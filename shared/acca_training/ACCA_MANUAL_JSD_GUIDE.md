@@ -546,3 +546,160 @@ by checking for the "Calculations approved by ACCA" stamp in the output.
 - NOTE: This guide is compiled from publicly available ACCA educational materials.
   The actual Manual J, S, and D standards should be purchased from ACCA for the
   complete normative procedures and tables.
+
+
+---
+
+## PART 6: CRITICAL VALIDATION SCENARIOS
+
+These are high-impact situations where a mismatch between the Manual J calculation
+and reality causes serious real-world consequences. ProCalcs must flag these with
+maximum urgency.
+
+### MANDATORY VERIFICATION: Ceiling / Attic Configuration
+
+**WHY THIS IS CRITICAL:**
+The ceiling insulation boundary and attic configuration are the single most impactful
+inputs in a cooling load calculation. They affect BOTH the ceiling conduction load AND
+the duct system losses simultaneously. Getting this wrong can swing the equipment
+sizing by 1-2 full tons — enough to cause mold, humidity problems, and comfort
+failures within months of installation.
+
+**THE ENCAPSULATED ATTIC PROBLEM:**
+A house designed with a vented attic gets changed to spray foam (encapsulated attic)
+during construction. Nobody reruns the Manual J. The equipment is now massively
+oversized because:
+- The hot attic ceiling load disappears (insulation moved to roof deck)
+- The duct losses drop dramatically (ducts now in semi-conditioned space)
+- The system short cycles, never dehumidifies properly
+- Mold grows within months
+- The homeowner paid MORE for spray foam and got a WORSE result
+
+This is not a rare edge case. Builders and load calculation companies miss this
+regularly. It is one of the most common and most damaging HVAC design errors.
+
+**PROCALCS RULE: MANDATORY ATTIC VERIFICATION CALLOUT**
+Every Manual J report processed by ProCalcs must trigger a mandatory verification
+for the ceiling/attic configuration. This is NOT optional. This is NOT a soft
+suggestion. The user MUST confirm before the validation can proceed.
+
+The verification must capture the complete attic picture because all pieces
+are interconnected:
+
+1. **Attic Type**: Vented attic, encapsulated/unvented attic, cathedral ceiling,
+   flat roof, or conditioned attic space?
+
+2. **Insulation Boundary**: Where is the primary thermal boundary?
+   - Ceiling plane (traditional — insulation on top of ceiling drywall)
+   - Roof deck (encapsulated — spray foam on underside of roof sheathing)
+   - Both (hybrid — uncommon but exists)
+
+3. **Insulation Type and R-Value**: What material and what R-value?
+   - Blown fiberglass or cellulose on ceiling (typical vented attic)
+   - Spray foam on roof deck (typical encapsulated)
+   - Batt insulation (older construction)
+   - R-value claimed in the Manual J report
+
+4. **Duct Location**: Where are the supply and return ducts?
+   - In the attic space (unconditioned — high duct losses)
+   - In conditioned space (low duct losses)
+   - In encapsulated attic (semi-conditioned — moderate duct losses)
+   - In crawlspace or basement
+
+5. **Air Handler Location**: Where is the AHU/furnace?
+   - In the attic
+   - In a closet (conditioned space)
+   - In the garage
+   - In the basement/crawlspace
+
+**MISMATCH DETECTION RULES:**
+
+The validator checks for these dangerous combinations:
+
+RED FLAG — Report says encapsulated/spray foam attic BUT calculates ceiling load
+as if insulation is on the ceiling plane with a vented attic above. This means the
+load is significantly inflated.
+
+RED FLAG — Report says ducts in unconditioned attic BUT attic is encapsulated.
+Duct losses are being overcalculated. Equipment will be oversized.
+
+RED FLAG — Report says vented attic with ceiling insulation BUT duct losses are
+calculated as if ducts are in conditioned space. Duct losses are undercalculated.
+Equipment may be undersized.
+
+YELLOW FLAG — Report shows very high ceiling R-value (R-49+) in an area where code
+only requires R-30 or R-38. Not necessarily wrong, but worth confirming — could
+indicate encapsulated attic that wasn't properly classified.
+
+YELLOW FLAG — Report shows attic duct losses that seem disproportionately high or
+low relative to the attic type selected. Cross-check against attic configuration.
+
+YELLOW FLAG — Any change order, construction note, or plan revision that mentions
+spray foam, encapsulation, or insulation changes after the Manual J date. This
+suggests the calculation may not reflect the as-built condition.
+
+**THE CONFIRMATION SCREEN FOR ATTIC/CEILING:**
+
+ProCalcs displays what the Manual J report claims, then asks the user to confirm
+or correct with a clear visual:
+
+"The Manual J report shows:
+ - Attic Type: [what report says]
+ - Insulation: [R-value and location from report]
+ - Duct Location: [what report says]
+
+⚠️ WARNING: The ceiling/attic configuration is the #1 source of oversizing errors.
+Please confirm these values match the actual construction:
+
+[Visual selector for attic type with simple illustrations]
+[Confirm / This is different → correction flow]"
+
+If the user changes any attic-related value, ProCalcs should show the estimated
+impact: "Changing from vented attic to encapsulated attic typically reduces the
+cooling load by X-X%. The current equipment may be oversized."
+
+### OTHER MANDATORY VERIFICATION CALLOUTS
+
+While the attic/ceiling is the most critical, these additional items should also
+trigger mandatory verification (not just soft suggestions):
+
+**Infiltration Method:**
+Did the contractor use a blower door test or an estimate? If estimated, what
+tightness category? This is the #2 reason heat pumps get sized wrong after
+design temperature errors.
+
+**Window Specifications:**
+Windows are typically the weakest thermal link. Are the U-factors and SHGC values
+from actual NFRC ratings or contractor estimates? On existing homes, were the
+windows verified or assumed?
+
+**Duct Leakage:**
+Was duct leakage tested or estimated? Duct leakage in unconditioned space can
+account for 15-30% of system losses. An untested estimate could be way off.
+
+**Below-Grade Conditions (Basements/Crawlspaces):**
+Is the basement/crawlspace conditioned or unconditioned? Insulated or not?
+What is the ground temperature assumption? These affect floor loads significantly.
+
+**Building Orientation:**
+Does the Manual J report orientation match the actual house? A 90-degree error
+in orientation can shift solar loads dramatically, especially with large window
+areas on the south or west sides.
+
+### FUTURE CRITICAL SCENARIOS TO ADD
+(As Tom and Richard identify more from field experience)
+- Mini-split vs ducted system load differences
+- Multi-zone system balancing issues
+- Humidity-dominant climates (Florida, Gulf Coast) vs temperature-dominant
+- High-altitude design condition adjustments
+- Radiant barrier effects
+- Thermal mass (concrete/masonry) cooling credits
+
+---
+
+## DOCUMENT STATUS (Updated)
+- Version: 1.1
+- Created: February 19, 2026
+- Updated: February 19, 2026 — Added Part 6 Critical Validation Scenarios
+- Author: Claude Opus 4.6
+- Reviewed by: Tom (pending), Richard (sent for review)
