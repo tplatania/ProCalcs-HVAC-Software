@@ -1,0 +1,126 @@
+{
+  "version": "1.0",
+  "name": "Manual S Quick Reference & Calculator",
+  "description": "Equipment sizing validation per ACCA Manual S standards",
+  
+  "cooling_capacity": {
+    "name": "Total Cooling Capacity",
+    "description": "Equipment capacity as percentage of calculated load",
+    "ranges": {
+      "single_stage": {
+        "min_pct": 100,
+        "max_pct": 115,
+        "display": "100% - 115%"
+      },
+      "two_stage": {
+        "min_pct": 100,
+        "max_pct": 120,
+        "display": "100% - 120%"
+      },
+      "variable_speed": {
+        "min_pct": 100,
+        "max_pct": 130,
+        "display": "100% - 130%"
+      }
+    },
+    "exceptions": {
+      "high_shr": {
+        "condition": "SHR > 95%",
+        "rule": "Total capacity max = Total load + 15,000 BTU",
+        "note": "When sensible heat ratio exceeds 95%, additional capacity is allowed"
+      }
+    }
+  },
+  
+  "sensible_capacity": {
+    "name": "Sensible Cooling Capacity",
+    "description": "Must meet sensible load requirements",
+    "ranges": {
+      "standard": {
+        "min_pct": 95,
+        "max_pct": 100,
+        "display": "95% - 100% of sensible load"
+      },
+      "manager_approval": {
+        "min_pct": 90,
+        "note": "Can go as low as 90% with manager approval"
+      }
+    }
+  },
+  
+  "latent_capacity": {
+    "name": "Latent Cooling Capacity",
+    "description": "Moisture removal capacity",
+    "ranges": {
+      "standard": {
+        "min_pct": 100,
+        "max_preferred_pct": 150,
+        "display": "Min 100%, Max 150% preferred"
+      }
+    },
+    "note": "Determined by Sensible & Total capacity - not an issue if higher than 150%"
+  },
+  
+  "heating_capacity": {
+    "name": "Heating Capacity",
+    "description": "Primary or backup heating capacity",
+    "ranges": {
+      "primary": {
+        "min_pct": 100,
+        "display": "100% of heating load"
+      },
+      "backup_strip": {
+        "note": "Electric strip for backup doesn't need 100% unless primary heating < 100%"
+      }
+    }
+  },
+  
+  "temperature_rise": {
+    "name": "Temperature Rise",
+    "electric_strip": {
+      "max_deg": 30,
+      "display": "Less than 30°F"
+    },
+    "furnace": {
+      "min_deg": 40,
+      "max_deg": 70,
+      "display": "40°F - 70°F (check manufacturer range)"
+    }
+  },
+  
+  "static_pressure": {
+    "default_before_ductwork": 0.6,
+    "unit": "inches WC",
+    "note": "Select CFM from air handler/furnace product data based on airflow vs static pressure"
+  },
+  
+  "system_type_guidance": {
+    "cold_climate": "Typically requires furnace",
+    "straight_cool": "Should have electric strip backup",
+    "heat_pump": "Should have electric strip backup",
+    "multi_floor_zone": "Use inverter system (higher SEER)",
+    "humid_climate": "Variable speed air handler preferred (FL and similar)"
+  },
+  
+  "equipment_matching": {
+    "air_handler_level": "Should match condenser level (don't pair high-end condenser with low-end air handler)",
+    "furnace_coil": "Same cabinet width if possible",
+    "coil_type": "Should be cased coil",
+    "downflow": "Ensure appropriate downflow model and downflow-capable coil"
+  },
+  
+  "ahri_requirements": {
+    "status": "Must be active",
+    "models": "Must match what is selected in Wrightsoft",
+    "region": "Must be correct for project location",
+    "ratings": "SEER/EER/HSPF/AFUE must match equipment input tab"
+  },
+  
+  "calculator_formulas": {
+    "cooling_pct": "(Equipment Capacity / Total Cooling Load) × 100",
+    "sensible_pct": "(Sensible Capacity / Sensible Load) × 100",
+    "latent_pct": "(Latent Capacity / Latent Load) × 100",
+    "heating_pct": "(Heating Capacity / Heating Load) × 100",
+    "temp_rise": "Supply Air Temp - Return Air Temp"
+  }
+}

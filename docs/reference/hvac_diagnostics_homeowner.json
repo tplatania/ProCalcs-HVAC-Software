@@ -1,0 +1,216 @@
+{
+  "hvac_diagnostics_db": {
+    "version": "1.0",
+    "description": "Database for HVAC refrigerant properties, charging targets, and troubleshooting logic. Simplified version for homeowners.",
+    "refrigerants": {
+      "R-410A": {
+        "type": "HFC",
+        "oil_type": "POE",
+        "color_code": "Rose",
+        "global_warming_potential": 2088,
+        "operating_pressures_typical": {
+          "low_side_suction_psig": "100-135",
+          "high_side_liquid_psig": "275-400"
+        },
+        "pt_chart_sample_f_to_psig": [
+          { "temp_f": 32, "pressure_psig": 101 },
+          { "temp_f": 40, "pressure_psig": 118 },
+          { "temp_f": 45, "pressure_psig": 130 },
+          { "temp_f": 50, "pressure_psig": 142 },
+          { "temp_f": 85, "pressure_psig": 253 },
+          { "temp_f": 95, "pressure_psig": 295 },
+          { "temp_f": 105, "pressure_psig": 340 },
+          { "temp_f": 115, "pressure_psig": 390 }
+        ]
+      },
+      "R-22": {
+        "type": "HCFC",
+        "oil_type": "Mineral or Alkylbenzene",
+        "color_code": "Green",
+        "global_warming_potential": 1810,
+        "operating_pressures_typical": {
+          "low_side_suction_psig": "60-80",
+          "high_side_liquid_psig": "175-250"
+        },
+        "pt_chart_sample_f_to_psig": [
+          { "temp_f": 32, "pressure_psig": 58 },
+          { "temp_f": 40, "pressure_psig": 68 },
+          { "temp_f": 45, "pressure_psig": 76 },
+          { "temp_f": 50, "pressure_psig": 84 },
+          { "temp_f": 85, "pressure_psig": 156 },
+          { "temp_f": 95, "pressure_psig": 182 },
+          { "temp_f": 105, "pressure_psig": 210 },
+          { "temp_f": 115, "pressure_psig": 243 }
+        ]
+      },
+      "R-32": {
+        "type": "HFC (A2L)",
+        "oil_type": "POE",
+        "color_code": "Red Band on Cylinder",
+        "global_warming_potential": 675,
+        "operating_pressures_typical": {
+          "low_side_suction_psig": "105-140",
+          "high_side_liquid_psig": "290-420"
+        },
+        "pt_chart_sample_f_to_psig": [
+          { "temp_f": 32, "pressure_psig": 105 },
+          { "temp_f": 40, "pressure_psig": 123 },
+          { "temp_f": 45, "pressure_psig": 135 },
+          { "temp_f": 50, "pressure_psig": 148 },
+          { "temp_f": 85, "pressure_psig": 265 },
+          { "temp_f": 95, "pressure_psig": 310 },
+          { "temp_f": 105, "pressure_psig": 358 },
+          { "temp_f": 115, "pressure_psig": 410 }
+        ]
+      },
+      "R-454B": {
+        "type": "HFO/HFC Blend (A2L)",
+        "oil_type": "POE",
+        "color_code": "Red Band on Cylinder",
+        "global_warming_potential": 466,
+        "operating_pressures_typical": {
+          "low_side_suction_psig": "98-132",
+          "high_side_liquid_psig": "270-395"
+        },
+        "pt_chart_sample_f_to_psig": [
+          { "temp_f": 32, "pressure_psig": 99 },
+          { "temp_f": 40, "pressure_psig": 116 },
+          { "temp_f": 45, "pressure_psig": 127 },
+          { "temp_f": 50, "pressure_psig": 139 },
+          { "temp_f": 85, "pressure_psig": 249 },
+          { "temp_f": 95, "pressure_psig": 290 },
+          { "temp_f": 105, "pressure_psig": 335 },
+          { "temp_f": 115, "pressure_psig": 385 }
+        ]
+      }
+    },
+    "charging_targets": {
+      "TXV_systems": {
+        "primary_metric": "Subcooling",
+        "target_range_f": "10-12",
+        "notes": "Verify superheat is stable (typically 8-20°F) to ensure valve is functioning, but charge by subcooling."
+      },
+      "fixed_orifice_piston_systems": {
+        "primary_metric": "Superheat",
+        "calculation_method": "Target Superheat = ((Indoor WB - 30) / 2) + ((Outdoor DB - 85) / 2) (Approximate)",
+        "target_range_f": "Variable based on load (typically 5-25°F)",
+        "notes": "Do not charge by subcooling. Allow system to stabilize for 15 minutes before reading."
+      },
+      "heat_pump_mode": {
+        "heating_mode_considerations": "Check manufacturers' chart. Often charged by weight in winter. If charging by pressures, use 'Heating Check Chart' specific to unit.",
+        "bi_flow_drier": "Required",
+        "accumulator": "Typical on suction line"
+      }
+    },
+    "diagnostic_troubleshooting": {
+      "subcooling": {
+        "high_subcooling": {
+          "condition": "> 15°F (typical)",
+          "indication": "Liquid backing up in condenser",
+          "possible_causes": [
+            "Overcharged system",
+            "Restriction in liquid line (filter drier, kink)",
+            "Restriction in metering device (TXV stuck closed)"
+          ],
+          "fixes": [
+            "Recover refrigerant to target weight",
+            "Replace liquid line drier",
+            "Replace/repair metering device"
+          ]
+        },
+        "low_subcooling": {
+          "condition": "< 8°F (typical)",
+          "indication": "Not enough liquid in condenser",
+          "possible_causes": [
+            "Undercharged system",
+            "Metering device stuck open (flooding)",
+            "Bad compressor valves (low compression)"
+          ],
+          "fixes": [
+            "Add refrigerant (weigh in)",
+            "Check TXV bulb placement/replace TXV",
+            "Perform compressor efficiency test"
+          ]
+        }
+      },
+      "superheat": {
+        "high_superheat": {
+          "condition": "> 25°F (typical)",
+          "indication": "Starved evaporator",
+          "possible_causes": [
+            "Undercharged system",
+            "Liquid line restriction",
+            "Metering device restriction",
+            "High heat load on evaporator"
+          ],
+          "fixes": [
+            "Leak search and recharge",
+            "Replace filter drier",
+            "Clear debris from metering device"
+          ]
+        },
+        "low_superheat": {
+          "condition": "< 5°F (typical)",
+          "indication": "Flooded evaporator (Liquid to compressor risk)",
+          "possible_causes": [
+            "Overcharged system",
+            "Metering device stuck open",
+            "Dirty evaporator coil",
+            "Low airflow (dirty filter, bad blower)",
+            "Oversized equipment"
+          ],
+          "fixes": [
+            "Recover refrigerant",
+            "Clean evaporator coil",
+            "Replace air filter/adjust blower speed"
+          ]
+        }
+      }
+    },
+    "symptom_mapping": [
+      {
+        "symptom": "Warm air from vents",
+        "mode": "Cooling",
+        "potential_causes": [
+          "Compressor not running (capacitor, contactor, thermal overload)",
+          "Low refrigerant charge (leak)",
+          "Blocked condenser coil",
+          "Reversing valve stuck in heating (Heat Pump)"
+        ]
+      },
+      {
+        "symptom": "Unit short cycling",
+        "mode": "Any",
+        "potential_causes": [
+          "Low pressure switch cutout (low charge)",
+          "High pressure switch cutout (dirty condenser, bad fan)",
+          "Oversized unit",
+          "Thermostat placement/failure",
+          "Clogged condensate drain (float switch trip)"
+        ]
+      },
+      {
+        "symptom": "Ice on lines",
+        "mode": "Cooling",
+        "location": "Suction line / Evaporator",
+        "potential_causes": [
+          "Low airflow (dirty filter, closed vents)",
+          "Low refrigerant charge (low suction pressure drops below freezing)",
+          "Blower motor failure",
+          "Dirty evaporator coil"
+        ]
+      },
+      {
+        "symptom": "High electric bills",
+        "mode": "Any",
+        "potential_causes": [
+          "Dirty coils (reduced heat transfer)",
+          "Low refrigerant charge (long run times)",
+          "Strip heat stuck on (Heat Pump auxiliary heat)",
+          "Compressor failing (high amp draw)",
+          "Duct leakage"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HVAC Safety Hazards, Emergency Procedures, and Professional Boundaries",
+  "intended_use": "Safety-aware HVAC guidance for homeowners, contractors, builders, and architects. Prioritizes life-safety over troubleshooting.",
+  "disclaimer": {
+    "general": "This knowledge file provides practical safety guidance, not a substitute for local code, manufacturer instructions, or professional diagnosis. If there is any doubt about safety, stop and contact qualified help.",
+    "assistant_behavior": "When a life-safety trigger is detected, the assistant must interrupt troubleshooting, issue a clear safety callout, and direct the user to appropriate emergency or licensed services. Never provide DIY steps that increase risk."
+  },
+  "severity_levels": {
+    "immediate_emergency": "Leave the house and/or call 911 immediately. Do not attempt troubleshooting.",
+    "serious_hazard": "Stop work and call a professional immediately. Do not operate equipment until inspected.",
+    "diy_safe": "Tasks a homeowner can do with basic tools and precautions (power off where applicable).",
+    "professional_only": "Tasks requiring licensing, certification, specialized tools, training, or code compliance."
+  },
+  "immediate_emergencies": {
+    "gas_leak": {
+      "severity": "CRITICAL - EVACUATE IMMEDIATELY",
+      "trigger_signs": [
+        "Smell of gas or 'rotten eggs' (mercaptan odorant)",
+        "Hissing sound near gas meter, gas line, regulator, or appliance",
+        "Visible damage to gas piping, meter, or appliance connectors",
+        "Pilot light repeatedly going out combined with gas odor",
+        "Dead vegetation near buried gas lines or unexplained bubbling in standing water",
+        "Physical symptoms: dizziness, nausea, headache, eye irritation"
+      ],
+      "immediate_response": [
+        "Evacuate all occupants and pets immediately.",
+        "Leave the door open if possible as you exit.",
+        "Do NOT use telephones or cell phones inside.",
+        "Do NOT turn light switches on or off.",
+        "Do NOT light matches or lighters.",
+        "Do NOT start vehicles near the home.",
+        "Call 911 or gas utility from outside or neighbor's location."
+      ],
+      "who_to_call": ["911 if strong odor or symptoms", "Gas utility emergency line", "Licensed plumber/gas fitter after clearance"]
+    },
+    "carbon_monoxide": {
+      "severity": "CRITICAL - EVACUATE IMMEDIATELY",
+      "trigger_signs": [
+        "CO detector alarm sounding",
+        "Symptoms: headache, dizziness, nausea, confusion, weakness, blurred vision",
+        "Symptoms improve when leaving the house",
+        "Soot streaks around furnace or draft hood",
+        "Yellow or flickering burner flame (should be steady blue)",
+        "Backdrafting, burner rollout, flame disturbance"
+      ],
+      "immediate_response": [
+        "Move everyone to fresh air immediately (outdoors).",
+        "Call 911 if anyone has symptoms.",
+        "Do not re-enter until cleared by emergency responders.",
+        "Do not ignore alarm even if you feel fine.",
+        "Do not run furnace to 'see if it goes away.'"
+      ],
+      "who_to_call": ["911", "Licensed HVAC technician for inspection after clearance"]
+    },
+    "electrical_fire": {
+      "severity": "CRITICAL - EVACUATE IMMEDIATELY",
+      "trigger_signs": [
+        "Visible flames or smoke from equipment",
+        "Acrid smell of burning plastic or insulation",
+        "Equipment extremely hot to touch",
+        "Popping, crackling, arcing, or buzzing sounds",
+        "Melted insulation, scorch marks"
+      ],
+      "immediate_response": [
+        "Evacuate immediately if flames or heavy smoke.",
+        "Call 911.",
+        "Cut main power at breaker ONLY if safe and far from fire.",
+        "Use ABC or Class C extinguisher only if trained and fire is small.",
+        "DO NOT use water on electrical fire.",
+        "DO NOT stay to fight a large fire."
+      ],
+      "who_to_call": ["911", "Licensed electrician", "Licensed HVAC technician"]
+    }
+  },
+  "serious_hazards": {
+    "cracked_heat_exchanger": {
+      "action": "SHUT DOWN UNIT IMMEDIATELY - CALL PRO",
+      "signs": [
+        "CO detector alerts or elevated readings",
+        "Sooting around furnace, burner rollout",
+        "Flame flicker/changes when blower starts",
+        "Unexplained headaches or nausea when heat runs",
+        "Rattling or popping noises during heat cycles",
+        "Visible rust or corrosion near heat exchanger"
+      ],
+      "risk": "Carbon Monoxide poisoning - potentially fatal",
+      "who_to_call": ["Licensed HVAC technician"]
+    },
+    "electrical_burning_smell": {
+      "action": "SHUT OFF BREAKER - CALL PRO",
+      "signs": [
+        "Fishy, acrid, or burning plastic smell",
+        "Smell gets stronger when unit runs",
+        "Warm/hot electrical covers",
+        "Discolored wiring or scorch marks"
+      ],
+      "risk": "Electrical fire, component failure",
+      "who_to_call": ["Licensed electrician", "Licensed HVAC technician"]
+    },
+    "refrigerant_leak_enclosed_space": {
+      "action": "VENTILATE - EVACUATE IF SYMPTOMS - CALL PRO",
+      "signs": [
+        "Hissing near coil/lineset with oily residue",
+        "Chemical odor, dizziness, headache in small room",
+        "System icing/frosting with poor cooling",
+        "Sudden loss of cooling performance"
+      ],
+      "risk": "Asphyxiation (displaces oxygen), chemical burns, frostbite",
+      "who_to_call": ["Licensed HVAC technician (EPA-certified)"]
+    },
+    "flooded_equipment": {
+      "action": "DO NOT TOUCH - CALL PRO",
+      "signs": [
+        "Standing water around indoor or outdoor unit",
+        "Water inside equipment cabinet",
+        "Wet control boards or electrical components"
+      ],
+      "risk": "Electrocution, short circuits, equipment often requires replacement",
+      "who_to_call": ["Licensed electrician", "Licensed HVAC technician"]
+    },
+    "sparking_arcing": {
+      "action": "SHUT OFF POWER - CALL PRO",
+      "signs": [
+        "Visible flashes inside cabinet",
+        "Loud popping or buzzing sounds",
+        "Breaker trips immediately upon reset"
+      ],
+      "risk": "Fire, severe equipment damage",
+      "who_to_call": ["Licensed electrician", "Licensed HVAC technician"]
+    }
+  },
+  "diy_boundaries": {
+    "homeowners_must_never_do": [
+      {
+        "task": "Working on energized equipment",
+        "reason": "Risk of lethal electric shock (120V/240V). Moving parts can cause amputation."
+      },
+      {
+        "task": "Handling refrigerants",
+        "reason": "Federal Law (EPA Section 608) requires certification. Fines up to $44,539 per day. Frostbite and asphyxiation risk."
+      },
+      {
+        "task": "Gas line work",
+        "reason": "Explosion risk. Requires specialized pressure testing and licensing."
+      },
+      {
+        "task": "Internal electrical panel work",
+        "reason": "Arc flash risk. Electrocution risk from main lugs even if main breaker is off."
+      },
+      {
+        "task": "Capacitor handling",
+        "reason": "Capacitors store lethal voltage even when power is off. Requires proper discharge procedure."
+      },
+      {
+        "task": "Heat exchanger inspection",
+        "reason": "Requires specialized tools (combustion analyzer, camera) and training. Misdiagnosis can cause CO poisoning."
+      },
+      {
+        "task": "Bypassing safety switches",
+        "reason": "Never jump out limits, rollouts, or pressure switches. They trip for a reason (fire/safety)."
+      }
+    ]
+  },
+  "safe_diy_tasks": {
+    "homeowners_can_do": [
+      {
+        "task": "Air Filter Replacement",
+        "procedure": "Turn thermostat off. Remove old filter. Insert new filter with airflow arrow pointing toward furnace/air handler.",
+        "stop_if": "Filter slot shows scorching or melting, burning smell, repeated shutdowns"
+      },
+      {
+        "task": "Thermostat Battery Replacement",
+        "procedure": "Remove faceplate. Replace batteries with correct type. Check for corrosion.",
+        "stop_if": "Corrosion or heat damage on wiring, system still unresponsive"
+      },
+      {
+        "task": "Outdoor Unit Debris Clearing",
+        "procedure": "Turn system off. Keep 2 feet clearance. Remove leaves/twigs gently. Rinse with hose (power off).",
+        "stop_if": "Unit buzzing or smoking, exposed wiring, oil stains, hissing sounds"
+      },
+      {
+        "task": "Check Breakers (without opening panel)",
+        "procedure": "Look for tripped switches. Flip to OFF then ON. If trips again, STOP.",
+        "stop_if": "Burning smell at panel, repeated tripping, sparking or buzzing"
+      },
+      {
+        "task": "Condensate Drain Maintenance",
+        "procedure": "Power off. Pour 1 cup distilled vinegar into drain line cleanout port to prevent algae.",
+        "stop_if": "Standing water near electrical, repeated clogging, mold growth"
+      },
+      {
+        "task": "Register/Vent Checks",
+        "procedure": "Ensure supply and return vents not blocked by furniture or rugs.",
+        "stop_if": "Whistling sounds, ice buildup, burning smell"
+      }
+    ]
+  },
+  "professional_licensing": {
+    "hvac_technician_required_for": [
+      "Refrigerant handling (charging, recovery, leak repair)",
+      "Component replacement (compressors, motors, valves)",
+      "Gas valve/furnace repair",
+      "Combustion and venting issues",
+      "Suspected heat exchanger problems",
+      "System sizing and installation"
+    ],
+    "electrician_required_for": [
+      "Running new high-voltage circuits",
+      "Breaker panel work",
+      "Burnt wiring repair",
+      "Service upgrades for HVAC"
+    ],
+    "plumber_gas_fitter_required_for": [
+      "Gas piping installation or modification",
+      "Gas pressure regulation work",
+      "Boiler water piping"
+    ],
+    "epa_608_certification": "Required by federal law to handle refrigerants. Homeowners cannot legally add or recover refrigerant."
+  },
+  "safety_equipment_recommendations": {
+    "carbon_monoxide_detectors": {
+      "placement": "Every level, outside sleeping areas, 5-15 feet from fuel-burning appliances",
+      "maintenance": "Test monthly. Replace batteries annually. Replace unit every 5-7 years."
+    },
+    "smoke_detectors": {
+      "placement": "Inside and outside every bedroom, on every level",
+      "maintenance": "Test monthly. Replace per manufacturer guidance."
+    },
+    "fire_extinguisher": {
+      "type": "Class ABC (Multi-purpose)",
+      "location": "Kitchen, garage, utility room near furnace",
+      "usage": "PASS: Pull, Aim, Squeeze, Sweep. Only for small fires with clear exit."
+    },
+    "gas_leak_detector": {
+      "type": "Handheld combustible gas sniffer or plug-in alarm",
+      "note": "Supplement to nose detection (rotten egg smell is primary warning)"
+    }
+  }
+}

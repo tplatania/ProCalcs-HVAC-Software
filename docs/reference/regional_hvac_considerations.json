@@ -1,0 +1,405 @@
+{
+  "schema_version": "1.0.0",
+  "intended_use": "Location-aware HVAC guidance for contractors, builders, architects, and homeowners across U.S. regions.",
+  "units": {
+    "temperature": "°F",
+    "relative_humidity": "%",
+    "efficiency": ["SEER2", "EER2", "HSPF2", "AFUE"],
+    "notes": "Design ranges are practical regional bands (not city-specific). Always confirm local ASHRAE design conditions and AHJ requirements."
+  },
+  "global_principles": {
+    "always_verify": [
+      "Local design temperatures (ASHRAE/Manual J tables and local weather files)",
+      "Local energy code edition and amendments (IECC/ASHRAE 90.1 or state equivalents)",
+      "AHJ permitting, commissioning/testing requirements, and documentation",
+      "Utility program requirements (rebates often require specific test results and model numbers)"
+    ],
+    "common_best_practices": [
+      "Manual J load calculations (room-by-room), Manual S equipment selection, Manual D duct design",
+      "Measured airflow and static pressure verification at startup",
+      "Duct leakage testing where required and always for quality assurance",
+      "Combustion safety and CO testing for fuel-burning appliances",
+      "Moisture management: airtightness, ventilation strategy, and correct latent capacity"
+    ]
+  },
+  "regions": [
+    {
+      "region_id": "se_gulf_coast",
+      "region_name": "Southeast / Gulf Coast",
+      "coverage": {
+        "states_and_areas": ["Florida", "Georgia", "Alabama", "Mississippi", "Louisiana", "South Carolina (coastal)"],
+        "notes": "Hot-humid, long cooling season, high latent loads; coastal corrosion risk."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["High humidity", "Long cooling season", "Salt air near coasts", "Hurricane-driven wind/rain"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [92, 98] },
+          "winter_outdoor_db": { "typical_range": [20, 35] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [60, 85],
+          "seasonality": ["Summer: persistently high RH", "Shoulder seasons: hidden mold risk", "Winter: moderate-high RH"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["High-efficiency variable-speed heat pump", "Heat pump with whole-home dehumidifier", "Dual-fuel in northern pockets"],
+        "sizing_notes": "Prioritize latent removal; avoid oversizing that short-cycles and leaves humidity high.",
+        "dehumidification_needs": "High - whole-house dehumidifiers strongly recommended for tight envelopes",
+        "equipment_protection": "Coastal coating on coils mandatory within 5 miles of coast. Hurricane straps. Flood elevation."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Oversized systems causing humidity complaints", "Mold in ducts and cabinets", "Duct leakage in hot attics", "Coil corrosion near coasts", "Storm damage"],
+        "maintenance_priority": "Condensate management and drain clearing",
+        "mold_risk": "Very high"
+      },
+      "pro_tips": [
+        "Comfort is a humidity project disguised as a temperature project.",
+        "Attic ducts are performance kryptonite; every seal and inch of insulation pays rent.",
+        "Condensate safety switches save ceilings and reputations.",
+        "Install float switches on ALL units."
+      ]
+    },
+    {
+      "region_id": "sw_desert",
+      "region_name": "Southwest Desert",
+      "coverage": {
+        "states_and_areas": ["Arizona", "Nevada", "New Mexico", "West Texas"],
+        "notes": "Hot-dry, large day/night swings, intense solar gain; dust and monsoon bursts."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Extreme dry heat", "High solar load", "Dust", "Big diurnal swings"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [100, 115] },
+          "winter_outdoor_db": { "typical_range": [20, 40] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [10, 35],
+          "seasonality": ["Very dry most of year", "Monsoon season (July-Aug): humidity spikes"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["High-efficiency heat pump or AC + furnace", "Evaporative cooler where appropriate", "Hybrid evap + refrigeration"],
+        "sizing_notes": "Solar gain drives peak loads. Manual J must account for high sensible heat ratio.",
+        "dehumidification_needs": "Rarely needed. Humidifiers often requested for comfort.",
+        "equipment_protection": "Sun shields for rooftop units. Hail guards. Dust management."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Capacitor failure from extreme heat", "Dust clogging coils", "Dried duct sealant", "Compressor overheating", "Refrigerant leaks"],
+        "maintenance_priority": "Wash outdoor coils monthly in summer. Check capacitors annually.",
+        "mold_risk": "Low except during monsoon"
+      },
+      "pro_tips": [
+        "Shade the condenser like it's a vampire but keep airflow like it's training for a marathon.",
+        "Dust is the silent compressor killer.",
+        "Use hard start kits on compressors for high head pressure.",
+        "Don't set setback thermostats too high; recovery at 110°F is impossible."
+      ]
+    },
+    {
+      "region_id": "northeast",
+      "region_name": "Northeast",
+      "coverage": {
+        "states_and_areas": ["New York", "New Jersey", "Pennsylvania", "Connecticut", "Massachusetts", "New Hampshire", "Vermont", "Maine", "Rhode Island"],
+        "notes": "Cold winters, humid summers, older housing stock; retrofits common."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Cold winters", "Variable shoulder seasons", "Humid summers", "Ice/snow load"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [85, 92] },
+          "winter_outdoor_db": { "typical_range": [-5, 15] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [35, 70],
+          "seasonality": ["Winter: very dry indoors", "Summer: moderate-high humidity", "Basements damp year-round"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["Cold-climate heat pump (Hyper-Heat/H2i)", "Hydronic boilers + mini splits", "Dual fuel"],
+        "sizing_notes": "Heat load dominates. Ensure heat pump capacity at low ambient matches load.",
+        "dehumidification_needs": "Basement dehumidifiers standard. Winter humidification often needed.",
+        "equipment_protection": "Snow stands (12-18\" risers). Ice shields for roofs above units. Freeze protection."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Heat pump underperformance in extreme cold", "Frozen condensate drains", "Basement humidity/mold", "Oversized boilers short-cycling", "Duct losses in basements"],
+        "maintenance_priority": "Combustion analysis and filter changes before winter.",
+        "mold_risk": "Moderate - basements in summer, attics in winter"
+      },
+      "pro_tips": [
+        "Basements are the Northeast's humidity factory. Treat them like part of the system.",
+        "Never install a heat pump directly on the ground; it will become an ice block.",
+        "Steam radiators provide excellent comfort - add mini-splits for cooling instead of replacing.",
+        "Variable speed fans reduce the 'cold blow' feeling vs oil heat."
+      ]
+    },
+    {
+      "region_id": "midwest",
+      "region_name": "Midwest",
+      "coverage": {
+        "states_and_areas": ["Ohio", "Michigan", "Indiana", "Illinois", "Wisconsin", "Minnesota", "Iowa", "Missouri", "Kansas", "Nebraska", "North Dakota", "South Dakota"],
+        "notes": "Extreme annual temperature swing; cold winters, hot humid summers."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Cold winters", "Hot humid summers", "High wind infiltration", "Ice/snow"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [88, 95] },
+          "winter_outdoor_db": { "typical_range": [-20, 10] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [30, 70],
+          "seasonality": ["Humid corn-sweat summers", "Bone-dry winters"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["High-efficiency gas furnace + AC", "Geothermal (very popular)", "Dual fuel", "Cold-climate heat pumps"],
+        "sizing_notes": "Design for both extremes. Wind infiltration is major load factor.",
+        "dehumidification_needs": "Recommended for basements. HRVs preferred over ERVs in far north.",
+        "equipment_protection": "Snow clearance. Freeze protection for condensate. Wind protection."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Cracked heat exchangers", "Clogged intake/exhaust from snow", "Filter neglect", "AC freezing in spring", "High static pressure"],
+        "maintenance_priority": "Carbon monoxide checks non-negotiable every fall.",
+        "mold_risk": "Moderate - focus on basement waterproofing"
+      },
+      "pro_tips": [
+        "Midwest comfort is a two-season chess match. Win both by nailing airflow and envelope leakage.",
+        "High static pressure quietly wrecks efficiency. Measure it, don't guess.",
+        "90%+ furnaces: Insulate condensate lines in unconditioned spaces or they freeze.",
+        "During polar vortex, keep thermostats constant; setbacks can't recover."
+      ]
+    },
+    {
+      "region_id": "pacific_northwest",
+      "region_name": "Pacific Northwest",
+      "coverage": {
+        "states_and_areas": ["Washington", "Oregon"],
+        "notes": "Mild temps, long damp season; growing cooling needs; wildfire smoke IAQ concerns."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Long wet season", "Mild but damp", "Wildfire smoke", "Increasing heat waves"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [82, 92] },
+          "winter_outdoor_db": { "typical_range": [20, 35] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [45, 85],
+          "seasonality": ["Fall-spring: damp, frequent rain", "Summer: drier but smoke dominates IAQ"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["Ductless mini-splits", "Inverter heat pumps", "ERV/HRV with filtration"],
+        "sizing_notes": "Historic homes often lack ductwork. Consider emerging heat-wave peaks.",
+        "dehumidification_needs": "Low to moderate - focus on damp-season mold prevention.",
+        "equipment_protection": "Moss/algae control. Rain drainage. UV tape for exterior line sets."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Mold in ductwork from dampness", "Short cycling in mild seasons", "Dirty filters from wildfire ash", "Lack of cooling in legacy homes", "Defrost board failures"],
+        "maintenance_priority": "Clean blower wheels - dust sticks to damp blades.",
+        "mold_risk": "High - 'sick building syndrome' common in older damp homes"
+      },
+      "pro_tips": [
+        "Design for the 'smoke week' and the 'heat wave week' even if they're not most weeks.",
+        "Customers are new to AC here; explain heat pumps blow 'cool' warm air vs furnaces.",
+        "Install fresh air intakes with dampers that can close during smoke events.",
+        "Damp-season mold comes from low runtime - ventilation strategy matters more than cooling."
+      ]
+    },
+    {
+      "region_id": "california",
+      "region_name": "California",
+      "coverage": {
+        "states_and_areas": ["California"],
+        "notes": "Highly diverse microclimates; Title 24 is most stringent energy code in US."
+      },
+      "sub_regions": {
+        "coastal": {
+          "climate": "Mild, corrosive marine layer",
+          "focus": "Corrosion resistance, ventilation, smoke filtration",
+          "common_systems": "Heat pumps, hydronic air handlers"
+        },
+        "central_valley": {
+          "climate": "Hot dry summer (100°F+), Tule fog winter",
+          "focus": "High cooling efficiency, air filtration for ag dust",
+          "common_systems": "Package units, gas furnaces"
+        },
+        "desert": {
+          "climate": "Extreme heat (105-118°F), dust, low humidity",
+          "focus": "Peak cooling, dust management, condenser shading",
+          "common_systems": "High-efficiency AC, hybrid evap strategies"
+        },
+        "mountain": {
+          "climate": "Cold winters, snow, altitude effects",
+          "focus": "Heating reliability, snow management, backup heat",
+          "common_systems": "Cold-climate heat pumps, high-efficiency furnaces"
+        }
+      },
+      "regional_code_notes": {
+        "code": "Title 24",
+        "details": "Requires HERS testing (duct leakage, refrigerant charge, airflow) for almost all alterations.",
+        "refrigerant": "Aggressive low-GWP phase-down leading the nation.",
+        "electrification": "Many municipalities banning new gas hookups."
+      },
+      "pro_tips": [
+        "If you touch ductwork in CA, you trigger a HERS test. Quote accordingly.",
+        "Variable speed equipment almost mandatory for Title 24 EER requirements.",
+        "In mild coastal zones, comfort is airflow and control logic, not raw tonnage.",
+        "Wildfire smoke mode: iWave or similar + high MERV media cabinets."
+      ]
+    },
+    {
+      "region_id": "mountain_west",
+      "region_name": "Mountain West",
+      "coverage": {
+        "states_and_areas": ["Colorado", "Utah", "Montana", "Wyoming", "Idaho"],
+        "notes": "Cold winters, dry air, altitude impacts; snow management central."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Cold winters", "Dry air", "Altitude", "Snow/ice", "Big diurnal swings"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [80, 95] },
+          "winter_outdoor_db": { "typical_range": [-20, 10] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [20, 55],
+          "seasonality": ["Very dry winters indoors", "Low humidity year-round"]
+        }
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["Modulating gas furnaces", "Cold-climate heat pumps + aux heat", "Dual fuel", "Radiant floor heating"],
+        "sizing_notes": "ALTITUDE DERATING: Gas appliances lose ~4% capacity per 1,000ft elevation.",
+        "dehumidification_needs": "Not needed. ADD humidifiers (steam preferred over bypass).",
+        "equipment_protection": "Snow hoods for intakes/exhausts. Hail guards. Wind protection."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Insufficient combustion air in tight homes", "Pressure switch errors from altitude", "Static electricity damaging boards", "Dry wood flooring cracking", "Sun damage to wiring"],
+        "maintenance_priority": "Check gas pressure manifold settings against altitude charts.",
+        "mold_risk": "Low"
+      },
+      "pro_tips": [
+        "You MUST change pressure switches on many furnaces above 5,000ft.",
+        "Don't trust rating plate BTU output - calculate derated output for Manual J.",
+        "Radiant floor heating is premium standard in luxury mountain homes.",
+        "Altitude turns 'normal' commissioning numbers into lies if you don't adjust.",
+        "Outdoor unit placement is half HVAC and half snow science."
+      ]
+    },
+    {
+      "region_id": "texas",
+      "region_name": "Texas",
+      "coverage": {
+        "states_and_areas": ["Texas"],
+        "notes": "Wide climate diversity; ERCOT grid concerns; resilience planning critical."
+      },
+      "sub_regions": {
+        "gulf_coast": {
+          "climate": "Hot/humid (Houston, Corpus)",
+          "focus": "Dehumidification, corrosion protection, flood elevation",
+          "common_systems": "Variable speed heat pumps with dehumidifiers",
+          "key_issue": "Humidity is the boss, temperature is the employee"
+        },
+        "central": {
+          "climate": "Very hot summers, occasional hard freezes (Austin, Dallas)",
+          "focus": "Peak cooling, hail protection, freeze resilience",
+          "common_systems": "Gas furnace + AC, dual fuel",
+          "key_issue": "Attic ducts can be hotter than your future if ignored"
+        },
+        "panhandle": {
+          "climate": "Windy, cold winters, hot summers",
+          "focus": "Heating/cooling balance, wind infiltration",
+          "common_systems": "Cold-climate heat pumps, high-efficiency furnaces",
+          "key_issue": "Wind is basically another occupant - plan infiltration like it pays rent"
+        },
+        "west": {
+          "climate": "Desert (El Paso)",
+          "focus": "Sensible cooling, dust management",
+          "common_systems": "AC + swamp cooler legacy",
+          "key_issue": "Comfort is 70% sun management, 30% equipment"
+        }
+      },
+      "regional_code_notes": {
+        "details": "Code adoption varies wildly. Austin/Dallas strict; rural areas little enforcement.",
+        "grid": "ERCOT instability drives demand for soft-start kits and generator integration."
+      },
+      "pro_tips": [
+        "In Houston, if you don't seal the plenum perfectly, it will sweat and ruin the ceiling.",
+        "Critter guards essential in rural Texas - ants love contactors, mice love wires.",
+        "Surge protectors mandatory due to lightning and grid fluctuations."
+      ]
+    },
+    {
+      "region_id": "hawaii",
+      "region_name": "Hawaii",
+      "coverage": {
+        "states_and_areas": ["Hawaii"],
+        "notes": "Marine climate; salt corrosion primary concern; high electricity costs."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Salt air corrosion", "Humidity", "Trade wind exposure", "High electricity costs"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [82, 90] },
+          "winter_outdoor_db": { "typical_range": [60, 72] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [60, 85],
+          "seasonality": ["High humidity year-round", "Trade winds provide natural ventilation"]
+        },
+        "unique_events": ["Volcanic vog (sulfur dioxide - corrosive)", "Tropical storms"]
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["High-SEER ductless multi-zone", "VRF systems"],
+        "sizing_notes": "Cooling only. Heating strips rarely needed.",
+        "dehumidification_needs": "Moderate - humidity persistent, mold risk depends on ventilation.",
+        "equipment_protection": "EVERYTHING must be coated. Boards need conformal coating. Copper with coating only."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Coil fins disintegrating from salt", "Geckos shorting control boards", "Mold on wall units", "Vog corrosion on copper lines", "Condensate leaks"],
+        "maintenance_priority": "Rinse outdoor units with fresh water MONTHLY.",
+        "mold_risk": "High"
+      },
+      "pro_tips": [
+        "The ocean is basically an unpaid technician trying to dissolve your condenser.",
+        "Coil washing cadence is not optional - it's a lifestyle.",
+        "Put mothballs or repellent in electrical compartments to keep geckos out.",
+        "Solar integration huge due to $0.40+/kWh rates.",
+        "Aluminum line sets dissolve here - copper with coating only."
+      ]
+    },
+    {
+      "region_id": "alaska",
+      "region_name": "Alaska",
+      "coverage": {
+        "states_and_areas": ["Alaska"],
+        "notes": "Extreme cold, long heating season, remote service constraints; moisture control critical."
+      },
+      "climate_characteristics": {
+        "primary_challenge": ["Extreme cold", "Long heating season", "Permafrost", "Remote service access"],
+        "design_temperature_ranges": {
+          "summer_outdoor_db": { "typical_range": [60, 75] },
+          "winter_outdoor_db": { "typical_range": [-40, 5] }
+        },
+        "humidity_patterns": {
+          "annual_typical_rh": [20, 60],
+          "seasonality": ["Very dry indoors in winter", "Condensation control is building durability priority"]
+        },
+        "unique_events": ["Extreme cold snaps", "Ice fog", "Earthquakes", "Power outages"]
+      },
+      "hvac_system_considerations": {
+        "recommended_system_types": ["Toyostoves (laser heaters)", "Oil boilers", "Cold-climate heat pumps (Southeast AK only)"],
+        "sizing_notes": "Redundancy is life-safety. You NEED a backup heat source. Plan for freeze protection everywhere.",
+        "dehumidification_needs": "Low. Primary goal is preventing condensation from indoor moisture.",
+        "equipment_protection": "Fuel tanks must be indoors or have heat tape. Raised stands. Wind breaks."
+      },
+      "common_regional_problems": {
+        "top_issues": ["Fuel gelling in outdoor tanks", "HRV cores freezing solid", "Carbon monoxide buildup", "Chimney drafting issues", "Blocked vents from frost"],
+        "maintenance_priority": "Fuel filter changes. Vent clearance. HRV core maintenance.",
+        "mold_risk": "Moderate - condensation on cold bridges"
+      },
+      "pro_tips": [
+        "Moisture is a structural enemy. Comfort comes second to keeping the building dry.",
+        "A blocked vent termination can become full system failure. Protect terminations like critical infrastructure.",
+        "In permafrost areas, heat loss can melt the foundation - HVAC design involves keeping floor cold.",
+        "Air sealing is more important than R-value to prevent moisture drive into walls.",
+        "Keep winter RH at 25-35% to prevent condensation damage."
+      ]
+    }
+  ]
+}

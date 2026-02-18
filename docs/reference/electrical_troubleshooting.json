@@ -1,0 +1,295 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HVAC Electrical Troubleshooting Knowledge Base (Safety-First)",
+  "last_updated": "2025-12-28",
+  "intended_use": "AI assistant guidance for homeowners and HVAC technicians. Prioritizes life-safety, prevents unsafe DIY, and provides practical diagnostics for qualified professionals.",
+  "safety_first_rule": {
+    "always_display_first": true,
+    "assistant_behavior": [
+      "If the user mentions burning smell, smoke, sparking/arcing, melted insulation, water near electrical equipment, repeated breaker trips, or any shock hazard: STOP troubleshooting, deliver a safety callout, and route to 911/electrician/HVAC tech as appropriate.",
+      "Never provide step-by-step instructions for homeowners that involve opening electrical compartments, touching wiring, measuring live voltage, replacing capacitors/contactors, or any panel work.",
+      "When uncertain whether the user is a homeowner or technician, assume homeowner and use the strictest safety posture.",
+      "For technicians, include PPE/lockout and safe test sequencing before any measurement guidance."
+    ]
+  },
+  "electrical_safety_critical": {
+    "priority": "HIGHEST - MUST BE COMMUNICATED FIRST",
+    "headline_warning": "HVAC equipment contains lethal voltage (120/240V) and stored energy (capacitors) that can shock even when power is off. Electrical work can cause electrocution, arc flash, or fire.",
+    "lethal_voltage_warnings": [
+      "Outdoor condensers and air handlers commonly contain 240V circuits",
+      "Control circuits are typically 24V but share cabinets with high voltage",
+      "Capacitors can hold charge after power is disconnected",
+      "Water + electricity is a life-safety hazard"
+    ],
+    "prohibited_for_homeowners": [
+      "Opening service panels on outdoor units, air handlers, furnaces, or electrical disconnects",
+      "Measuring voltage, amperage, or capacitance with a meter",
+      "Replacing capacitors, contactors, transformers, motors, control boards, fuses (inside equipment)",
+      "Working inside the breaker panel or replacing breakers",
+      "Bypassing safety switches, fuses, or interlocks",
+      "Operating equipment with burning smell, smoke, sparking, or water intrusion"
+    ],
+    "technician_ppe_required": [
+      "Safety glasses and insulated gloves appropriate for task",
+      "Arc-rated PPE as required by site safety policy",
+      "Insulated tools in energized testing scenarios",
+      "Proper footwear and stable work surface"
+    ],
+    "lockout_tagout_procedure": [
+      "Identify all power sources (main breaker, equipment disconnect, air handler breaker)",
+      "Shut off power using disconnects/breakers (both indoor and outdoor as applicable)",
+      "Apply lock and tag per company/site policy",
+      "Verify de-energized state with an appropriate meter (prove the meter before/after)",
+      "Discharge capacitors safely (technician-only)",
+      "Only then begin component inspection or replacement"
+    ],
+    "professional_triage": {
+      "call_911": [
+        "Any fire/smoke/flames",
+        "Strong electrical burning smell with visible smoke or arcing",
+        "Anyone shocked or injured"
+      ],
+      "call_electrician": [
+        "Breaker panel issues (buzzing, arcing, scorch marks)",
+        "Repeated breaker trips that resume immediately after reset",
+        "Burning smell from panel/disconnect/wiring outside HVAC equipment",
+        "Lights in house flicker when AC starts",
+        "New circuit/disconnect/service upgrades"
+      ],
+      "call_hvac_tech": [
+        "Capacitor/contactor/motor failures inside HVAC equipment",
+        "Compressor issues, refrigerant-related faults, control board faults",
+        "Low-voltage control problems inside HVAC equipment",
+        "Unit hums but fan won't spin",
+        "Thermostat is blank (potential transformer issue)"
+      ]
+    }
+  },
+  "components": {
+    "capacitors": {
+      "types": {
+        "run_capacitor": "Helps motor/compressor run efficiently and start reliably (PSC motors, some compressors)",
+        "start_capacitor": "Provides extra starting torque for some compressors/motors (often with potential relay or start kit)",
+        "dual_run_capacitor": "Single can that serves both compressor (HERM) and condenser fan (FAN) plus common (C)"
+      },
+      "ratings": {
+        "units": "Microfarads (µF or MFD) and Voltage (370V/440V)",
+        "tolerance": "Typically +/- 6%",
+        "voltage_rule": "440VAC-rated capacitors can replace 370VAC if capacitance matches; reverse is NOT acceptable"
+      },
+      "common_ratings": {
+        "condenser_fan_motor": "3-10 µF, commonly 5, 7.5, 10 µF at 370V/440V",
+        "compressor_run_cap": "25-80 µF, commonly 30, 35, 40, 45, 50, 55, 60, 70 µF at 370V/440V",
+        "blower_motor_psc": "5-20 µF, commonly 7.5, 10, 12.5, 15 µF at 370V/440V"
+      },
+      "terminal_markings": {
+        "C": "Common",
+        "FAN": "Condenser fan motor",
+        "HERM": "Hermetic compressor"
+      },
+      "symptoms_of_failure": [
+        "Outdoor unit hums but fan or compressor does not start",
+        "Fan blade can be spun and then it runs (classic weak run cap - DO NOT advise homeowners to do this)",
+        "Hard starting, intermittent starts, or rapid cycling on overload",
+        "Bulging/domed top of capacitor",
+        "Oil leaking from casing",
+        "Burnt terminals or rust"
+      ],
+      "why_homeowners_must_not_replace": [
+        "Shock risk from stored charge and nearby high-voltage terminals",
+        "Incorrect wiring can destroy motors/boards or create fire hazards",
+        "A failed capacitor may be symptom of deeper issue (motor/compressor over-amps, failing bearings, voltage problems)",
+        "Capacitor discharge requires proper resistor-based method - screwdriver shorting is dangerous"
+      ]
+    },
+    "contactors": {
+      "function": "High-voltage relay that uses 24V control power to energize the compressor and condenser fan circuit",
+      "signs_of_failure": [
+        "Pitted or burnt/carbonized contacts",
+        "Contacts welded closed (unit runs continuously even when thermostat is OFF)",
+        "Chattering/buzzing (weak coil voltage or failing coil)",
+        "Ants or debris caught between contacts (preventing closure)",
+        "Plunger stuck in or out",
+        "Melted coil casing or burnt smell"
+      ],
+      "common_causes_of_failure": [
+        "Age and contact erosion from normal arcing",
+        "Ants/insects and debris (very common in some regions)",
+        "High current draw from failing compressor or fan motor",
+        "Loose terminals causing heating",
+        "Low-voltage control issues causing coil chatter"
+      ],
+      "replacement_notes": "Match coil voltage (typically 24VAC) and contact rating. Inspect for upstream causes (over-amps, voltage issues). Technician only."
+    },
+    "motors_and_amp_draws": {
+      "types": {
+        "PSC": "Permanent Split Capacitor - Older, fixed speed, relies on run capacitor, speed taps",
+        "ECM": "Electronically Commutated Motor - Variable speed, high efficiency, has internal module, not capacitor-based same way"
+      },
+      "nameplate_terminology": {
+        "RLA": "Rated Load Amps - Compressor running current rating reference",
+        "LRA": "Locked Rotor Amps - Inrush current at startup (if sustained, motor is seized)",
+        "FLA": "Full Load Amps - Motor rated current at full load",
+        "MCA": "Minimum Circuit Ampacity - Used to size the WIRE",
+        "MOP": "Maximum Overcurrent Protection - Used to size the BREAKER/FUSE"
+      },
+      "failure_signs": [
+        "Amp draw exceeds RLA/FLA on nameplate",
+        "Motor casing extremely hot to touch",
+        "Grinding/squealing noise (bearing failure)",
+        "Shaft has play (wiggles) or is hard to turn by hand",
+        "Burning smell from motor"
+      ],
+      "save_vs_replace": {
+        "saveable": "Loose wire connection, bad capacitor (motor itself is fine)",
+        "replace": "Bad windings (short to ground/open), seized bearings, ECM module failure, consistent over-amp despite correct voltage and airflow"
+      }
+    },
+    "electrical_connections": {
+      "common_problems": [
+        "Loose lugs/screws causing resistance = heat = melted wires",
+        "Corrosion on terminals (common in coastal areas)",
+        "Rub-outs (copper tube vibrating against wire insulation)",
+        "Undersized conductors or improper terminations"
+      ],
+      "breaker_sizing": {
+        "MCA": "Minimum Circuit Ampacity - Used to size the WIRE",
+        "MOP": "Maximum Overcurrent Protection - Used to size the BREAKER/FUSE",
+        "common_mistakes": [
+          "Oversizing breaker beyond MOP (fire risk)",
+          "Undersizing breaker leading to nuisance trips",
+          "Using breaker size as conductor sizing guide (incorrect)"
+        ]
+      },
+      "warning_signs": [
+        "Discolored/brown insulation near terminals",
+        "Melted wire nuts or terminals",
+        "Breaker warm to touch",
+        "Scorch marks in disconnect or equipment",
+        "Buzzing at panel or disconnect"
+      ]
+    },
+    "transformers_low_voltage": {
+      "basics": "Steps down 120V/240V to 24V for control circuit (thermostat, contactor coil, control board)",
+      "common_issues": [
+        "Blown 3A or 5A fuse on control board",
+        "Short in thermostat wire (dogs chewing, weed eater damage, pinched at staples)",
+        "Bad transformer (primary winding open)",
+        "Shorted contactor coil or control component"
+      ],
+      "diagnosis_tip": "If thermostat is blank and batteries are good, check condensate float switch first (interrupts 24V). Then check fuse on board. Then transformer."
+    }
+  },
+  "diagnostic_symptoms_table": [
+    {
+      "symptom": "Outdoor unit hums but won't start",
+      "safety_first": "Do not touch the unit or attempt manual fan spinning. Shut off at thermostat.",
+      "likely_causes": ["Bad capacitor (fan or compressor)", "Contactor not fully closing", "Seized condenser fan motor", "Compressor locked rotor", "Low voltage"],
+      "homeowner_check": "Check thermostat settings, check breaker once, clear debris around unit",
+      "call_pro_if": "Humming persists or breaker trips"
+    },
+    {
+      "symptom": "Breaker keeps tripping",
+      "safety_first": "Reset ONE time only. If trips again, STOP. If burning smell/buzzing/heat at panel: call electrician urgently.",
+      "likely_causes": ["Compressor overcurrent/locked rotor", "Shorted capacitor", "Shorted motor windings", "Loose/burnt connection causing arcing", "Incorrect breaker size", "Low voltage"],
+      "homeowner_check": "One-time reset only. Note WHEN it trips (on start vs after running).",
+      "call_pro_if": "Trips again. Electrician if panel symptoms. HVAC tech if equipment suspected."
+    },
+    {
+      "symptom": "Blower won't run (indoor)",
+      "safety_first": "Do not open the air handler cabinet.",
+      "likely_causes": ["Bad blower capacitor (PSC)", "ECM module failure", "Blown low-voltage fuse", "Control board failure", "Door interlock switch open", "Motor bearings seized"],
+      "homeowner_check": "Check thermostat fan setting (AUTO/ON), replace filter, check breaker once",
+      "call_pro_if": "No change after basic checks"
+    },
+    {
+      "symptom": "System won't turn on at all",
+      "safety_first": "If burning smell or water near equipment: stop and call pro.",
+      "likely_causes": ["Tripped breaker or blown fuse", "Thermostat issue (dead batteries, wrong settings)", "Transformer failure or blown low-voltage fuse", "Float switch tripped (condensate)", "Control board failure"],
+      "homeowner_check": "Thermostat batteries and settings, breaker reset ONE time, check for water around drain pan (without opening panels)",
+      "call_pro_if": "Power returns then fails again, water overflow present, breaker trips again"
+    },
+    {
+      "symptom": "Burning smell from equipment",
+      "safety_first": "Turn system OFF immediately at thermostat. If smoke/sparking/flames: LEAVE and call 911. Do not reset breakers.",
+      "likely_causes": ["Electrical arcing/overheating", "Motor overheating", "Burnt wire/terminal", "Control board failure"],
+      "homeowner_check": "NONE beyond turning system off and reporting observations",
+      "call_pro_if": "Immediately - electrician and/or HVAC tech"
+    }
+  ],
+  "homeowner_safe_checks": {
+    "rules": [
+      "No touching internal components, wiring, or opening service panels",
+      "If unsure, stop and call a professional"
+    ],
+    "safe_checks": [
+      {
+        "check": "Breaker reset (ONE time only)",
+        "steps": "Identify HVAC breaker, switch fully OFF then ON once. If trips again, stop and call pro.",
+        "stop_if": "Any burning smell at panel, buzzing/arcing, heat at breaker"
+      },
+      {
+        "check": "Thermostat battery and settings",
+        "steps": "Confirm mode (COOL/HEAT), setpoint, schedule. Replace batteries if applicable."
+      },
+      {
+        "check": "Drain line inspection",
+        "steps": "Look for water in pan under indoor unit (without opening panels). If full, vacuum out drain line from outside termination."
+      },
+      {
+        "check": "Filter check",
+        "steps": "Ensure filter is not clogged, which can overheat motors and trip safeties."
+      },
+      {
+        "check": "Visual inspection (look, don't touch)",
+        "what_to_look_for": ["Ice on refrigerant lines (report only)", "Water pooling near equipment", "Debris blocking outdoor unit", "Burnt smell or smoke"]
+      }
+    ],
+    "what_to_report_to_technician": [
+      "Exact symptom and timing (on startup vs after running)",
+      "Any recent power outage or lightning event",
+      "Any code displayed on thermostat/control board",
+      "Whether breaker trips immediately or after a few minutes",
+      "Photos of outdoor unit placement and any visible damage (from safe distance)"
+    ]
+  },
+  "technician_diagnostic_procedures": {
+    "systematic_approach": [
+      "Start with safety: PPE, LOTO, verify de-energized before opening compartments",
+      "Confirm complaint and operating mode; check thermostat call and 24V control integrity",
+      "Inspect visually for heat damage, loose connections, debris, moisture, component condition",
+      "Verify supply voltage under load; confirm disconnect and breaker integrity",
+      "Check control voltage (24VAC) to contactor/relays; verify safeties in series",
+      "Test capacitors (after safe discharge), contactor coil resistance, contact condition",
+      "Measure running amps and compare to nameplate; watch for abnormal inrush/locked rotor",
+      "Document findings and root cause, not just the failed part"
+    ],
+    "meter_readings_guide": {
+      "prove_your_meter": "Verify meter on known live source before testing, test circuit, verify again after",
+      "common_patterns": [
+        {
+          "reading": "Low line voltage under load + high current draw",
+          "indicates": "Supply issue, loose connection, undersized conductors, utility sag"
+        },
+        {
+          "reading": "Contactor coil energized but contacts not closing fully",
+          "indicates": "Weak coil voltage, failing coil, mechanical binding/debris"
+        },
+        {
+          "reading": "Capacitance out of tolerance",
+          "indicates": "Failed capacitor - replace with correct µF and equal/higher voltage rating"
+        },
+        {
+          "reading": "LRA condition (high inrush, no start)",
+          "indicates": "Weak capacitor/start kit issue, locked rotor compressor, low voltage"
+        }
+      ]
+    },
+    "documentation_best_practices": [
+      "Record nameplate data (MCA/MOP, RLA/LRA/FLA) and measured values with conditions",
+      "Photograph wiring before changes",
+      "Note root cause suspects (ants in contactor, loose lug causing heat, etc.)",
+      "Provide customer summary: what failed, why, what was done, how to prevent recurrence"
+    ]
+  }
+}

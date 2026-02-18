@@ -1,0 +1,449 @@
+{
+  "hvac_manufacturer_db": {
+    "meta": {
+      "version": "1.0.0",
+      "description": "Comprehensive HVAC manufacturer database for technician identification, model decoding, warranty terms, and common field issues.",
+      "created_date": "2025-12-28",
+      "notes": [
+        "Model number nomenclature varies by product line and production year. Always confirm with the unit data plate.",
+        "Warranty terms can vary by product tier, region, and registration rules. Verify the specific warranty certificate.",
+        "Refrigerant transition: Many OEMs shifted to A2L low-GWP refrigerants around January 1, 2025 for new equipment."
+      ]
+    },
+    "manufacturers": {
+      "Carrier": {
+        "parent_company": "Carrier Global Corporation",
+        "subsidiary_brands": ["Bryant", "Payne", "Day & Night"],
+        "brand_notes": "Carrier refers to R-454B as 'Puron Advance' in newer products.",
+        "model_number_decoder": {
+          "format_example": "24ACC636A003",
+          "breakdown": {
+            "24": "Product Type (24=AC, 25=Heat Pump)",
+            "A": "Tier/Series (A=Performance/Infinity, V=Variable Speed)",
+            "CC": "Model Family",
+            "6": "SEER Indicator (6=16 SEER, 7=17 SEER)",
+            "36": "Capacity (36,000 BTU = 3 Ton)",
+            "A": "Major Revision",
+            "003": "Voltage/Electrical (003=208/230V 1ph)"
+          },
+          "tonnage_codes": {
+            "18": {"tons": 1.5, "btu": 18000},
+            "24": {"tons": 2.0, "btu": 24000},
+            "30": {"tons": 2.5, "btu": 30000},
+            "36": {"tons": 3.0, "btu": 36000},
+            "42": {"tons": 3.5, "btu": 42000},
+            "48": {"tons": 4.0, "btu": 48000},
+            "60": {"tons": 5.0, "btu": 60000}
+          },
+          "seer_codes": {
+            "3": "13 SEER", "4": "14 SEER", "5": "15 SEER",
+            "6": "16 SEER", "7": "17 SEER", "8": "18 SEER"
+          },
+          "voltage_codes": {
+            "1": "115V 1ph 60Hz",
+            "3": "208/230V 1ph 60Hz",
+            "4": "460V 3ph 60Hz"
+          },
+          "serial_decoder": "First two digits = Week, Second two digits = Year (e.g., 1221... = 12th week of 2021)"
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years (with registration)",
+          "heat_exchanger": "20 years or Lifetime (depending on model)",
+          "registration_required": true,
+          "registration_window_days": 90,
+          "labor": "Typically 1 year by installer or via optional plan"
+        },
+        "common_issues": [
+          {
+            "model_series": "Infinity / Evolution (User Interface)",
+            "issue": "Communication errors (SYSTXCC) often due to ABCD wiring shorts or bad UI connection",
+            "years": "2015-Present",
+            "field_tip": "Check all low-voltage connections and verify proper wiring sequence"
+          },
+          {
+            "model_series": "Secondary Heat Exchangers (90%+ Furnaces)",
+            "issue": "Polypropylene coating failure leading to clogging/corrosion (Class action history)",
+            "years": "1990s-2011",
+            "field_tip": "Inspect secondary HX for blockage if experiencing pressure switch issues"
+          },
+          {
+            "model_series": "General - All Platforms",
+            "issue": "Dual run capacitor and contactor wear in hot climates with frequent cycling",
+            "years": "Common across years",
+            "field_tip": "Verify correct µF ratings and mount caps away from heat sources"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A (Puron)",
+          "2025_plus": "R-454B (Puron Advance)"
+        }
+      },
+      "Trane": {
+        "parent_company": "Trane Technologies",
+        "subsidiary_brands": ["American Standard", "RunTru"],
+        "brand_notes": "Trane and American Standard share platforms. Transitioning to R-454B and R-32 in phased approach.",
+        "model_number_decoder": {
+          "format_example": "4TTR4036L1000A",
+          "breakdown": {
+            "4": "Refrigerant (4=R-410A, 2=R-22)",
+            "T": "Product Type (T=Split Cooling)",
+            "T": "Brand (T=Trane, A=American Standard)",
+            "R": "Type (R=Replacement/Standard)",
+            "4": "SEER Group (4=14 SEER, 6=16 SEER, 7=17 SEER)",
+            "036": "Capacity (036 = 36,000 BTU = 3 Ton)",
+            "L": "Major Design Change",
+            "1": "Voltage (1=208-230/1/60)"
+          },
+          "tonnage_codes": {
+            "018": {"tons": 1.5, "btu": 18000},
+            "024": {"tons": 2.0, "btu": 24000},
+            "030": {"tons": 2.5, "btu": 30000},
+            "036": {"tons": 3.0, "btu": 36000},
+            "042": {"tons": 3.5, "btu": 42000},
+            "048": {"tons": 4.0, "btu": 48000},
+            "060": {"tons": 5.0, "btu": 60000}
+          },
+          "seer_codes": {
+            "3": "13 SEER", "4": "14 SEER", "5": "15 SEER",
+            "6": "16 SEER", "7": "17 SEER", "8": "18 SEER",
+            "9": "19 SEER", "0": "20+ SEER"
+          },
+          "power_supply_codes": {
+            "1": "208-230/1/60",
+            "3": "200-230/3/60",
+            "4": "460/3/60"
+          },
+          "serial_decoder": "First 2 digits = Year, next 2 digits = Week (e.g., 2140... = 2021, Week 40). Older models use alphanumeric year codes."
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10-12 years depending on model (XLi gets 12)",
+          "heat_exchanger": "20 years to Lifetime",
+          "registration_required": true,
+          "registration_window_days": 60,
+          "labor": "Not included by manufacturer"
+        },
+        "common_issues": [
+          {
+            "model_series": "Spine Fin Coils",
+            "issue": "Difficult to clean without specialized chemical/sprayer; prone to clogging if cottonwood present",
+            "years": "All",
+            "field_tip": "Use low-pressure water from inside-out; avoid aggressive brushing that flattens spine fins"
+          },
+          {
+            "model_series": "XV20i / XV18",
+            "issue": "Inverter drive board failures due to power surges",
+            "years": "2016-Present",
+            "field_tip": "Surge protector highly recommended for variable speed units"
+          },
+          {
+            "model_series": "General - Outdoor Units",
+            "issue": "Contactor pitting and dual run capacitor failure in hot climates",
+            "years": "Common across years",
+            "field_tip": "Check contactor voltage drop and inspect for overheating"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-454B and R-32 (phased approach - verify nameplate)"
+        }
+      },
+      "Lennox": {
+        "parent_company": "Lennox International",
+        "subsidiary_brands": ["Armstrong Air", "Ducane", "Concord", "Allied"],
+        "brand_notes": "R-454B for whole-home systems, R-32 for ductless mini-splits.",
+        "model_number_decoder": {
+          "format_example": "XC21-036-230-01",
+          "breakdown": {
+            "X": "Refrigerant (X=R-410A, H=R-22)",
+            "C": "Unit Type (C=Air Conditioner, P=Heat Pump)",
+            "21": "Series/SEER (21=Signature Series 21 SEER)",
+            "036": "Capacity (036 = 3 Ton)",
+            "230": "Voltage (208/230V)",
+            "01": "Revision"
+          },
+          "tonnage_codes": {
+            "018": {"tons": 1.5, "btu": 18000},
+            "024": {"tons": 2.0, "btu": 24000},
+            "030": {"tons": 2.5, "btu": 30000},
+            "036": {"tons": 3.0, "btu": 36000},
+            "041": {"tons": 3.5, "btu": 41000},
+            "042": {"tons": 3.5, "btu": 42000},
+            "047": {"tons": 4.0, "btu": 47000},
+            "048": {"tons": 4.0, "btu": 48000},
+            "060": {"tons": 5.0, "btu": 60000}
+          },
+          "series_tiers": {
+            "Merit": "Entry level (13ACX series)",
+            "Elite": "Mid-tier (EL16XC1 series)",
+            "Signature": "Premium (XC21, XC25 series)"
+          },
+          "serial_decoder": "Third and fourth digits indicate year (e.g., 5815... = 2015). First two digits = plant code."
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years (Signature series sometimes 10+)",
+          "heat_exchanger": "20 years or Lifetime",
+          "registration_required": true,
+          "registration_window_days": 60,
+          "labor": "Not included by manufacturer"
+        },
+        "common_issues": [
+          {
+            "model_series": "Evaporator Coils (All Aluminum Quantum)",
+            "issue": "Early generations of aluminum coils had leak issues at U-bends",
+            "years": "2014-2017",
+            "field_tip": "Check for formicary corrosion in high-VOC environments"
+          },
+          {
+            "model_series": "EL296V / SL280V Furnaces",
+            "issue": "Pressure switch port blockage due to condensate issues",
+            "years": "2015-2019",
+            "field_tip": "Clear condensate drain and inspect pressure switch tubing"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-454B (whole-home), R-32 (mini-splits)"
+        }
+      },
+      "Rheem": {
+        "parent_company": "Rheem Manufacturing Company",
+        "subsidiary_brands": ["Ruud", "WeatherKing"],
+        "brand_notes": "Rheem and Ruud share major platforms; model prefixes differ.",
+        "model_number_decoder": {
+          "format_example": "RA1636AJ1NA",
+          "breakdown": {
+            "R": "Brand (R=Rheem, U=Ruud)",
+            "A": "Type (A=AC, P=Heat Pump)",
+            "16": "SEER (14=14 SEER, 16=16 SEER)",
+            "36": "Capacity (36 = 3 Ton)",
+            "A": "Major Series",
+            "J": "Voltage (J=208/230 1ph)",
+            "1": "Option Code",
+            "NA": "Regional/revision codes"
+          },
+          "tonnage_codes": {
+            "18": {"tons": 1.5, "btu": 18000},
+            "24": {"tons": 2.0, "btu": 24000},
+            "30": {"tons": 2.5, "btu": 30000},
+            "36": {"tons": 3.0, "btu": 36000},
+            "42": {"tons": 3.5, "btu": 42000},
+            "48": {"tons": 4.0, "btu": 48000},
+            "60": {"tons": 5.0, "btu": 60000}
+          },
+          "serial_decoder": "Look for 'W' followed by numbers (e.g., ...W2419... = 24th week of 2019)"
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years",
+          "heat_exchanger": "20 years or Lifetime",
+          "registration_required": true,
+          "registration_window_days": 60,
+          "labor": "Not included by manufacturer"
+        },
+        "common_issues": [
+          {
+            "model_series": "Heat Pumps (RP14/RP15)",
+            "issue": "Reversing valve solenoid wire rubbing against copper tubing causing short/leak",
+            "years": "2016-2020",
+            "field_tip": "Inspect solenoid wire routing during service calls"
+          },
+          {
+            "model_series": "Microchannel Coil Models",
+            "issue": "Corrosion sensitivity in coastal/industrial environments",
+            "years": "Varies by series",
+            "field_tip": "Recommend coil protection strategies and periodic rinsing in coastal markets"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-454B"
+        }
+      },
+      "Goodman_Daikin": {
+        "parent_company": "Daikin Comfort Technologies North America",
+        "subsidiary_brands": ["Goodman", "Amana", "Daikin"],
+        "brand_notes": "Daikin/Goodman uses R-32 (not R-454B) for A2L transition. Amana often has Lifetime Unit Replacement warranty.",
+        "model_number_decoder": {
+          "format_example": "GSX160361",
+          "breakdown": {
+            "G": "Brand (G=Goodman, A=Amana, D=Daikin)",
+            "S": "Type (S=Split System)",
+            "X": "Refrigerant (X=R-410A, Z=R-410A High Eff)",
+            "16": "SEER",
+            "036": "Capacity (036 = 3 Ton)",
+            "1": "Revision"
+          },
+          "tonnage_codes": {
+            "018": {"tons": 1.5, "btu": 18000},
+            "024": {"tons": 2.0, "btu": 24000},
+            "030": {"tons": 2.5, "btu": 30000},
+            "036": {"tons": 3.0, "btu": 36000},
+            "042": {"tons": 3.5, "btu": 42000},
+            "048": {"tons": 4.0, "btu": 48000},
+            "060": {"tons": 5.0, "btu": 60000}
+          },
+          "seer2_codes": {
+            "3": "13.4-13.7 SEER2", "4": "13.8-14.5 SEER2",
+            "5": "14.6-15.5 SEER2", "6": "15.6-16.5 SEER2",
+            "7": "16.6-17.5 SEER2", "8": "17.6-18.5 SEER2",
+            "9": "18.6-19.5 SEER2", "0": "19.6+ SEER2"
+          },
+          "electrical_codes": {
+            "1": "208/230V 1ph 60Hz",
+            "3": "208/230V 3ph 60Hz",
+            "4": "460V 3ph 60Hz",
+            "5": "380/415V 3ph 50Hz"
+          },
+          "serial_decoder": "First two digits = Year, Second two digits = Month (e.g., 1904... = April 2019)"
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years (Amana often has Lifetime Unit Replacement)",
+          "heat_exchanger": "20 years or Lifetime Unit Replacement (Amana)",
+          "registration_required": true,
+          "registration_window_days": 60,
+          "labor": "Not included by manufacturer"
+        },
+        "common_issues": [
+          {
+            "model_series": "Goodman GSX/GSZ",
+            "issue": "Filter drier rust-out if located outside (factory installed in condenser)",
+            "years": "2010-2018",
+            "field_tip": "Inspect filter drier for corrosion during maintenance"
+          },
+          {
+            "model_series": "SmartCoil (Aluminum)",
+            "issue": "Leaks at the transition from aluminum to copper stub",
+            "years": "2015-2018",
+            "field_tip": "Check copper-to-aluminum joints carefully"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-32 (NOT R-454B - Daikin uses R-32)"
+        }
+      },
+      "York": {
+        "parent_company": "Johnson Controls",
+        "subsidiary_brands": ["Coleman", "Luxaire", "Champion"],
+        "brand_notes": "Johnson Controls selected R-454B for YORK residential ducted applications.",
+        "model_number_decoder": {
+          "format_example": "YCG36B21S",
+          "breakdown": {
+            "Y": "Brand (Y=York)",
+            "C": "Type (C=AC, H=Heat Pump)",
+            "G": "Series/SEER (G=17 SEER, S=13/14 SEER)",
+            "36": "Capacity (36 = 3 Ton)",
+            "B": "Refrigerant/Generation",
+            "21": "Voltage",
+            "S": "Revision"
+          },
+          "tonnage_codes": {
+            "18": {"tons": 1.5, "btu": 18000},
+            "24": {"tons": 2.0, "btu": 24000},
+            "30": {"tons": 2.5, "btu": 30000},
+            "36": {"tons": 3.0, "btu": 36000},
+            "42": {"tons": 3.5, "btu": 42000},
+            "48": {"tons": 4.0, "btu": 48000},
+            "60": {"tons": 5.0, "btu": 60000}
+          },
+          "voltage_codes": {
+            "06": "208/230V 1ph 60Hz",
+            "45": "440/480V 3ph 60Hz"
+          },
+          "serial_decoder": "Check data plate 'Mfg Date' - serial format varies by era"
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years",
+          "heat_exchanger": "20 years or Lifetime",
+          "registration_required": true,
+          "registration_window_days": 90,
+          "labor": "Some programs offer 1-year labor"
+        },
+        "common_issues": [
+          {
+            "model_series": "Microchannel Condensers",
+            "issue": "Leaking at the header welds; difficult to repair, usually requires replacement",
+            "years": "2010-Present",
+            "field_tip": "Microchannel coils are generally not field-repairable"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-454B"
+        }
+      },
+      "ICP_Brands": {
+        "parent_company": "International Comfort Products (Carrier Global)",
+        "subsidiary_brands": ["Heil", "Tempstar", "Comfortmaker", "Arcoaire", "Day & Night"],
+        "brand_notes": "Owned by Carrier, shares many internal components but different chassis/model numbers.",
+        "model_number_decoder": {
+          "format_example": "N4A336AKN",
+          "breakdown": {
+            "N": "Brand Tier (N=Entry, H=Mainline)",
+            "4": "Refrigerant (4=R-410A)",
+            "A": "Type (A=AC, H=Heat Pump)",
+            "3": "SEER (3=13, 4=14, 5=15, 6=16)",
+            "36": "Capacity (36 = 3 Ton)",
+            "A": "Major Series",
+            "K": "Voltage (K=208/230V 1ph)",
+            "N": "Sales Code"
+          },
+          "tonnage_codes": {
+            "18": {"tons": 1.5, "btu": 18000},
+            "24": {"tons": 2.0, "btu": 24000},
+            "30": {"tons": 2.5, "btu": 30000},
+            "36": {"tons": 3.0, "btu": 36000},
+            "42": {"tons": 3.5, "btu": 42000},
+            "48": {"tons": 4.0, "btu": 48000},
+            "60": {"tons": 5.0, "btu": 60000}
+          },
+          "efficiency_codes": {
+            "3": "13 SEER", "4": "14 SEER", "5": "15 SEER", "6": "16 SEER"
+          },
+          "voltage_codes": {
+            "K": "208/230V 1ph 60Hz"
+          },
+          "serial_decoder": "Same as Carrier: First 2 digits = week, second 2 digits = year (e.g., E1521... = 15th week of 2021)"
+        },
+        "warranty": {
+          "standard_parts": "5 years (10 years with registration)",
+          "compressor": "10 years",
+          "no_hassle_replacement": "Top tier models offer full unit replacement if compressor/coil fails in first 1/5/10 years",
+          "registration_required": true,
+          "registration_window_days": 90,
+          "labor": "Not included by manufacturer"
+        },
+        "common_issues": [
+          {
+            "model_series": "Entry Level (N4A3)",
+            "issue": "Fan motors prone to bearing failure in high heat environments",
+            "years": "2015-2019",
+            "field_tip": "Monitor motor amp draw and bearing noise during maintenance"
+          },
+          {
+            "model_series": "General - All Platforms",
+            "issue": "Capacitor/contactors and low-voltage wiring issues (splices, rodents, corrosion)",
+            "years": "Common across years",
+            "field_tip": "Inspect wiring connections and look for rodent damage"
+          }
+        ],
+        "refrigerant_by_year": {
+          "pre_2010": "R-22",
+          "2010_2024": "R-410A",
+          "2025_plus": "R-454B"
+        }
+      }
+    }
+  }
+}

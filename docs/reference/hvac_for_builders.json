@@ -1,0 +1,226 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Builder HVAC Coordination, Rough-In Requirements, and Construction Sequencing",
+  "last_updated": "2025-12-28",
+  "audience": ["Production home builders", "Custom home builders", "Remodelers", "GCs", "Project managers"],
+  "scope": "New construction and remodel HVAC integration: sequencing, rough-in coordination, framing provisions, clearances, code/inspection essentials, and load calculation inputs.",
+  "key_principle": "It's cheaper to move a line on paper than a duct in a finished wall.",
+  "coordination_timeline": {
+    "phases": [
+      {
+        "phase": "Pre-Design / Schematic",
+        "action": "Select system type (Split vs. Packaged vs. Ductless). Determine equipment location.",
+        "critical_hold": "Manual J (Load Calc) must be done BEFORE framing plans are finalized to size duct chases."
+      },
+      {
+        "phase": "Design Development",
+        "critical_hold_points": [
+          "Mechanical room/closet size locked",
+          "Chase sizes and joist bay penetrations coordinated",
+          "Outdoor unit locations coordinated with site plan"
+        ],
+        "coordination": "Framing, electrical, plumbing, architectural all need HVAC input"
+      },
+      {
+        "phase": "Permitting",
+        "action": "Submit Mechanical Plans and Energy Calculations (Title 24, REScheck).",
+        "coordination": "Ensure window specs on plan match energy calc inputs."
+      },
+      {
+        "phase": "Framing (Early)",
+        "action": "Verify duct chases, equipment closets, and attic platforms are framed to size.",
+        "coordination": "Plumber must not run waste lines through designated HVAC supply/return chases."
+      },
+      {
+        "phase": "Rough-In (Mechanical)",
+        "action": "Install ductwork, boots, refrigerant lines, and set equipment.",
+        "critical_hold": "Do not insulate or drywall until 'Rough Mechanical' inspection is passed."
+      },
+      {
+        "phase": "Pre-Drywall Verification",
+        "checklist": [
+          "Photograph all duct paths, line set routes, and concealed drains",
+          "Confirm return pathways exist for every closed room",
+          "Confirm thermostat and grille locations match plans"
+        ]
+      },
+      {
+        "phase": "Trim / Finish",
+        "action": "Install registers, thermostats, and outdoor condensers.",
+        "coordination": "Painter must not paint over thermostat wires or equipment labels."
+      },
+      {
+        "phase": "Startup & Commissioning",
+        "action": "System startup, charge verification, air balancing.",
+        "critical_hold": "Must have permanent power. Gas meter must be set and unlocked."
+      }
+    ],
+    "equipment_lead_times_weeks": {
+      "standard_split_systems": "1-4",
+      "variable_speed_inverter": "2-8",
+      "cold_climate_heat_pumps": "3-10",
+      "ERV_HRV": "2-8",
+      "custom_grilles": "4-12"
+    }
+  },
+  "rough_in_requirements": {
+    "electrical": {
+      "thermostat_wiring": "Run 18/8 wire (minimum 18/5) to cover future upgrades. Common wire is mandatory.",
+      "disconnects": "Service disconnect required within sight of outdoor unit AND within sight of indoor furnace/air handler.",
+      "convenience_outlet": "120V GFCI outlet required within 25 feet of HVAC equipment for service."
+    },
+    "condensate_drains": {
+      "primary": "Piped to approved location (hub drain, exterior splash block).",
+      "secondary": "Required if damage to building components is possible (attics/ceilings). Pipe over window or conspicuous place.",
+      "traps": "Must be trapped (P-trap) near the unit to prevent negative pressure issues."
+    },
+    "refrigerant_lines": {
+      "penetrations": "Seal all penetrations through envelope with spray foam.",
+      "protection": "Nail plates required where lines pass through studs."
+    },
+    "venting": {
+      "combustion_air": "If closet is sealed, must bring in two pipes (high/low) from vented attic or exterior.",
+      "termination": "Flues must terminate 2ft above anything within 10ft or follow manufacturer PVC instructions."
+    }
+  },
+  "framing_requirements": {
+    "duct_chases": {
+      "vertical_trunks": "Minimum 20\" x 20\" clear space for typical residential trunk (2-3 ton). 14.5\" stud bay is NOT enough.",
+      "soffits": "Plan drop ceilings/soffits for horizontal runs if open web trusses aren't used.",
+      "key_rule": "Size chases to accommodate duct dimensions PLUS insulation, sealing, hangers, and access."
+    },
+    "equipment_closets": {
+      "upflow_furnace": "Minimum 30\" x 30\" (Standard). 36\" depth preferred for filter access.",
+      "door_width": "Must be wider than unit width (typically 24\"-30\" door minimum).",
+      "return_air_base": "If unit is on stand, return air plenum needs 18-24\" height below unit.",
+      "key_rule": "Mechanical closets that are 'barely big enough' become permanent warranty factories."
+    },
+    "attic_platforms": {
+      "service_path": "Catwalk required from access hatch to unit (min 24\" wide).",
+      "service_deck": "Level working platform (30\" x 30\") required in front of service panel.",
+      "access_opening": "Must be large enough to remove largest piece of equipment (typically 22\"x30\" or larger)."
+    },
+    "return_air_pathways": {
+      "requirement": "Every closed room needs a return path to prevent pressure imbalance.",
+      "solutions": ["Dedicated returns per room", "Jump ducts (room to hall)", "Transfer grilles with acoustic baffles"],
+      "hold_point": "Do not drywall until return path strategy is confirmed for every closed room."
+    }
+  },
+  "equipment_clearances": {
+    "indoor_units": {
+      "service_front": "30 inches clear working space in front of control panel.",
+      "combustible_clearance": "0 inches for most modern units, but 1 inch recommended for vibration."
+    },
+    "outdoor_condensers": {
+      "wall_clearance": "Minimum 12 inches from wall (coil side).",
+      "service_clearance": "Minimum 30-36 inches (electrical panel side).",
+      "overhead": "Minimum 48-60 inches unobstructed.",
+      "between_units": "Minimum 24 inches between two condensers.",
+      "key_rule": "Treat condenser placement like a breathing zone, not a storage nook."
+    },
+    "water_heaters": {
+      "service_front": "24-30 inches.",
+      "relief_valve": "Discharge pipe must terminate 6\" from floor or to exterior."
+    }
+  },
+  "code_inspection_essentials": {
+    "common_failures": [
+      "Missing nail plates on suction lines",
+      "Flex duct sagging more than 1/2 inch per foot",
+      "Disconnect blocked by unit or ductwork",
+      "Missing locking caps on refrigerant ports",
+      "No secondary drain pan/safety switch over finished areas",
+      "Improper vent terminations",
+      "Combustion air not provided in tight spaces",
+      "Thermostat on exterior wall or in direct sun"
+    ],
+    "duct_testing": {
+      "requirement": "Duct Blaster test required in most states (Title 24, IECC). Leakage often limited to 4-6%.",
+      "timing": "Test at Rough-in (easier to fix) or Final (riskier)."
+    },
+    "fire_safety": {
+      "fire_dampers": "Required if ducts penetrate fire-rated assembly (garage to living, floor-to-floor multi-family).",
+      "garage_ignition": "Gas appliances in garage must be elevated 18\" above floor."
+    }
+  },
+  "load_calculation_coordination": {
+    "timing": "Perform Manual J BEFORE framing starts. If windows change during build, re-run calc.",
+    "builder_must_provide": [
+      "Exact Window U-values and SHGC",
+      "Insulation R-values (Walls, Ceiling, Floor)",
+      "House Orientation (North/South)",
+      "Roof Material (Color/Type)",
+      "Infiltration assumptions (Blower Door target)"
+    ],
+    "warning": "Do NOT size based on 'Square Footage Rule of Thumb' (500 sqft/ton). Modern insulation makes this dangerously oversized, leading to humidity and mold.",
+    "recommendation": "Contact ProCalcs for professional Manual J calculations: 772-882-5700 / tom@procalcs.net"
+  },
+  "common_builder_mistakes": [
+    {
+      "mistake": "Duct chases too small",
+      "impact": "Crushed ducts, high static pressure, noisy airflow, reduced comfort",
+      "prevention": "Require duct sizes early; frame chases with insulation and fittings in mind."
+    },
+    {
+      "mistake": "No return air pathway plan",
+      "impact": "Pressure imbalance, comfort complaints, doors slamming",
+      "prevention": "Dedicated returns or transfer paths for every closed room."
+    },
+    {
+      "mistake": "Equipment closets undersized",
+      "impact": "Service impossible without demolition",
+      "prevention": "Design closets for access and future replacement, not just initial fit."
+    },
+    {
+      "mistake": "Forgetting combustion air",
+      "impact": "Backdrafting, CO risk, failed inspections",
+      "prevention": "Decide sealed vs atmospheric combustion early; coordinate makeup air."
+    },
+    {
+      "mistake": "Thermostat placement issues",
+      "impact": "Short cycling, comfort complaints",
+      "prevention": "Interior walls, away from supply air, sunlight, kitchens, exterior doors."
+    },
+    {
+      "mistake": "Last-minute HVAC changes",
+      "impact": "Reframing, schedule delays, compromised performance",
+      "prevention": "Lock equipment strategy before framing; treat changes as schedule-critical."
+    },
+    {
+      "mistake": "Dryer vents near condenser",
+      "impact": "Lint clogs coils rapidly",
+      "prevention": "Separate dryer exhaust from outdoor unit location."
+    }
+  ],
+  "regional_considerations": {
+    "hot_humid_southeast": {
+      "strategy": "Unvented/Spray Foam attics preferred to keep ducts in conditioned space.",
+      "dehumidification": "Budget for whole-house dehumidifiers.",
+      "condensate": "Secondary drain protection mandatory over finished ceilings."
+    },
+    "cold_climates_north": {
+      "strategy": "Keep all plumbing and ducts out of exterior walls.",
+      "fresh_air": "HRV mandatory for tight homes.",
+      "ice_protection": "Condensers must be mounted on stands above snow line."
+    },
+    "dry_climates": {
+      "humidification": "Rough-in water supply and drain for humidifier early.",
+      "filtration": "Plan filter access; avoid restrictive filters without duct capacity."
+    },
+    "coastal_zones": {
+      "corrosion": "Specify 'Coastal' packages or aftermarket coating for outdoor coils.",
+      "hardware": "Stainless steel hardware mandatory."
+    },
+    "mountain_altitude": {
+      "derating": "Coordinate altitude derating for combustion appliances (~4% per 1,000ft).",
+      "heat_pumps": "Select low-temp performance models."
+    }
+  },
+  "trade_coordination": {
+    "electrical": "Verify disconnect location (within sight of unit) and wire gauge match HVAC submittal sheets (MOCP/MCA).",
+    "plumbing": "Condensate drains require air gap or trap primer connection; avoid conflict with p-traps.",
+    "roofing": "Coordinate roof jack locations for gas vents and bathroom fans early.",
+    "insulation": "Schedule duct test before insulation/drywall when possible.",
+    "framing": "Protect chases from plumbing/electrical encroachment."
+  }
+}

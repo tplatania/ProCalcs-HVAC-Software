@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Mini-Split Error Codes Knowledge Base (by Brand)",
+  "last_updated": "2025-12-28",
+  "intended_use": "Troubleshooting guidance for homeowners and technicians. Emphasizes safe, practical checks and clear escalation to professionals.",
+  "global_notes": {
+    "model_variation_warning": "Error codes can vary by model series, region, control type (wired vs wireless), and generation. Always confirm using the exact model's service manual when available.",
+    "how_to_use": [
+      "Collect: brand, indoor model number, outdoor model number, the exact code/pattern shown, and whether the unit is heating/cooling/auto.",
+      "Ask where the code appears: indoor display/LEDs, outdoor LED board, wired controller, handheld remote, or app.",
+      "Run homeowner-safe checks first only when appropriate; stop and call a pro for refrigerant, electrical, or compressor/inverter faults."
+    ],
+    "safety_overlay_triggers_stop_now": [
+      "Burning smell, smoke, or visible arcing",
+      "Standing water near electrical components",
+      "Refrigerant leak suspected in a small/poorly ventilated space with dizziness/irritation",
+      "Any condition that feels unsafe"
+    ],
+    "severity_levels": {
+      "normal_status": "Not an error; normal operation/protection or reminder.",
+      "homeowner_maybe": "Homeowner-safe checks may resolve; call a pro if it returns.",
+      "pro_required": "Requires trained diagnosis/repair.",
+      "pro_required_urgent": "Shut down and call a pro promptly (risk of damage/safety)."
+    }
+  },
+  "brands": {
+    "mitsubishi": {
+      "brand_name": "Mitsubishi Electric (Mr. Slim, Hyper-Heat)",
+      "error_display": "Alphanumeric codes on wired controller or LED blink patterns on indoor unit",
+      "common_codes": [
+        {"code": "P1", "meaning": "Intake sensor error", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns after reset"},
+        {"code": "P2", "meaning": "Pipe temperature sensor error", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "P4", "meaning": "Drain float switch tripped", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Check for drain blockage/overflow", "call_pro_if": "Water inside unit or repeated trips"},
+        {"code": "P6", "meaning": "Freeze/overheat protection", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Clean filters, check airflow, let ice thaw", "call_pro_if": "Repeats or weak performance"},
+        {"code": "E6", "meaning": "Indoor/outdoor communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both units", "call_pro_if": "Returns after reset"},
+        {"code": "E9", "meaning": "Communication error (transmission)", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Power cycle both units", "call_pro_if": "Returns"},
+        {"code": "PL", "meaning": "Refrigerant circuit abnormal", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Check filter/airflow", "call_pro_if": "Always - refrigerant work"},
+        {"code": "UP", "meaning": "Compressor overcurrent", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Clear outdoor airflow, power cycle once", "call_pro_if": "If returns"}
+      ]
+    },
+    "fujitsu": {
+      "brand_name": "Fujitsu (Halcyon)",
+      "error_display": "E-codes on wired controller or LED blink patterns (Operation/Timer lights)",
+      "common_codes": [
+        {"code": "E1:00", "meaning": "Indoor/outdoor communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Persistent"},
+        {"code": "E2:00", "meaning": "Return air thermistor open", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "E4:00", "meaning": "Indoor coil thermistor open", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "EE:00", "meaning": "High pressure problem", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Clear outdoor airflow, rinse coil gently", "call_pro_if": "Persists"},
+        {"code": "EF:00", "meaning": "Discharge temp too high", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Check filters/airflow", "call_pro_if": "Persists"},
+        {"code": "09", "meaning": "Float switch operated (condensate)", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Check for drain blockage", "call_pro_if": "Water inside unit"}
+      ]
+    },
+    "daikin": {
+      "brand_name": "Daikin",
+      "error_display": "Alphanumeric codes (U4, A5, etc.) on controller/remote",
+      "common_codes": [
+        {"code": "00", "meaning": "Normal - no malfunction", "category": "status", "severity": "normal_status"},
+        {"code": "U4", "meaning": "Indoor/outdoor communication failure", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Returns"},
+        {"code": "U0", "meaning": "Refrigerant shortage", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Check filters/airflow", "call_pro_if": "Always - leak/charge work"},
+        {"code": "U2", "meaning": "Voltage drop/overvoltage", "category": "electrical", "severity": "homeowner_maybe", "homeowner_check": "Power cycle once", "call_pro_if": "Persistent - electrician needed"},
+        {"code": "A5", "meaning": "Freeze-up/HP protection", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Clean filters, check airflow, let thaw", "call_pro_if": "Repeats"},
+        {"code": "A6", "meaning": "Fan motor fault", "category": "fan", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Most cases"},
+        {"code": "C4", "meaning": "Heat exchanger sensor fault", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "E6", "meaning": "Compressor startup fault", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns"}
+      ]
+    },
+    "lg": {
+      "brand_name": "LG",
+      "error_display": "CH## codes on display or LED blink patterns",
+      "common_codes": [
+        {"code": "CH05", "meaning": "Indoor/outdoor communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Check outdoor breaker, power cycle both", "call_pro_if": "Persists"},
+        {"code": "CH07", "meaning": "Mode conflict (multi-zone)", "category": "mode_conflict", "severity": "homeowner_maybe", "homeowner_check": "Set all zones to same mode (all cool or all heat)", "call_pro_if": "Persists despite matching modes"},
+        {"code": "CH38/F4", "meaning": "Low refrigerant", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns - leak diagnostics"},
+        {"code": "CH54", "meaning": "Reverse phase/power abnormal", "category": "electrical", "severity": "pro_required", "homeowner_check": "Breaker reset once", "call_pro_if": "Persists - electrician needed"},
+        {"code": "CH61", "meaning": "Overheat protection", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Clear outdoor unit area, clean filters", "call_pro_if": "Recurring shutdowns"}
+      ]
+    },
+    "samsung": {
+      "brand_name": "Samsung",
+      "error_display": "E### or C### codes on display",
+      "common_codes": [
+        {"code": "E201/E202", "meaning": "Indoor/outdoor communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Persistent"},
+        {"code": "E121", "meaning": "Room temp sensor open/short", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "E154", "meaning": "Indoor fan error", "category": "fan", "severity": "pro_required", "homeowner_check": "Power cycle, check filter", "call_pro_if": "Persistent"},
+        {"code": "E425", "meaning": "Reverse/open phase", "category": "electrical", "severity": "pro_required", "homeowner_check": "Power cycle once", "call_pro_if": "Electrician needed"},
+        {"code": "E554", "meaning": "Gas leak detected", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Turn off, ventilate if anyone feels ill", "call_pro_if": "Always"},
+        {"code": "Ch", "meaning": "Crankcase heater operation (normal)", "category": "status", "severity": "normal_status", "note": "Wait for system to allow start"}
+      ]
+    },
+    "gree": {
+      "brand_name": "Gree (also Tosot, KingHome)",
+      "error_display": "Alphanumeric codes (E#, F#, H#) on indoor display",
+      "common_codes": [
+        {"code": "H1", "meaning": "Defrosting (NORMAL - not an error)", "category": "status", "severity": "normal_status", "homeowner_check": "Wait 10-15 mins", "call_pro_if": "Never returns to heat"},
+        {"code": "E1", "meaning": "High pressure protection", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Clean outdoor coil", "call_pro_if": "Persists"},
+        {"code": "E2", "meaning": "Anti-freeze protection", "category": "protection", "severity": "homeowner_maybe", "homeowner_check": "Clean filters, check airflow, let thaw", "call_pro_if": "Repeats"},
+        {"code": "E3", "meaning": "Low pressure protection", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Clean filters", "call_pro_if": "Persists - leak diagnostics"},
+        {"code": "E6", "meaning": "Communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Returns"},
+        {"code": "F0", "meaning": "Low refrigerant/restriction", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Clean filters", "call_pro_if": "Persists"},
+        {"code": "F1-F4", "meaning": "Temperature sensor errors", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "H5", "meaning": "IPM (inverter) protection", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns"}
+      ]
+    },
+    "carrier_midea": {
+      "brand_name": "Carrier / Midea",
+      "error_display": "E#, F#, P# codes on indoor display",
+      "common_codes": [
+        {"code": "H1", "meaning": "Defrost/oil return (NORMAL)", "category": "status", "severity": "normal_status", "note": "Normal in heating mode"},
+        {"code": "E1", "meaning": "Communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Returns"},
+        {"code": "E3", "meaning": "Indoor fan speed error", "category": "fan", "severity": "pro_required", "homeowner_check": "Clean filters, power cycle", "call_pro_if": "Persistent"},
+        {"code": "EC", "meaning": "Refrigerant leak detected", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Turn off, ventilate if needed", "call_pro_if": "Always"},
+        {"code": "P0", "meaning": "IPM/IGBT protection", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns"},
+        {"code": "P1", "meaning": "Over/under voltage", "category": "electrical", "severity": "pro_required", "homeowner_check": "Power cycle once", "call_pro_if": "Persistent - electrician needed"},
+        {"code": "P4", "meaning": "Inverter drive error", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Check airflow, power cycle once", "call_pro_if": "Returns"}
+      ]
+    },
+    "pioneer": {
+      "brand_name": "Pioneer",
+      "error_display": "Alphanumeric codes on indoor display",
+      "common_codes": [
+        {"code": "CL", "meaning": "Filter cleaning reminder (NORMAL)", "category": "status", "severity": "normal_status", "note": "Clean filters to clear"},
+        {"code": "EL 01", "meaning": "Communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Returns"},
+        {"code": "EH 03", "meaning": "Indoor fan speed error", "category": "fan", "severity": "pro_required", "homeowner_check": "Clean filters, power cycle", "call_pro_if": "Persistent"},
+        {"code": "EL 0C", "meaning": "Refrigerant leak detected", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Turn off", "call_pro_if": "Always"},
+        {"code": "P1", "meaning": "Over/under voltage", "category": "electrical", "severity": "pro_required", "homeowner_check": "Power cycle once", "call_pro_if": "Persistent"}
+      ]
+    },
+    "senville": {
+      "brand_name": "Senville",
+      "error_display": "EH/EL/EC/PC codes on indoor display",
+      "common_codes": [
+        {"code": "dF", "meaning": "Defrost (NORMAL)", "category": "status", "severity": "normal_status", "note": "Wait - normal in heating"},
+        {"code": "CL", "meaning": "Filter reminder (NORMAL)", "category": "status", "severity": "normal_status"},
+        {"code": "FP", "meaning": "Low temp heating safeguard (NORMAL)", "category": "status", "severity": "normal_status"},
+        {"code": "AP", "meaning": "WiFi pairing mode (NORMAL)", "category": "status", "severity": "normal_status"},
+        {"code": "EL 01", "meaning": "Communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Confirm outdoor breaker ON, power cycle both", "call_pro_if": "Persistent"},
+        {"code": "EH 03", "meaning": "Indoor fan speed error", "category": "fan", "severity": "pro_required", "homeowner_check": "Clean filters, power cycle", "call_pro_if": "Returns"},
+        {"code": "EH C1 / EL 0C", "meaning": "Refrigerant leak", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Turn off, ventilate if ill", "call_pro_if": "Always"},
+        {"code": "PC 04", "meaning": "Inverter drive error", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns"}
+      ]
+    },
+    "mrcool": {
+      "brand_name": "MRCOOL",
+      "error_display": "E#, F#, P# codes on indoor display",
+      "common_codes": [
+        {"code": "P7", "meaning": "USB smart kit not installed (NORMAL if no kit)", "category": "status", "severity": "normal_status"},
+        {"code": "E1", "meaning": "Communication error", "category": "communication", "severity": "homeowner_maybe", "homeowner_check": "Check DIY coupler seating, confirm outdoor breaker ON, power cycle both", "call_pro_if": "Returns"},
+        {"code": "E3", "meaning": "Indoor fan speed error", "category": "fan", "severity": "pro_required", "homeowner_check": "Clean filters, check for debris in blower", "call_pro_if": "Persistent"},
+        {"code": "E4", "meaning": "Room temp sensor error", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle", "call_pro_if": "Returns"},
+        {"code": "E5", "meaning": "Coil temp sensor error", "category": "sensor", "severity": "pro_required", "homeowner_check": "Power cycle, check filters", "call_pro_if": "Returns"},
+        {"code": "EC", "meaning": "Refrigerant leak", "category": "refrigerant", "severity": "pro_required_urgent", "homeowner_check": "Turn off", "call_pro_if": "Always"},
+        {"code": "F0", "meaning": "Compressor overload", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Clear outdoor airflow, power cycle once", "call_pro_if": "Returns"},
+        {"code": "P1", "meaning": "Over/under voltage", "category": "electrical", "severity": "pro_required", "homeowner_check": "Power cycle once", "call_pro_if": "Persistent"},
+        {"code": "P4", "meaning": "Inverter drive error", "category": "compressor", "severity": "pro_required_urgent", "homeowner_check": "Power cycle once", "call_pro_if": "Returns"}
+      ]
+    }
+  },
+  "troubleshooting_guide": {
+    "first_questions_to_ask": [
+      "What brand and model is your mini-split?",
+      "What code is showing and where (indoor display, outdoor LEDs, remote)?",
+      "Is it in heating or cooling mode?",
+      "Did anything happen recently (power outage, installation, cleaning)?"
+    ],
+    "universal_first_step": "For most codes: Turn off system, shut off breakers for BOTH indoor and outdoor for 5 minutes, then restore power together.",
+    "common_homeowner_fixes": [
+      "Communication errors (E1, E6, U4, CH05): Usually outdoor unit lost power - check breaker, power cycle both units",
+      "Freeze protection (P6, E2, A5): Dirty filter or blocked airflow - clean filter, check vents, let ice thaw",
+      "Mode conflict (CH07): Multi-zone running different modes - set all to same mode",
+      "Defrost codes (H1, dF): NORMAL in heating - wait 10-15 minutes"
+    ],
+    "always_call_pro_for": [
+      "Refrigerant leak codes (EC, F0, U0, CH38)",
+      "Compressor/inverter codes (P0, P4, H5, UP, F0)",
+      "Repeated electrical codes after reset",
+      "Any code that returns after power cycle"
+    ]
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Architect HVAC Integration Knowledge Base",
+  "last_updated": "2025-12-28",
+  "audience": ["Architects", "Interior designers", "Owner's reps", "Project managers"],
+  "project_phases": ["Schematic Design", "Design Development", "Construction Documents", "Construction Administration"],
+  "key_principle": "Form follows function, but function requires space. Integrate the systems so they disappear.",
+  "mechanical_space_planning": {
+    "equipment_room_guidelines": {
+      "residential_closet": "Minimum 30\"x30\" for upflow furnace/AHU. Allow 36\" depth for filter access. Door must handle unit width.",
+      "commercial_mechanical_room": "Rule of thumb: 4-6% of gross building area. Allow 3-4ft clear aisle around major equipment.",
+      "access_rule": "Verify door swing and size allows equipment replacement without demolition."
+    },
+    "ceiling_plenum_depth": {
+      "ducted_vav": "Requires 18-24\" clear depth minimum (lights + structure + duct + slope).",
+      "vrf_cassettes": "Requires 10-12\" clearance from finish face to deck.",
+      "fan_coils": "Unit height + access panel + hydronic piping + insulation + condensate slope.",
+      "chilled_beams": "Beam depth + DOAS distribution + coordination with lighting/sprinklers.",
+      "coordination_note": "Beam depths often dictate duct routing; coordinate early to avoid 'threading the needle'."
+    },
+    "vertical_chases": {
+      "sizing_rule": "HVAC risers need approx 2 sq ft per 10,000 CFM. Add 6\" clearance on all sides.",
+      "alignment": "Stack mechanical rooms vertically to minimize chase offsets (which consume ceiling height).",
+      "fire_rating": "Confirm fire-rated shaft requirements early for multifamily/commercial."
+    },
+    "outdoor_units": {
+      "rooftop": "Structural curb coordination (dead load + wind/snow). Screening must account for 10-ft sightlines.",
+      "grade_level": "Avoid near bedrooms or operable windows. Maintain 3-ft clearance for airflow.",
+      "screening_options": ["Parapet integration", "Architectural screen walls/louvers", "Mechanical penthouse", "Setbacks from street view"]
+    },
+    "mini_split_planning": {
+      "line_set_concealment": ["Recessed wall chases", "Soffits/ceiling coves", "Exterior line-hide channels", "Service cavities behind millwork"],
+      "outdoor_placement": "Avoid tight alcoves that recirculate hot air. Plan condensate management."
+    }
+  },
+  "acoustic_considerations": {
+    "noise_metrics": {
+      "NC": "Noise Criteria - curve-based indoor noise rating. Lower is quieter.",
+      "dBA": "A-weighted decibels - approximates human hearing. Used for equipment ratings.",
+      "Sones": "Perceived loudness scale - used for small fans. Lower is quieter."
+    },
+    "recommended_nc_levels": {
+      "concert_hall": "NC 15-20",
+      "private_bedroom": "NC 20-30",
+      "hotel_guestroom": "NC 25-35",
+      "conference_room": "NC 25-35",
+      "private_office": "NC 30-40",
+      "open_office": "NC 35-45",
+      "restaurant": "NC 40-45",
+      "lobby_corridor": "NC 35-50"
+    },
+    "mitigation_strategies": {
+      "vibration_isolation": "Spring isolators for rooftop units; neoprene pads for internal equipment.",
+      "duct_velocity": "Velocities > 1000 FPM generate noise. 90-degree turns need turning vanes.",
+      "sound_attenuators": "Require 3-5ft length in straight duct runs; plan this space early.",
+      "flexible_connectors": "At duct/piping transitions to break vibration transmission."
+    },
+    "mini_split_bedrooms": {
+      "selection": "Specify low indoor dBA-rated heads for sleeping areas.",
+      "placement": "Avoid directly over bed or aimed at occupants.",
+      "condensate": "Proper slope/traps to avoid gurgling sounds."
+    }
+  },
+  "aesthetic_integration": {
+    "diffuser_grille_styles": {
+      "linear_slot": "Minimalist look. Coordinate plenum box size above (larger than visible slot).",
+      "perforated_face": "Discrete appearance; blends into ceilings.",
+      "louvered_grilles": "Common and cost-effective; more visible; align with lights.",
+      "plaster_in_grilles": "Mud-in frames for rimless 'Level 5' finish appearance.",
+      "custom_wood_slat": "High-end look; verify free area and pressure drop with MEP."
+    },
+    "hiding_ductwork": [
+      "Soffits and bulkheads (intentional geometry aligned across rooms)",
+      "Tray ceilings (perimeter supply/return zones)",
+      "Dropped corridors (common in multifamily for main runs)",
+      "Exposed industrial (coordinate acoustic lining and aesthetics intentionally)"
+    ],
+    "thermostat_placement": {
+      "function": "Interior wall, representative zone, away from sun/supply/doors/kitchens.",
+      "aesthetics": "Align with switch heights. Use recessed/low-profile models. Coordinate with interior designer.",
+      "never": "Exterior walls, behind doors, near supply registers, in direct sunlight."
+    },
+    "return_air_strategies": [
+      "Hide in corridors where aesthetics less critical",
+      "Transfer grilles with privacy baffling",
+      "Return plenums integrated into millwork toe-kicks",
+      "Dedicated mechanical chases"
+    ]
+  },
+  "energy_code_compliance": {
+    "frameworks": {
+      "IECC": "International Energy Conservation Code. Prescriptive vs Performance paths.",
+      "ASHRAE_90_1": "Commercial standard. LEED reference.",
+      "Title_24": "California specific. Extremely stringent on envelope, airflow, controls, and documentation."
+    },
+    "envelope_vs_mechanical_tradeoffs": {
+      "principle": "Better envelope reduces peak loads, duct sizes, and mechanical space needs.",
+      "glazing_impact": "SHGC and orientation directly affect HVAC capacity and diffuser placement.",
+      "high_performance": "Tight envelopes shift priorities toward ventilation and humidity control."
+    },
+    "documentation": {
+      "typical_items": [
+        "Equipment schedules and efficiencies",
+        "Ventilation calculations and system descriptions",
+        "Control sequences (commercial)",
+        "Duct test / airflow verification reports",
+        "Energy model or compliance forms"
+      ],
+      "tools": "COMcheck/REScheck for proving compliance. Architects provide envelope; MEP provides mechanical."
+    }
+  },
+  "ventilation_design": {
+    "standards": {
+      "ASHRAE_62_1": "Commercial. Ventilation rate = CFM per person + CFM per sq ft.",
+      "ASHRAE_62_2": "Residential. Whole-house mechanical ventilation required for tight homes."
+    },
+    "strategies": {
+      "DOAS": "Dedicated Outdoor Air System. Decouples ventilation from thermal loads. Improves IAQ and humidity control.",
+      "ERV": "Energy Recovery Ventilator. Favored in hot-humid or mixed climates for enthalpy exchange.",
+      "HRV": "Heat Recovery Ventilator. Favored in cold climates where moisture recovery less desired."
+    },
+    "coordination": {
+      "ERV_HRV": "Requires two exterior penetrations (intake/exhaust) spaced 10ft apart.",
+      "makeup_air": "Large exhaust (kitchen hoods) requires makeup air to avoid depressurization.",
+      "intake_location": "Away from loading docks, exhaust terminations, pollution sources."
+    }
+  },
+  "sustainable_design": {
+    "certifications": {
+      "LEED": "Points for enhanced commissioning, thermal comfort, optimized energy performance.",
+      "Passive_House": "Super-insulated envelope, airtight construction, continuous ERV. Tiny heating loads."
+    },
+    "technologies": {
+      "VRF": "Variable Refrigerant Flow. High efficiency, heat recovery between zones.",
+      "geothermal": "Ground Source Heat Pump. Requires well field or horizontal loops.",
+      "electrification": "Moving from gas to heat pump systems."
+    },
+    "net_zero": {
+      "approach": "Electrification + envelope improvements + solar.",
+      "architect_actions": "Reserve roof space for PV, avoid shading, coordinate equipment placement."
+    }
+  },
+  "system_type_overview": {
+    "central_ducted": {
+      "pros": "Hidden distribution, good whole-building control",
+      "cons": "Requires ducts and chases, plenum depth drives architecture",
+      "coordination": "Duct routes, returns, mechanical closet, grille layout, service access"
+    },
+    "VRF_VRV": {
+      "pros": "Flexible zoning, reduced ductwork, good for retrofits",
+      "cons": "Multiple indoor units and access panels, line set routing, outdoor noise",
+      "coordination": "Risers/line sets, branch selector access, condensate, ceiling access"
+    },
+    "ductless_mini_splits": {
+      "pros": "Minimal ductwork, fast retrofit",
+      "cons": "Visible indoor units, line set concealment challenges",
+      "coordination": "Head placement, line set paths, condensate, outdoor screening"
+    },
+    "VAV_commercial": {
+      "pros": "Scalable for large buildings, handles variable loads",
+      "cons": "Deep plenums, terminal box access, duct distribution constraints",
+      "coordination": "Ceiling zones, shaft sizes, access panels, fire/smoke dampers"
+    },
+    "chilled_beams": {
+      "pros": "High comfort, quiet, reduced drafts, reduced duct sizes",
+      "cons": "Requires DOAS for humidity control, condensation risk if not controlled",
+      "coordination": "DOAS integration, ceiling coordination with lighting/sprinklers"
+    },
+    "radiant_floor_ceiling": {
+      "pros": "Excellent comfort, quiet, low visual impact",
+      "cons": "Early structural/finish integration required, condensation limits cooling",
+      "coordination": "Manifolds, piping zones, controls, DOAS, maintenance access"
+    },
+    "geothermal": {
+      "pros": "Efficient, reduced outdoor equipment noise",
+      "cons": "Site drilling impacts, mechanical room for pumps/headers",
+      "coordination": "Site planning, drilling logistics, hydronic headers"
+    }
+  },
+  "mep_coordination": {
+    "architect_provides": [
+      "Floor plans, sections, RCP, elevations",
+      "Room naming and use types (for ventilation/acoustic targets)",
+      "Envelope performance (glazing, insulation, airtightness goals)",
+      "Site constraints (setbacks, noise-sensitive neighbors, screening intent)",
+      "Structural constraints (beams, penetrations policy)",
+      "Interior design intent (grille aesthetics, ceiling features)"
+    ],
+    "mep_provides": [
+      "System options with space/coordination impacts",
+      "Preliminary shaft and plenum requirements",
+      "Equipment schedules and locations",
+      "Ventilation and exhaust concepts",
+      "Noise/vibration strategy",
+      "Revisions as architecture evolves"
+    ],
+    "bim_coordination": {
+      "clash_detection": "Critical for gravity pipes vs ductwork. Verify beam penetrations early.",
+      "ceiling_zones": "Define 'MEP corridors' early (corridors, core zones).",
+      "access_panels": "Coordinate in RCP. Include maintainability checks."
+    }
+  },
+  "common_architectural_mistakes": [
+    {
+      "mistake": "The 'Magic' Return",
+      "description": "Designing supply ducts but no path for air to return (undercut doors often insufficient)."
+    },
+    {
+      "mistake": "Inaccessible Equipment",
+      "description": "FCUs above hard-lid ceilings without access panels, or access blocked by light fixtures."
+    },
+    {
+      "mistake": "Undersized Shafts",
+      "description": "Sizing for duct only, forgetting insulation, fire dampers, and installation clearance."
+    },
+    {
+      "mistake": "Louver Mismatch",
+      "description": "Designing louvers for aesthetics only, causing high velocity rain intake or noise."
+    },
+    {
+      "mistake": "Thermostat Placement",
+      "description": "Placing stats on exterior walls (false readings) or behind doors."
+    },
+    {
+      "mistake": "Insufficient Mechanical Room",
+      "description": "Service impossible, rework required, long-term maintenance nightmare."
+    },
+    {
+      "mistake": "Ceiling Plenum Too Shallow",
+      "description": "Duct conflicts, noisy systems, forced soffits late in design."
+    },
+    {
+      "mistake": "Ignoring Replacement Access",
+      "description": "Future equipment cannot be replaced without major demolition."
+    }
+  ],
+  "phase_guidance": {
+    "schematic_design": {
+      "focus": "Blocking and stacking. How big does mechanical room need to be? Where do vertical risers go?",
+      "rule_of_thumb": "Commercial mechanical rooms: 4-6% of gross floor area."
+    },
+    "design_development": {
+      "focus": "Routing. Where do chases go? Are they aligned? Equipment locations finalized."
+    },
+    "construction_documents": {
+      "focus": "Conflicts. Clash detection between gravity pipes and ductwork. Access panel coordination."
+    },
+    "construction_administration": {
+      "focus": "RFIs, substitutions, field conflicts, commissioning, closeout documentation."
+    }
+  },
+  "load_calculation_recommendation": {
+    "timing": "Get load calculations during design, not after CDs.",
+    "residential": "For Manual J/S/D calculations, contact ProCalcs: 772-882-5700 / tom@procalcs.net"
+  }
+}

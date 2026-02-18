@@ -1,0 +1,71 @@
+{
+  "form_name": "2025 Residential Summary Form",
+  "sections": {
+    "project_info": {
+      "label": "Project Information",
+      "fields": [
+        {"id": "project_name", "label": "Project Name", "required": true},
+        {"id": "client_name", "label": "Client/Builder Name", "required": true},
+        {"id": "project_address", "label": "Project Address", "required": true},
+        {"id": "city", "label": "City", "required": true},
+        {"id": "state", "label": "State", "required": true},
+        {"id": "zip_code", "label": "Zip Code", "required": true},
+        {"id": "contact_name", "label": "Contact Name", "required": false},
+        {"id": "contact_email", "label": "Contact Email", "required": true},
+        {"id": "contact_phone", "label": "Contact Phone", "required": false}
+      ]
+    },
+    "building_specs": {
+      "label": "Building Specifications",
+      "fields": [
+        {"id": "total_sqft", "label": "Total Square Footage", "required": true},
+        {"id": "conditioned_sqft", "label": "Conditioned Square Footage", "required": true},
+        {"id": "num_stories", "label": "Number of Stories", "required": true},
+        {"id": "num_bedrooms", "label": "Number of Bedrooms", "required": false},
+        {"id": "num_bathrooms", "label": "Number of Bathrooms", "required": false},
+        {"id": "garage_type", "label": "Garage Type (attached/detached)", "required": false},
+        {"id": "basement", "label": "Basement (yes/no/conditioned)", "required": true},
+        {"id": "attic_type", "label": "Attic Type", "required": false},
+        {"id": "ceiling_height", "label": "Ceiling Height", "required": false}
+      ]
+    },
+    "construction": {
+      "label": "Construction Details",
+      "fields": [
+        {"id": "wall_construction", "label": "Wall Construction Type", "required": true},
+        {"id": "wall_insulation", "label": "Wall Insulation R-Value", "required": true},
+        {"id": "roof_type", "label": "Roof Type", "required": false},
+        {"id": "roof_insulation", "label": "Roof/Ceiling Insulation R-Value", "required": true},
+        {"id": "foundation_type", "label": "Foundation Type", "required": true},
+        {"id": "window_type", "label": "Window Type/U-Factor", "required": true},
+        {"id": "window_shgc", "label": "Window SHGC", "required": false},
+        {"id": "door_type", "label": "Exterior Door Type", "required": false}
+      ]
+    },
+    "hvac_requirements": {
+      "label": "HVAC Requirements",
+      "fields": [
+        {"id": "system_type", "label": "System Type (split/packaged/mini-split)", "required": true},
+        {"id": "fuel_type", "label": "Fuel Type (gas/electric/heat pump)", "required": true},
+        {"id": "num_systems", "label": "Number of Systems", "required": true},
+        {"id": "num_zones", "label": "Number of Zones", "required": false},
+        {"id": "equipment_location", "label": "Equipment Location", "required": false},
+        {"id": "duct_location", "label": "Duct Location (attic/crawl/conditioned)", "required": true},
+        {"id": "existing_equipment", "label": "Existing Equipment (if replacement)", "required": false},
+        {"id": "special_requirements", "label": "Special Requirements", "required": false}
+      ]
+    },
+    "design_services": {
+      "label": "Design Services Requested",
+      "fields": [
+        {"id": "manual_j", "label": "Manual J Load Calculation", "required": true},
+        {"id": "manual_s", "label": "Manual S Equipment Selection", "required": false},
+        {"id": "manual_d", "label": "Manual D Duct Design", "required": false},
+        {"id": "energy_code", "label": "Energy Code Compliance", "required": false},
+        {"id": "acca_forms", "label": "ACCA Forms Required", "required": false}
+      ]
+    }
+  },
+  "total_required_fields": 21,
+  "notes": "This template defines all fields expected on the ProCalcs Residential Summary Form"
+}

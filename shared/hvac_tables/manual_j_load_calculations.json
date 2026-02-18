@@ -1,0 +1,190 @@
+{
+  "manual_j_load_calculations": {
+    "version": "1.0",
+    "description": "Comprehensive guide to Manual J residential load calculations for HVAC equipment sizing",
+    
+    "what_is_manual_j": {
+      "definition": "Manual J is the industry-standard protocol developed by ACCA (Air Conditioning Contractors of America) for calculating heating and cooling loads in residential buildings.",
+      "purpose": "Determines the exact amount of heating and cooling capacity (in BTUs) a home needs to maintain comfort in the hottest and coldest conditions for that location.",
+      "standard": "ACCA Manual J 8th Edition (MJ8) - ANSI/ACCA 2 Manual J-2016",
+      "code_requirement": "Required by most building codes including IRC (International Residential Code) Section M1401.3 and IECC"
+    },
+
+    "why_rules_of_thumb_fail": {
+      "overview": "Old rules like '1 ton per 500 sq ft' or '400-600 sq ft per ton' were rough estimates from decades ago when homes were built very differently.",
+      "reasons_they_are_outdated": [
+        "Modern insulation: R-38 to R-60 ceilings vs R-11 or less in older homes",
+        "Advanced windows: Double/triple pane, Low-E coatings, argon fill with U-factors of 0.25-0.30 vs single pane at 1.0+",
+        "Tighter construction: Modern homes achieve 3-5 ACH50 vs 15-25 ACH50 in older construction",
+        "Improved air sealing: House wraps, spray foam, sealed penetrations",
+        "Better doors: Insulated steel/fiberglass vs hollow wood",
+        "Radiant barriers and cool roofs: Reduce heat gain significantly in hot climates"
+      ],
+      "consequences_of_oversizing": [
+        "Short cycling: System turns on/off frequently, never running long enough",
+        "Humidity problems: In cooling mode, system doesn't run long enough to dehumidify - leads to clammy, uncomfortable air and potential mold",
+        "Hot/cold spots: Air doesn't circulate properly",
+        "Higher energy bills: Startup is the least efficient part of the cycle",
+        "Premature equipment failure: Frequent cycling stresses compressor and components",
+        "Higher upfront cost: Paying for capacity you don't need"
+      ],
+      "consequences_of_undersizing": [
+        "Cannot maintain setpoint: Home never reaches desired temperature on extreme days",
+        "Continuous running: System runs 100% and still can't keep up",
+        "High utility bills: Non-stop operation costs money",
+        "Reduced equipment life: Constant operation causes wear",
+        "Comfort complaints: Occupants are never comfortable"
+      ],
+      "real_world_example": "A 2,000 sq ft home built in 1980 might need 4-5 tons. The same size home built to 2023 energy codes might only need 2-2.5 tons. Using 'square footage rules' would oversize the new home by nearly 100%."
+    },
+
+    "manual_j_inputs": {
+      "location_data": {
+        "description": "Climate and design conditions for the specific location",
+        "inputs": [
+          "Outdoor design temperature (heating): Coldest temperature used for calculations (e.g., 99% design day)",
+          "Outdoor design temperature (cooling): Hottest temperature used for calculations (e.g., 1% design day)",
+          "Humidity levels: Impacts latent (moisture) cooling load",
+          "Elevation: Affects air density",
+          "Climate zone: Determines base assumptions"
+        ]
+      },
+      "building_envelope": {
+        "description": "The thermal boundary of the home",
+        "inputs": [
+          "Wall construction: Frame type, cavity insulation R-value, continuous insulation",
+          "Ceiling/attic: Insulation type and R-value, radiant barrier presence",
+          "Foundation: Slab, crawlspace, or basement - insulation levels",
+          "Windows: U-factor, SHGC (Solar Heat Gain Coefficient), frame type, size, orientation",
+          "Doors: Type, insulation value, size",
+          "Air infiltration: Blower door test results (ACH50) or estimated leakage"
+        ]
+      },
+      "internal_loads": {
+        "description": "Heat generated inside the home",
+        "inputs": [
+          "Number of occupants: Each person adds ~200-300 BTU/hr sensible + latent",
+          "Appliances: Kitchen, laundry, electronics",
+          "Lighting: Especially older incandescent"
+        ]
+      },
+      "duct_system": {
+        "description": "Losses through the duct system",
+        "inputs": [
+          "Duct location: Conditioned space, attic, crawlspace, garage",
+          "Duct insulation: R-value of duct wrap",
+          "Duct leakage: Sealed vs unsealed, tested leakage rate",
+          "Duct surface area: Length and size of runs"
+        ]
+      },
+      "ventilation": {
+        "description": "Fresh air requirements",
+        "inputs": [
+          "Mechanical ventilation: ERV, HRV, or exhaust-only",
+          "Fresh air CFM requirements per ASHRAE 62.2"
+        ]
+      }
+    },
+
+    "manual_j_outputs": {
+      "heating_load": {
+        "description": "Total BTU/hr needed to heat the home on the design day",
+        "components": [
+          "Envelope losses (walls, ceiling, floor, windows, doors)",
+          "Infiltration losses",
+          "Duct losses",
+          "Ventilation load"
+        ]
+      },
+      "cooling_load": {
+        "description": "Total BTU/hr needed to cool the home on the design day",
+        "components": {
+          "sensible_load": "Heat that raises temperature - from envelope, solar gain, internal loads, infiltration, ducts",
+          "latent_load": "Moisture that must be removed - from infiltration, occupants, ventilation"
+        }
+      },
+      "room_by_room_loads": {
+        "description": "Individual load calculations for each room/zone",
+        "purpose": "Used for Manual D duct design and Manual S equipment selection, ensures proper air distribution"
+      }
+    },
+
+    "equipment_selection_manual_s": {
+      "description": "After Manual J determines the loads, Manual S guides proper equipment selection",
+      "key_principles": [
+        "Select cooling equipment at or slightly below the Manual J sensible load (no more than 15% over for cooling)",
+        "Ensure equipment can handle the latent (humidity) load",
+        "Select heating equipment to meet or slightly exceed the heating load",
+        "Consider equipment performance at actual operating conditions, not just rated capacity",
+        "Verify airflow matches equipment requirements"
+      ],
+      "common_mistakes": [
+        "Selecting equipment based on old system size",
+        "Rounding up 'just to be safe' - this causes oversizing",
+        "Ignoring latent load in humid climates",
+        "Not accounting for elevation effects on capacity"
+      ]
+    },
+
+    "software_tools": {
+      "description": "ACCA-approved software for Manual J calculations",
+      "professional_tools": [
+        "Wrightsoft Right-J",
+        "Elite RHVAC",
+        "ACCA SpeedSheet",
+        "EnergyGauge",
+        "RemRate"
+      ],
+      "notes": "Manual calculations are possible but time-consuming. Software ensures accuracy and code compliance. Always use ACCA-approved tools."
+    },
+
+    "procalcs_services": {
+      "company": "ProCalcs",
+      "services": [
+        "Manual J Load Calculations",
+        "Manual D Duct Design", 
+        "Manual S Equipment Selection",
+        "Energy Code Compliance",
+        "HVAC Design for New Construction",
+        "HVAC Design for Renovations/Additions"
+      ],
+      "contact": {
+        "phone": "772-882-5700",
+        "email": "tom@procalcs.net"
+      },
+      "why_choose_procalcs": [
+        "Accurate calculations ensure properly sized equipment",
+        "Avoid costly comfort and efficiency problems",
+        "Meet building code requirements",
+        "Professional documentation for permits and inspections"
+      ]
+    },
+
+    "frequently_asked_questions": [
+      {
+        "question": "How much does a Manual J cost?",
+        "answer": "Costs vary based on home size and complexity. Contact ProCalcs at 772-882-5700 for a quote. The cost is minimal compared to the problems caused by improperly sized equipment."
+      },
+      {
+        "question": "How long does a Manual J take?",
+        "answer": "A professional Manual J typically requires gathering home information and running calculations. ProCalcs can often turn around calculations quickly depending on workload."
+      },
+      {
+        "question": "What information do I need to provide?",
+        "answer": "Floor plans with dimensions, window schedule (sizes, types), insulation levels, construction details, and location. If you have a blower door test result, that's helpful too."
+      },
+      {
+        "question": "Is Manual J required by code?",
+        "answer": "Yes, in most jurisdictions. The International Residential Code (IRC M1401.3) and IECC require heating and cooling equipment to be sized per ACCA Manual J or equivalent approved calculation methods."
+      },
+      {
+        "question": "Can I just use the same size as my old system?",
+        "answer": "No - your old system was likely sized using rules of thumb and is probably oversized. If you've made any efficiency improvements (windows, insulation, air sealing), you almost certainly need a smaller system now."
+      },
+      {
+        "question": "What if my contractor doesn't want to do a Manual J?",
+        "answer": "This is a red flag. Professional contractors understand the importance of proper sizing. If a contractor wants to guess or use rules of thumb, consider finding one who follows industry standards. Or contact ProCalcs to have the calculation done independently."
+      }
+    ]
+  }
+}

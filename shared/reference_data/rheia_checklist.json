@@ -1,0 +1,130 @@
+{
+  "version": "1.0",
+  "name": "Rheia QC Checklist",
+  "resource_url": "https://www.rheiacomfort.com/resources/designers",
+  "total_items": 53,
+  "sections": {
+    "manual_j": {
+      "name": "Manual J",
+      "description": "Designers shall complete Manual J in accordance with ACCA standards",
+      "items": [
+        {"id": 1, "rule": "Thermal envelope check - all insulation and window values match building specifications", "automatable": true},
+        {"id": 2, "rule": "Design file window locations match architectural backgrounds", "automatable": false},
+        {"id": 3, "rule": "Ducts have been set to be in conditioned space", "automatable": true},
+        {"id": 4, "rule": "Ventilation and Infiltration match building specifications", "automatable": true},
+        {"id": 5, "rule": "Internal gains are within reasonable range per Manual J standards", "automatable": true},
+        {"id": 6, "rule": "Weather location matches project location", "automatable": true}
+      ]
+    },
+    "manual_s": {
+      "name": "Manual S",
+      "description": "Designers shall complete Manual S in accordance with ACCA standards",
+      "items": [
+        {"id": 7, "rule": "Cooling equipment sizing is within Manual S requirements", "automatable": true},
+        {"id": 8, "rule": "Heating equipment sizing is within Manual S requirements", "automatable": true},
+        {"id": 9, "rule": "Air handling unit configuration correct (upflow, downflow, horizontal)", "automatable": true},
+        {"id": 10, "rule": "Temperature rise for gas furnace within manufacturer approved range", "automatable": true},
+        {"id": 11, "rule": "Supplemental heat strips meet Manual S requirements for heating capacity", "automatable": true},
+        {"id": 12, "rule": "Altitude adjustments made for high altitude locations (>2000' elevation)", "automatable": true},
+        {"id": 13, "rule": "Airflow and static pressure selection matches manufacturer published table data", "automatable": true}
+      ]
+    },
+    "equipment_location": {
+      "name": "Equipment Location and Duct Routing",
+      "description": "All Rheia ductwork and equipment must be completely within the building thermal envelope",
+      "items": [
+        {"id": 14, "rule": "AHU is located in conditioned space", "automatable": true},
+        {"id": 15, "rule": "All ductwork is located in conditioned space", "automatable": true},
+        {"id": 16, "rule": "Architectural/structural changes clearly labeled (dropped ceilings, thickened walls, inverted soffits, relocating beams)", "automatable": false},
+        {"id": 17, "rule": "I-Joist penetrations clearly located and sized on drawings", "automatable": false},
+        {"id": 18, "rule": "Structural drawings reviewed for conflicts with duct routing and beams/structural members", "automatable": false},
+        {"id": 19, "rule": "Construction details of architectural features will be shared with builder", "automatable": false},
+        {"id": 20, "rule": "Manifold located appropriately to integrate with surrounding architecture and structure", "automatable": false}
+      ]
+    },
+    "drawing_duct_system": {
+      "name": "Drawing the Duct System",
+      "description": "Draw the Rheia duct system per the Rheia Engineering Design Manual",
+      "resource_url": "https://www.rheiacomfort.com/resources/designers",
+      "items": [
+        {"id": 21, "rule": "Transition duct between AHU and manifold drawn and sized correctly", "automatable": false},
+        {"id": 22, "rule": "All outlet types set correctly and clearly identified on drawing", "automatable": false},
+        {"id": 23, "rule": "Registers located to avoid conflict with lighting and integrate with architecture", "automatable": false},
+        {"id": 24, "rule": "All supply ducts routed from manifold to each register", "automatable": false},
+        {"id": 25, "rule": "Ducts in floor system reflect I-Joist layout/hole pattern or open web truss routing", "automatable": false},
+        {"id": 26, "rule": "Elbows added per 'When to Include Elbows' document", "automatable": false, "resource": "https://www.rheiacomfort.com/resources/designers"},
+        {"id": 27, "rule": "Risers have correct vertical length (ceiling height for high sidewall, +2' floor-to-floor, +5' attic-to-floor)", "automatable": true},
+        {"id": 28, "rule": "All risers have correct elbow location set", "automatable": false},
+        {"id": 29, "rule": "Register throw evaluated to eliminate hot/cold spots in each room", "automatable": false},
+        {"id": 30, "rule": "Ducts sized for 3\" or 4\" and clearly labeled on drawing", "automatable": true},
+        {"id": 31, "rule": "Return duct system drawn and sized correctly", "automatable": false}
+      ]
+    },
+    "airflow_static_pressure": {
+      "name": "Evaluate Airflow and Static Pressure",
+      "description": "Follow steps in Rheia Engineering Design Manual for adequate airflow and system static pressure",
+      "items": [
+        {"id": 32, "rule": "Coil pressure loss for dry and wet coils set per manufacturer specs", "automatable": true},
+        {"id": 33, "rule": "Filter pressure loss set per manufacturer specs or best practices", "automatable": true},
+        {"id": 34, "rule": "Room-by-room airflows within 20% or 25 CFM for all design modes and orientations", "automatable": true},
+        {"id": 35, "rule": "Total system pressure loss does not exceed equipment static by more than 0.025\"", "automatable": true, "note": "Not all modes required based on climate; not all orientations required based on job type"},
+        {"id": 36, "rule": "All unnecessary duct runs deleted while maintaining adequate airflow/static", "automatable": false},
+        {"id": 37, "rule": "Duct runs omitted from rooms with <10 CFM requirement (with builder approval)", "automatable": true}
+      ]
+    },
+    "design_by_orientation": {
+      "name": "Design by Orientation",
+      "description": "All orientations must be considered. Three options: orientation specific, single equipment with orientation specific duct, single equipment with single duct",
+      "sub_sections": {
+        "orientation_specific": {
+          "name": "Orientation Specific Design",
+          "items": [
+            {"id": 38, "rule": "Manual J and Manual S completed for each of 8 orientations", "automatable": false},
+            {"id": 39, "rule": "Duct design for each of 8 orientations meets airflow and static requirements", "automatable": false}
+          ]
+        },
+        "single_equipment_orientation_duct": {
+          "name": "Single Equipment with Orientation Specific Duct Design",
+          "items": [
+            {"id": 40, "rule": "Manual J and Manual S meet worst case scenario orientation", "automatable": false},
+            {"id": 41, "rule": "Duct design for each of 8 orientations meets airflow and static requirements", "automatable": false}
+          ]
+        },
+        "single_equipment_single_duct": {
+          "name": "Single Equipment with Single Duct Design",
+          "items": [
+            {"id": 42, "rule": "Manual J and Manual S meet worst case scenario orientation", "automatable": false},
+            {"id": 43, "rule": "Single duct design checked at all 8 orientations meets requirements (static may be low at some - OK)", "automatable": false}
+          ]
+        }
+      }
+    },
+    "manifold_design": {
+      "name": "Manifold Design",
+      "description": "Follow steps in Manifold Design Guideline for proper sizing and performance",
+      "resource_url": "https://www.rheiacomfort.com/resources/designers",
+      "items": [
+        {"id": 44, "rule": "Duct take-off locations provide adequate space to transition from manifold to routing area", "automatable": false},
+        {"id": 45, "rule": "If manifold feeds floor system and is flush with subfloor/ceiling, space provided to avoid joist/truss conflict", "automatable": false},
+        {"id": 46, "rule": "Hole pattern follows square or hexagonal grid layout with proper spacing per Manifold Design Guide", "automatable": false},
+        {"id": 47, "rule": "Number of holes matches number of registers; number on each face is noted", "automatable": true},
+        {"id": 48, "rule": "Each hole is on manifold face most in line with duct routing direction", "automatable": false},
+        {"id": 49, "rule": "1\" thickness of ductboard has been accounted for", "automatable": true},
+        {"id": 50, "rule": "Final manifold design includes length, width, and height dimensions", "automatable": false},
+        {"id": 51, "rule": "Final manifold design shows each face of the manifold", "automatable": false},
+        {"id": 52, "rule": "Final manifold design shows inlet from air handler", "automatable": false},
+        {"id": 53, "rule": "Section view provided when needed to convey AHU and manifold configuration", "automatable": false}
+      ]
+    }
+  },
+  "riser_height_reference": {
+    "high_sidewall_boots": "Riser = ceiling height",
+    "floor_to_floor": "Riser = ceiling height + 2'",
+    "attic_to_floor_below": "Riser = ceiling height + 5'"
+  },
+  "client_specific": {
+    "rheia_atlanta": {"seer_minimum": 16},
+    "beazer_nashville": {"duct_size": "3 inch only", "supply_duct": "round"},
+    "rheia_southeast": {"bom_part": "10-04-230", "regions": ["FL", "GA", "SC", "NC", "TN"]}
+  }
+}

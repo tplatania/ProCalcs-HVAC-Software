@@ -1,0 +1,466 @@
+{
+  "meta": {
+    "schema": "hvac.refrigerant_diagnostics",
+    "version": "1.0.0",
+    "units": {
+      "temperature": "degF",
+      "pressure": "psig",
+      "superheat": "degF",
+      "subcool": "degF"
+    },
+    "notes": [
+      "PT chart values are saturation pressures (psig) at the listed saturation temperatures (°F).",
+      "Operating pressure ranges are typical starting expectations only; always convert pressure to saturation temperature and compare to line temps to calculate superheat/subcooling.",
+      "For zeotropic blends, use dew point for vapor/suction side and bubble point for liquid/subcooling side unless the manufacturer specifies otherwise. (R-454B is a zeotropic blend.)"
+    ],
+    "created_local_date": "2025-12-28"
+  },
+  "refrigerants": [
+    {
+      "id": "R410A",
+      "name": "R-410A",
+      "type": "near-azeotropic blend",
+      "safety_class": "A1",
+      "pt_chart": {
+        "data": [
+          { "tempF": 40, "pressure_psig": 118.4 },
+          { "tempF": 50, "pressure_psig": 142.6 },
+          { "tempF": 60, "pressure_psig": 170.1 },
+          { "tempF": 70, "pressure_psig": 201.1 },
+          { "tempF": 80, "pressure_psig": 235.8 },
+          { "tempF": 90, "pressure_psig": 274.5 },
+          { "tempF": 100, "pressure_psig": 317.6 },
+          { "tempF": 110, "pressure_psig": 365.4 },
+          { "tempF": 120, "pressure_psig": 418.3 }
+        ],
+        "source_hint": "published PT chart"
+      },
+      "normal_operating_pressure_ranges": {
+        "context": "typical comfort cooling, properly charged, clean coils, adequate airflow",
+        "low_side_psig": { "min": 115, "max": 145 },
+        "high_side_psig": { "min": 350, "max": 450 },
+        "notes": [
+          "Ranges shift with indoor load and outdoor ambient; use saturation temps + SH/SC for decisions."
+        ]
+      }
+    },
+    {
+      "id": "R22",
+      "name": "R-22",
+      "type": "single component",
+      "safety_class": "A1",
+      "pt_chart": {
+        "data": [
+          { "tempF": 40, "pressure_psig": 68.6 },
+          { "tempF": 50, "pressure_psig": 84.1 },
+          { "tempF": 60, "pressure_psig": 101.6 },
+          { "tempF": 70, "pressure_psig": 121.4 },
+          { "tempF": 80, "pressure_psig": 143.6 },
+          { "tempF": 90, "pressure_psig": 168.4 },
+          { "tempF": 100, "pressure_psig": 195.9 },
+          { "tempF": 110, "pressure_psig": 226.4 },
+          { "tempF": 120, "pressure_psig": 260.0 }
+        ],
+        "source_hint": "published PT chart"
+      },
+      "normal_operating_pressure_ranges": {
+        "context": "typical comfort cooling, properly charged, clean coils, adequate airflow",
+        "low_side_psig": { "min": 65, "max": 85 },
+        "high_side_psig": { "min": 200, "max": 260 },
+        "notes": [
+          "R-22 systems vary widely; use SH/SC and manufacturer charging method first."
+        ]
+      }
+    },
+    {
+      "id": "R32",
+      "name": "R-32",
+      "type": "single component",
+      "safety_class": "A2L",
+      "pt_chart": {
+        "data": [
+          { "tempF": 40, "pressure_psig": 121 },
+          { "tempF": 50, "pressure_psig": 146 },
+          { "tempF": 60, "pressure_psig": 174 },
+          { "tempF": 70, "pressure_psig": 206 },
+          { "tempF": 80, "pressure_psig": 242 },
+          { "tempF": 90, "pressure_psig": 281 },
+          { "tempF": 100, "pressure_psig": 325 },
+          { "tempF": 110, "pressure_psig": 375 },
+          { "tempF": 120, "pressure_psig": 429 }
+        ],
+        "source_hint": "published PT chart"
+      },
+      "normal_operating_pressure_ranges": {
+        "context": "typical comfort cooling, properly charged, clean coils, adequate airflow",
+        "low_side_psig": { "min": 120, "max": 155 },
+        "high_side_psig": { "min": 320, "max": 460 },
+        "notes": [
+          "R-32 is an A2L refrigerant; follow A2L service safety procedures and local codes."
+        ]
+      }
+    },
+    {
+      "id": "R454B",
+      "name": "R-454B",
+      "type": "zeotropic blend",
+      "safety_class": "A2L",
+      "pt_chart": {
+        "bubble_dew_notes": "This dataset is a single vapor pressure table; for detailed glide handling, use manufacturer PT chart with bubble/dew columns when available.",
+        "data": [
+          { "tempF": 40, "pressure_psig": 111.9 },
+          { "tempF": 50, "pressure_psig": 135.0 },
+          { "tempF": 60, "pressure_psig": 161.0 },
+          { "tempF": 70, "pressure_psig": 190.4 },
+          { "tempF": 80, "pressure_psig": 223.3 },
+          { "tempF": 90, "pressure_psig": 260.0 },
+          { "tempF": 100, "pressure_psig": 300.8 },
+          { "tempF": 110, "pressure_psig": 346.0 },
+          { "tempF": 120, "pressure_psig": 395.9 }
+        ],
+        "source_hint": "published PT chart"
+      },
+      "normal_operating_pressure_ranges": {
+        "context": "typical comfort cooling, properly charged, clean coils, adequate airflow",
+        "low_side_psig": { "min": 105, "max": 145 },
+        "high_side_psig": { "min": 300, "max": 420 },
+        "notes": [
+          "R-454B is A2L and a blend; charge by weight when required and verify with SH/SC per equipment data plate."
+        ]
+      }
+    }
+  ],
+  "charging_targets": {
+    "txv_or_eev_systems": {
+      "method": "subcooling",
+      "target_subcooling_F": {
+        "typical": [10, 12],
+        "acceptable": [8, 15]
+      },
+      "notes": [
+        "Use the equipment charging label when available. Many systems specify a target subcooling at a given outdoor temperature.",
+        "If subcool is high, suspect overcharge or a restriction in the liquid line; if low, suspect undercharge or flash gas."
+      ]
+    },
+    "fixed_orifice_or_piston_systems": {
+      "method": "superheat",
+      "target_superheat_F": {
+        "general_range": [8, 20],
+        "common_target": [10, 15]
+      },
+      "notes": [
+        "Superheat targets depend on indoor wet-bulb and outdoor dry-bulb; use a superheat chart when possible.",
+        "If superheat is high, suspect undercharge, a restriction, or low airflow; if low, suspect overfeeding or low load."
+      ]
+    },
+    "heat_pumps": {
+      "preferred_charging_mode": "cooling_mode_when_possible",
+      "notes": [
+        "Many heat pumps are charged in cooling mode using subcooling (TXV/EEV) or superheat (fixed orifice), then verified in heating mode per manufacturer.",
+        "Some heat pumps have different metering devices in heating vs cooling; follow the unit's charging chart and defrost-board instructions.",
+        "If conditions prevent running cooling mode (cold weather), charge by weight (weigh-in) plus manufacturer heating checks."
+      ],
+      "common_targets": {
+        "cooling_mode": {
+          "txv_or_eev_subcooling_F": {
+            "typical": [10, 12],
+            "acceptable": [8, 15]
+          },
+          "fixed_orifice_superheat_F": {
+            "general_range": [8, 20],
+            "common_target": [10, 15]
+          }
+        },
+        "heating_mode": {
+          "method": "manufacturer_specific",
+          "typical_checks": [
+            "Verify indoor airflow and outdoor coil cleanliness first",
+            "Confirm reversing valve position and auxiliary heat status",
+            "Compare pressures to PT chart to get saturation temps, then check line temps"
+          ]
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "rules_of_thumb": {
+      "use_pressure_as_temperature": "Always convert measured pressure to saturation temperature using the PT chart before interpreting readings.",
+      "measurements_needed": [
+        "Outdoor ambient temperature",
+        "Indoor return air dry-bulb and wet-bulb (or at least return DB + supply DB split)",
+        "Low-side pressure and suction line temperature (to calculate superheat)",
+        "High-side pressure and liquid line temperature (to calculate subcooling)",
+        "Airflow / filter condition / coil cleanliness"
+      ]
+    },
+    "fault_signatures": [
+      {
+        "id": "undercharge_or_leak",
+        "name": "Undercharge / leak",
+        "pattern": { "subcooling": "low", "superheat": "high" },
+        "likely_causes": ["Refrigerant leak", "Improper initial charge", "Charge lost over time"],
+        "quick_checks": [
+          "Look for oil stains at joints/service valves",
+          "Check Schrader cores and caps",
+          "Leak check and repair before recharging"
+        ],
+        "fixes": [
+          "Find and repair leak",
+          "Evacuate if opened",
+          "Weigh in charge per nameplate, then fine-tune per SH/SC method"
+        ]
+      },
+      {
+        "id": "overcharge",
+        "name": "Overcharge",
+        "pattern": { "subcooling": "high", "superheat": "low" },
+        "likely_causes": [
+          "Too much refrigerant added",
+          "Charging without proper method",
+          "Condenser airflow issues masquerading as overcharge"
+        ],
+        "quick_checks": [
+          "Confirm condenser fan operation",
+          "Confirm coil is clean",
+          "Confirm proper airflow before recovering charge"
+        ],
+        "fixes": [
+          "Recover refrigerant to target subcool/superheat",
+          "Charge by weight if required",
+          "Re-test after stabilization"
+        ]
+      },
+      {
+        "id": "liquid_line_restriction",
+        "name": "Liquid line restriction (filter-drier, kink, partially closed valve)",
+        "pattern": { "subcooling": "high", "superheat": "high" },
+        "likely_causes": [
+          "Restricted filter-drier",
+          "Kinked liquid line",
+          "Partially closed service valve",
+          "Plugged TXV inlet screen"
+        ],
+        "quick_checks": [
+          "Check for a temperature drop across filter-drier",
+          "Inspect for kinks/crimps",
+          "Verify valves fully open"
+        ],
+        "fixes": [
+          "Replace restricted component (often filter-drier)",
+          "Correct kink/valve position",
+          "Evacuate and weigh-in recharge if opened"
+        ]
+      },
+      {
+        "id": "low_airflow_evaporator",
+        "name": "Low airflow across evaporator",
+        "pattern": { "subcooling": "normal_or_high", "superheat": "low_or_normal" },
+        "likely_causes": [
+          "Dirty filter",
+          "Dirty evaporator coil",
+          "Blower issues",
+          "Closed/blocked vents",
+          "Duct restrictions"
+        ],
+        "quick_checks": [
+          "Check filter and blower speed",
+          "Check coil cleanliness",
+          "Check static pressure if available"
+        ],
+        "fixes": [
+          "Restore airflow (filter/coil/blower/duct)",
+          "Re-check SH/SC after airflow is corrected"
+        ]
+      }
+    ],
+    "subcooling": {
+      "high_subcooling": {
+        "definition": "Subcooling above target (TXV systems) after the system is stabilized",
+        "likely_causes": [
+          "Overcharge",
+          "Restricted liquid line / filter-drier",
+          "Condenser airflow reduced (dirty coil, failed fan, blocked airflow)",
+          "Non-condensables in system (rare but possible after improper evacuation)"
+        ],
+        "recommended_checks": [
+          "Verify condenser fan operation and coil cleanliness",
+          "Measure temperature drop across filter-drier (restriction indicator)",
+          "Confirm metering device type and target subcool from data plate",
+          "Confirm outdoor ambient and allow stabilization time"
+        ],
+        "fixes": [
+          "If airflow issue: correct airflow first, then re-check",
+          "If restriction: replace restricted component and evacuate/recharge as needed",
+          "If overcharge: recover refrigerant to target subcool"
+        ]
+      },
+      "low_subcooling": {
+        "definition": "Subcooling below target (TXV systems) after the system is stabilized",
+        "likely_causes": [
+          "Undercharge / leak",
+          "Flash gas in liquid line (long line set without proper charge adjustment, high ambient)",
+          "Metering device overfeeding (rare), or very low load"
+        ],
+        "recommended_checks": [
+          "Look for leak indicators (oil residue, bubbling at joints)",
+          "Confirm system has correct charge for line set length",
+          "Confirm indoor load and airflow are normal"
+        ],
+        "fixes": [
+          "If leak suspected: repair leak, then weigh-in charge",
+          "Add refrigerant per charging method until target subcool is reached (after stabilization)"
+        ]
+      }
+    },
+    "superheat": {
+      "high_superheat": {
+        "definition": "Superheat above target after stabilization (fixed orifice), or higher than expected (TXV)",
+        "likely_causes": [
+          "Undercharge / leak",
+          "Restricted metering device or liquid line",
+          "Low indoor airflow or low load (can raise SH in some cases)",
+          "TXV stuck closed / sensing bulb issue"
+        ],
+        "recommended_checks": [
+          "Confirm airflow (filter, blower, coil, ducts)",
+          "Check subcooling (helps separate undercharge vs restriction)",
+          "For TXV: inspect bulb mounting/insulation and equalizer line"
+        ],
+        "fixes": [
+          "If undercharged: repair leak and recharge",
+          "If restriction/TXV issue: repair/replace component and recharge if opened",
+          "If airflow issue: correct airflow first, then re-check"
+        ]
+      },
+      "low_superheat": {
+        "definition": "Superheat below target (near 0°F indicates flooding risk)",
+        "likely_causes": [
+          "Overcharge (more common on fixed orifice systems)",
+          "Metering device overfeeding (TXV hunting/stuck open)",
+          "Low load (very cool indoor return air, low airflow in certain cases)",
+          "Compressor risk: liquid floodback"
+        ],
+        "recommended_checks": [
+          "Confirm indoor load and airflow",
+          "Check subcooling (high SC supports overcharge/restriction patterns)",
+          "Listen for compressor flooding indicators and check accumulator (heat pumps)"
+        ],
+        "fixes": [
+          "If overcharged: recover to target",
+          "If TXV overfeeding: correct bulb placement/insulation or replace TXV",
+          "If low load: normalize conditions and re-check"
+        ]
+      }
+    }
+  },
+  "problem_catalog": [
+    {
+      "id": "airflow_low",
+      "name": "Low airflow (evaporator)",
+      "summary": "Not enough air across indoor coil, leading to low coil temp, freezing, poor capacity.",
+      "common_indicators": [
+        "Low suction pressure",
+        "Low/normal superheat",
+        "Icing on evaporator/suction line",
+        "High temp drop across coil or weak airflow"
+      ],
+      "fixes": [
+        "Replace/clean filter",
+        "Clean evap coil",
+        "Check blower speed/capacitor",
+        "Open/clear ducts and registers"
+      ]
+    },
+    {
+      "id": "condenser_airflow_low",
+      "name": "Low airflow (condenser)",
+      "summary": "Outdoor coil can't reject heat, driving head pressure up.",
+      "common_indicators": ["High head pressure", "High subcooling possible", "Hot condenser air discharge", "Fan/coil issues"],
+      "fixes": ["Clean condenser coil", "Repair fan motor/capacitor", "Clear obstructions"]
+    },
+    {
+      "id": "undercharge_leak",
+      "name": "Undercharge / leak",
+      "summary": "Not enough refrigerant mass flow, reducing capacity and raising superheat.",
+      "common_indicators": ["Low subcooling", "High superheat", "Low suction", "Bubbles in sight glass (if present)"],
+      "fixes": ["Leak search/repair", "Evacuate if opened", "Weigh in charge then verify by SH/SC"]
+    },
+    {
+      "id": "overcharge",
+      "name": "Overcharge",
+      "summary": "Too much refrigerant, higher subcooling, risk of flooding and high head.",
+      "common_indicators": ["High subcooling", "Low superheat", "High head pressure"],
+      "fixes": ["Recover to target charge", "Verify airflow and stabilize"]
+    },
+    {
+      "id": "restriction_liquid_line",
+      "name": "Liquid line restriction",
+      "summary": "Restriction reduces refrigerant flow, causing high SC before the restriction and starving the evaporator.",
+      "common_indicators": ["High subcooling", "High superheat", "Temperature drop across filter-drier"],
+      "fixes": ["Replace restricted component", "Evacuate/recharge as needed"]
+    },
+    {
+      "id": "restriction_metering",
+      "name": "Metering device restriction / TXV stuck closed",
+      "summary": "Metering device limits flow too much, starving evaporator.",
+      "common_indicators": ["High superheat", "Often low suction", "Often low capacity"],
+      "fixes": ["Inspect/replace TXV/orifice", "Verify bulb/equalizer line", "Recharge as needed"]
+    },
+    {
+      "id": "iced_evaporator",
+      "name": "Evaporator icing",
+      "summary": "Indoor coil freezes, choking airflow and reducing capacity.",
+      "common_indicators": ["Ice on suction line or coil", "Low airflow", "Low suction pressure"],
+      "fixes": ["Thaw coil", "Fix airflow or charge issue causing icing"]
+    },
+    {
+      "id": "short_cycling_controls",
+      "name": "Short cycling (controls/safeties)",
+      "summary": "Unit cycles off quickly due to thermostat, pressure switches, or protection logic.",
+      "common_indicators": ["Rapid on/off cycling", "Pressure switch trips", "Abnormal head or suction"],
+      "fixes": ["Check thermostat setup/location", "Check pressure switches and cause (airflow/charge)", "Check low voltage wiring"]
+    }
+  ],
+  "symptoms_to_likely_problems": [
+    {
+      "symptom": "Warm air from vents",
+      "problem_ids_ranked": ["airflow_low", "undercharge_leak", "condenser_airflow_low", "restriction_metering"],
+      "quick_checks": [
+        "Confirm thermostat set to COOL and indoor fan is running",
+        "Check filter and return/supply airflow",
+        "Check if outdoor unit is running and condenser fan spinning",
+        "Measure SH/SC to separate airflow vs charge vs restriction"
+      ]
+    },
+    {
+      "symptom": "Unit short cycling",
+      "problem_ids_ranked": ["short_cycling_controls", "condenser_airflow_low", "airflow_low", "overcharge"],
+      "quick_checks": [
+        "Check thermostat placement and setpoints (large overshoot, direct sunlight, etc.)",
+        "Check high-pressure and low-pressure switch trip history if available",
+        "Inspect condenser coil and fan",
+        "Measure head pressure trend during run cycle"
+      ]
+    },
+    {
+      "symptom": "Ice on lines",
+      "problem_ids_ranked": ["airflow_low", "undercharge_leak", "restriction_metering", "iced_evaporator"],
+      "quick_checks": [
+        "Check filter and blower operation",
+        "Verify indoor coil is not blocked and condensate is draining",
+        "Measure superheat (often high if undercharged, low/normal if airflow issue)",
+        "Let coil thaw before final readings"
+      ]
+    },
+    {
+      "symptom": "High electric bills",
+      "problem_ids_ranked": ["condenser_airflow_low", "airflow_low", "undercharge_leak", "overcharge"],
+      "quick_checks": [
+        "Check coil cleanliness (indoor + outdoor) and filters",
+        "Confirm system isn't running continuously due to low capacity",
+        "Measure temperature split and SH/SC",
+        "Look for duct leaks or return air issues"
+      ]
+    }
+  ]
+}

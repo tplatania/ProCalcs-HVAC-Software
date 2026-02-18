@@ -1,0 +1,845 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HVAC Repair vs Replace Decision Guide",
+  "last_updated": "2025-12-28",
+  "intended_use": "Help homeowners and professionals make informed decisions about repairing or replacing HVAC equipment based on age, cost, efficiency, and practical factors.",
+
+  "core_decision_framework": {
+    "the_50_percent_rule": {
+      "rule": "If the repair cost exceeds 50% of the replacement cost, replacement is usually the better investment.",
+      "nuance": [
+        "For equipment over 15 years old, lower threshold to 30-40%",
+        "For equipment under 8 years old, repairs up to 60-70% may still make sense",
+        "Factor in expected remaining lifespan after repair"
+      ]
+    },
+    "the_5000_rule": {
+      "rule": "Multiply the age of the equipment by the repair cost. If the result exceeds $5,000, consider replacing.",
+      "example": "12-year-old AC needs $500 repair: 12 × 500 = $6,000 → Lean toward replacement",
+      "note": "This is a rough guideline, not absolute. Consider other factors below."
+    },
+    "key_questions_to_ask": [
+      "How old is the equipment?",
+      "What's the repair history? (First issue vs recurring problems)",
+      "Is this a major component or minor part?",
+      "What's the efficiency rating vs modern equipment?",
+      "Is refrigerant involved? (R-22 phase-out consideration)",
+      "Are there comfort or air quality issues beyond this repair?",
+      "What are your plans for the home? (Selling soon vs staying long-term)"
+    ]
+  },
+
+  "equipment_lifespan_expectations": {
+    "air_conditioners": {
+      "average_lifespan": "15-20 years",
+      "coastal_areas": "10-15 years (salt air corrosion)",
+      "extreme_climates": "12-15 years (heavy use)",
+      "with_proper_maintenance": "Can exceed 20 years",
+      "end_of_life_signs": [
+        "Frequent repairs (more than once per season)",
+        "R-22 refrigerant system with leak",
+        "Compressor failure after 15+ years",
+        "Efficiency noticeably declining (longer run times, higher bills)"
+      ]
+    },
+    "heat_pumps": {
+      "average_lifespan": "12-17 years",
+      "note": "Shorter than AC-only because they run year-round",
+      "coastal_areas": "10-12 years",
+      "end_of_life_signs": [
+        "Defrost cycle issues becoming frequent",
+        "Reversing valve failure",
+        "Compressor struggling in moderate temperatures"
+      ]
+    },
+    "gas_furnaces": {
+      "average_lifespan": "18-25 years",
+      "high_quality_brands": "Can reach 30 years",
+      "critical_end_of_life": "Heat exchanger crack = immediate replacement required (CO risk)",
+      "end_of_life_signs": [
+        "Heat exchanger cracks or rust",
+        "Flame sensor and igniter issues recurring",
+        "Burner problems",
+        "Yellow or flickering flame",
+        "CO detector alerts"
+      ]
+    },
+    "boilers": {
+      "average_lifespan": "20-30 years",
+      "cast_iron": "Can last 30-40 years with maintenance",
+      "end_of_life_signs": [
+        "Frequent leaks",
+        "Kettling sounds (scale buildup)",
+        "Uneven heating",
+        "Rust and corrosion visible"
+      ]
+    },
+    "ductless_mini_splits": {
+      "average_lifespan": "15-20 years",
+      "note": "Indoor heads may need replacement before outdoor unit",
+      "end_of_life_signs": [
+        "Refrigerant leaks recurring",
+        "Compressor issues",
+        "Control board failures",
+        "Excessive noise"
+      ]
+    },
+    "air_handlers": {
+      "average_lifespan": "15-20 years",
+      "end_of_life_signs": [
+        "Blower motor replacements becoming frequent",
+        "Coil leaks",
+        "Excessive rust in drain pan",
+        "Electrical issues recurring"
+      ]
+    }
+  },
+
+  "repair_scenarios": {
+    "usually_worth_repairing": [
+      {
+        "component": "Capacitor",
+        "typical_cost": "$150-$300",
+        "reasoning": "Cheap, common failure, doesn't indicate systemic issues",
+        "lifespan_after_repair": "Capacitors typically last 5-10 years"
+      },
+      {
+        "component": "Contactor",
+        "typical_cost": "$150-$350",
+        "reasoning": "Normal wear item, easy replacement",
+        "watch_for": "Pitting means it's been arcing - normal end of life"
+      },
+      {
+        "component": "Flame Sensor (Furnace)",
+        "typical_cost": "$75-$200",
+        "reasoning": "Common maintenance item, often just needs cleaning",
+        "note": "If cleaning doesn't fix it, sensor replacement is still cheap"
+      },
+      {
+        "component": "Thermostat",
+        "typical_cost": "$100-$350 installed",
+        "reasoning": "Independent of main equipment health"
+      },
+      {
+        "component": "Condensate Drain / Float Switch",
+        "typical_cost": "$100-$250",
+        "reasoning": "Maintenance issue, not equipment failure"
+      },
+      {
+        "component": "Refrigerant Recharge (small leak, newer system)",
+        "typical_cost": "$200-$500",
+        "conditions": "Only if system is under 10 years AND leak is found and fixed",
+        "warning": "Repeated recharges = throwing money away. Find and fix the leak."
+      },
+      {
+        "component": "Blower Motor",
+        "typical_cost": "$400-$800",
+        "reasoning": "Worth it if system is under 12-15 years old",
+        "note": "ECM motors cost more ($600-$1,200) but last longer"
+      },
+      {
+        "component": "Igniter (Hot Surface Igniter)",
+        "typical_cost": "$150-$300",
+        "reasoning": "Common wear item on furnaces, easy fix"
+      },
+      {
+        "component": "Reversing Valve Solenoid (Heat Pump)",
+        "typical_cost": "$200-$400",
+        "reasoning": "Solenoid is cheap; full valve replacement is different story"
+      },
+      {
+        "component": "Defrost Control Board",
+        "typical_cost": "$300-$500",
+        "reasoning": "Worth it if heat pump is under 12 years old"
+      }
+    ],
+
+    "case_by_case_evaluate_carefully": [
+      {
+        "component": "Compressor",
+        "typical_cost": "$1,500-$3,000+",
+        "replace_if": [
+          "System is over 12-15 years old",
+          "R-22 system (refrigerant phased out)",
+          "Second compressor failure",
+          "Warranty has expired"
+        ],
+        "repair_if": [
+          "System is under 8 years old",
+          "Still under manufacturer warranty",
+          "Rest of system is in good condition"
+        ],
+        "note": "Compressor replacement often costs 50-70% of new system"
+      },
+      {
+        "component": "Evaporator Coil (Indoor)",
+        "typical_cost": "$1,000-$2,500",
+        "replace_if": [
+          "System is over 12 years old",
+          "Coil has leaked refrigerant multiple times",
+          "R-22 system"
+        ],
+        "repair_if": [
+          "System is under 10 years old",
+          "First leak occurrence",
+          "Under warranty"
+        ],
+        "note": "Consider replacing both indoor coil and outdoor unit together for proper matching"
+      },
+      {
+        "component": "Condenser Coil (Outdoor)",
+        "typical_cost": "$1,200-$2,800",
+        "reasoning": "Similar decision tree to evaporator coil",
+        "note": "Coil-only replacement can cause mismatched system issues"
+      },
+      {
+        "component": "Blower Motor (ECM/Variable Speed)",
+        "typical_cost": "$800-$1,500",
+        "reasoning": "Expensive but provides efficiency benefits",
+        "evaluate": "Worth it if air handler is under 12 years old"
+      },
+      {
+        "component": "Heat Exchanger",
+        "typical_cost": "$1,500-$3,500+",
+        "critical_safety": "Cracked heat exchanger = CO risk",
+        "replace_system_if": [
+          "Furnace is over 15 years old",
+          "Secondary heat exchanger also showing wear",
+          "Multiple cracks found"
+        ],
+        "repair_if": [
+          "Furnace is under 10 years old",
+          "Under warranty (many have 20-year or lifetime heat exchanger warranty)"
+        ],
+        "warning": "Some contractors oversell heat exchanger cracks. Get second opinion."
+      },
+      {
+        "component": "Reversing Valve (Heat Pump - full valve)",
+        "typical_cost": "$800-$2,000",
+        "reasoning": "Labor intensive. Evaluate system age carefully.",
+        "usually_replace_system_if": "Heat pump is over 12 years old"
+      }
+    ],
+
+    "usually_replace_dont_repair": [
+      {
+        "component": "Compressor on R-22 System",
+        "reasoning": "R-22 is phased out. Even if compressor is replaced, refrigerant costs $75-$150/lb and rising",
+        "recommendation": "Replace entire system with R-410A or newer R-454B"
+      },
+      {
+        "component": "Second Compressor Failure",
+        "reasoning": "Indicates systemic issues (contamination, restriction, electrical problems)",
+        "recommendation": "Full system replacement to avoid third failure"
+      },
+      {
+        "component": "Cracked Heat Exchanger (Old Furnace)",
+        "reasoning": "CO safety risk. Heat exchanger cost approaches new furnace cost",
+        "recommendation": "Replace furnace. Modern furnaces are 95%+ efficient vs 80% on older units"
+      },
+      {
+        "component": "TXV Failure + Other Issues (Same Season)",
+        "reasoning": "Multiple component failures indicate end of life",
+        "recommendation": "System replacement more cost-effective than chasing problems"
+      },
+      {
+        "component": "Furnace with Recalled Heat Exchanger",
+        "reasoning": "Some manufacturers had widespread heat exchanger issues",
+        "recommendation": "Check for active recalls. Replacement may be covered."
+      },
+      {
+        "component": "Severely Corroded Condenser",
+        "reasoning": "Coastal corrosion damage is progressive and irreversible",
+        "recommendation": "Replace with coated coils or consider mini-split for salt air environments"
+      }
+    ]
+  },
+
+  "efficiency_payback_analysis": {
+    "seer_comparison": {
+      "description": "Seasonal Energy Efficiency Ratio - higher is better",
+      "old_systems": "8-10 SEER (pre-2006)",
+      "minimum_today": "14-15 SEER (varies by region)",
+      "high_efficiency": "18-26 SEER",
+      "savings_example": {
+        "scenario": "Replacing 10 SEER with 18 SEER",
+        "estimated_savings": "40-45% reduction in cooling costs",
+        "note": "Actual savings depend on climate, usage, and home efficiency"
+      }
+    },
+    "afue_comparison": {
+      "description": "Annual Fuel Utilization Efficiency - furnace efficiency",
+      "old_systems": "60-80% AFUE",
+      "standard_today": "80% AFUE (non-condensing)",
+      "high_efficiency": "90-98% AFUE (condensing)",
+      "savings_example": {
+        "scenario": "Replacing 80% AFUE with 96% AFUE",
+        "estimated_savings": "15-20% reduction in heating costs",
+        "note": "Condensing furnaces require different venting (PVC vs metal flue)"
+      }
+    },
+    "payback_period_factors": [
+      "Local utility rates (higher rates = faster payback)",
+      "Climate (more extreme = faster payback)",
+      "Hours of operation",
+      "Home insulation and air sealing",
+      "Available rebates and tax credits"
+    ],
+    "rebates_and_incentives": {
+      "federal": "Check current tax credits at energystar.gov",
+      "utility": "Many utilities offer $200-$1,500 rebates for high-efficiency equipment",
+      "state": "Some states have additional incentive programs",
+      "tip": "Ask contractor about available rebates BEFORE purchase"
+    }
+  },
+
+  "r22_phase_out_special_section": {
+    "background": "R-22 (Freon) production banned as of January 1, 2020. Only recycled/reclaimed R-22 available.",
+    "current_r22_prices": "$75-$150+ per pound (was $15-$25 before phase-out)",
+    "typical_system_charge": "6-12 lbs depending on system size",
+    "decision_guidance": {
+      "minor_leak_small_recharge": {
+        "scenario": "System needs 1-2 lbs R-22, leak can be repaired",
+        "recommendation": "May be worth repairing if system is in otherwise good condition",
+        "cost": "$200-$500 including leak repair"
+      },
+      "major_leak_or_recurring": {
+        "scenario": "Large leak, compressor issue, or second/third recharge",
+        "recommendation": "Replace system. R-22 costs will continue rising.",
+        "note": "Every dollar spent on R-22 is money that won't go toward new equipment"
+      },
+      "compressor_failure": {
+        "scenario": "Compressor dead on R-22 system",
+        "recommendation": "System replacement strongly recommended",
+        "reasoning": "New compressor + R-22 recharge could exceed $3,000-$4,000"
+      }
+    },
+    "retrofit_not_recommended": {
+      "explanation": "Some suggest 'drop-in' refrigerant replacements (R-407C, R-422D, etc.)",
+      "problems": [
+        "Voids manufacturer warranty",
+        "May not perform as well",
+        "Some are being phased out too",
+        "Requires oil change and system flush"
+      ],
+      "better_option": "Put that money toward a new R-410A or R-454B system"
+    }
+  },
+
+  "special_situations": {
+    "selling_home_soon": {
+      "scenario": "Planning to sell within 1-2 years",
+      "guidance": [
+        "New HVAC can add value and appeal to buyers",
+        "However, you won't recoup 100% of replacement cost",
+        "If current system works: consider repair and disclose age to buyers",
+        "If current system is problematic: replacement prevents deal-killing inspection issues"
+      ],
+      "tip": "Get system serviced and documented before listing"
+    },
+    "staying_long_term": {
+      "scenario": "Planning to stay 10+ years",
+      "guidance": [
+        "Invest in quality replacement when needed",
+        "Higher efficiency pays back over time",
+        "Consider comfort upgrades (variable speed, zoning)",
+        "Proper sizing via Manual J is crucial"
+      ]
+    },
+    "rental_property": {
+      "scenario": "Investment property decisions",
+      "guidance": [
+        "Reliability matters most (minimize emergency calls)",
+        "Mid-tier efficiency often best ROI",
+        "Factor in tenant comfort and retention",
+        "Document all repairs for tax purposes"
+      ]
+    },
+    "home_renovation": {
+      "scenario": "Major renovation or addition planned",
+      "guidance": [
+        "Perfect time to replace aging equipment",
+        "New load calculation (Manual J) required for additions",
+        "May need larger system or second zone",
+        "Ductwork modifications easier during construction"
+      ],
+      "procalcs_note": "Contact ProCalcs for Manual J load calculations: 772-882-5700"
+    }
+  },
+
+  "replacement_considerations": {
+    "proper_sizing": {
+      "critical_warning": "NEVER accept 'rule of thumb' sizing (400-600 sq ft per ton)",
+      "requirement": "Insist on Manual J load calculation",
+      "oversizing_problems": [
+        "Short cycling (on/off frequently)",
+        "Poor humidity control",
+        "Uneven temperatures",
+        "Higher upfront cost for no benefit",
+        "Premature wear"
+      ],
+      "undersizing_problems": [
+        "Can't keep up on extreme days",
+        "Runs constantly",
+        "Higher energy bills",
+        "Shortened equipment life"
+      ],
+      "procalcs_service": "ProCalcs provides professional Manual J calculations: 772-882-5700 / tom@procalcs.net"
+    },
+    "matching_components": {
+      "warning": "Mixing old and new components reduces efficiency and can void warranties",
+      "best_practice": "Replace as matched system (outdoor unit + indoor coil at minimum)",
+      "ahri_matching": "Look for AHRI-certified matched combinations"
+    },
+    "ductwork_evaluation": {
+      "when_to_address": [
+        "Visible damage, disconnections, or crushed sections",
+        "Excessive dust or debris inside",
+        "Rooms that never condition properly",
+        "Duct age over 20 years",
+        "High static pressure readings"
+      ],
+      "note": "New high-efficiency equipment won't perform well with poor ductwork"
+    },
+    "contractor_selection": {
+      "get_multiple_quotes": "At least 3 quotes from licensed contractors",
+      "red_flags": [
+        "Quote without seeing the home or doing calculations",
+        "Pressure to decide immediately",
+        "Unusually low price (cutting corners)",
+        "No written warranty details",
+        "Not pulling permits"
+      ],
+      "green_flags": [
+        "Performs Manual J calculation",
+        "Inspects existing ductwork",
+        "Explains equipment options clearly",
+        "Provides detailed written quote",
+        "Licensed, insured, good reviews",
+        "Offers financing options"
+      ]
+    }
+  },
+
+  "cost_ranges_2024_2025": {
+    "disclaimer": "Costs vary significantly by region, brand, and complexity. These are rough national averages.",
+    "central_air_conditioner": {
+      "budget": "$4,000-$6,000",
+      "mid_range": "$6,000-$9,000",
+      "premium": "$9,000-$15,000+",
+      "includes": "Outdoor unit, indoor coil, installation, permits"
+    },
+    "heat_pump_system": {
+      "budget": "$5,000-$8,000",
+      "mid_range": "$8,000-$12,000",
+      "premium": "$12,000-$20,000+",
+      "note": "Higher cost offset by heating AND cooling capability"
+    },
+    "gas_furnace": {
+      "80_percent_afue": "$3,000-$5,000",
+      "90_plus_afue": "$4,500-$7,500",
+      "premium_modulating": "$6,000-$10,000+",
+      "note": "Condensing furnaces (90%+) require PVC venting"
+    },
+    "ductless_mini_split": {
+      "single_zone": "$3,000-$6,000",
+      "multi_zone_2_3_heads": "$7,000-$15,000",
+      "whole_home_4_plus_heads": "$15,000-$25,000+",
+      "note": "Great for additions, rooms without ductwork, or zoned comfort"
+    },
+    "boiler": {
+      "standard": "$5,000-$10,000",
+      "high_efficiency": "$8,000-$15,000",
+      "note": "Installation complexity varies greatly"
+    }
+  },
+
+  "quick_decision_flowchart": {
+    "step_1": {
+      "question": "Is the equipment over 15 years old?",
+      "if_yes": "Lean toward replacement unless repair is very minor (<$300)",
+      "if_no": "Continue to step 2"
+    },
+    "step_2": {
+      "question": "Is it an R-22 refrigerant system?",
+      "if_yes": "Lean strongly toward replacement (phased-out refrigerant)",
+      "if_no": "Continue to step 3"
+    },
+    "step_3": {
+      "question": "Is the repair cost more than 50% of replacement cost?",
+      "if_yes": "Replace (or get second opinion)",
+      "if_no": "Continue to step 4"
+    },
+    "step_4": {
+      "question": "Is this a safety issue (heat exchanger crack, CO detected, electrical hazard)?",
+      "if_yes": "Replace immediately - safety first",
+      "if_no": "Continue to step 5"
+    },
+    "step_5": {
+      "question": "Has this equipment needed repairs more than once in the past 2 years?",
+      "if_yes": "Consider replacement - pattern of failures indicates declining health",
+      "if_no": "Continue to step 6"
+    },
+    "step_6": {
+      "question": "Is this a major component (compressor, heat exchanger, coil)?",
+      "if_yes": "Carefully evaluate with age and other factors",
+      "if_no": "Repair is likely the right choice"
+    }
+  },
+
+  "professional_guidance": {
+    "hvac_contractor_perspective": {
+      "when_contractors_recommend_replacement": [
+        "Multiple component failures indicating system decline",
+        "Compressor failure on older or R-22 system",
+        "Heat exchanger safety concerns",
+        "Customer complaining about efficiency/comfort even after repairs"
+      ],
+      "when_contractors_recommend_repair": [
+        "Simple component failures on newer equipment",
+        "First-time issues on maintained systems",
+        "Minor repairs during warranty period",
+        "Customer has budget constraints (ethical contractors will repair what they can)"
+      ]
+    },
+    "homeowner_perspective": {
+      "questions_to_ask_contractor": [
+        "What specifically failed and why?",
+        "What's the expected lifespan of this equipment after repair?",
+        "What would a new system cost for comparison?",
+        "Is my refrigerant type still available/affordable?",
+        "Are there any rebates available if I replace?",
+        "Can I get this in writing?"
+      ]
+    },
+    "second_opinion_triggers": [
+      "Repair quote over $1,500",
+      "Contractor immediately pushes replacement on first visit",
+      "Heat exchanger crack diagnosis (commonly oversold)",
+      "Recommendation to 'add refrigerant' without finding leak",
+      "Something feels off about the diagnosis"
+    ]
+  },
+
+  "summary_rules_of_thumb": [
+    "Under 8 years old: Almost always repair (unless major safety issue or R-22)",
+    "8-15 years old: Evaluate carefully using the factors above",
+    "Over 15 years old: Lean toward replacement for major repairs",
+    "R-22 system: Replace unless repair is truly minor",
+    "Heat exchanger crack: Replace the furnace (safety first)",
+    "Multiple repairs same season: System is telling you it's done",
+    "Simple parts (capacitor, contactor, igniter): Almost always repair",
+    "Major parts (compressor, coils): Do the math carefully",
+    "When in doubt: Get a second opinion from a different contractor"
+  ],
+
+  "ductwork_and_distribution_impact": {
+    "why_it_matters": "A new high-efficiency system on bad ducts performs like a sports car on flat tires.",
+    "key_checks": [
+      "Duct leakage (especially in attic/crawlspace)",
+      "Undersized returns causing high static pressure",
+      "Comfort issues tied to distribution (hot/cold rooms)",
+      "Flex duct kinks or crushed sections",
+      "Supply/return locations and room-to-room balance"
+    ],
+    "lean_toward_replacement_or_redesign_when": [
+      "Static pressure is consistently high",
+      "Multiple rooms chronically uncomfortable",
+      "Ducts are damaged, contaminated, or inaccessible for repair",
+      "Return pathways are missing (doors slam, whistling, stuffy rooms)"
+    ],
+    "repair_ok_when": [
+      "Duct system is confirmed sound and sized appropriately",
+      "Comfort issues are isolated and easily corrected"
+    ],
+    "key_message": "If we replace equipment without fixing airflow, you'll still have comfort problems and the new system will be stressed."
+  },
+
+  "envelope_and_load_changes": {
+    "why_it_matters": "If the house changed, the load changed. That can turn a 'replace like-for-like' into a comfort problem.",
+    "triggers_requiring_new_load_calculation": [
+      "New windows or doors installed",
+      "Added insulation or sealed attic",
+      "Spray foam encapsulation",
+      "New addition or garage conversion",
+      "Major shade tree removal or new sun exposure",
+      "Finishing a basement or attic"
+    ],
+    "why_it_matters_for_sizing": "Sizing based on old conditions can lead to oversizing (short cycling, humidity issues) or undersizing (comfort complaints).",
+    "procalcs_note": "Contact ProCalcs for updated Manual J calculations after home improvements: 772-882-5700"
+  },
+
+  "humidity_and_iaq_as_decision_drivers": {
+    "why_it_matters": "Sometimes the decision isn't 'broken vs not' but 'healthy vs not healthy.'",
+    "signs_replacement_makes_more_sense": [
+      "Persistent high indoor humidity despite correct sizing attempts",
+      "Recurring mold/mildew smells from air handler or ducts",
+      "Chronic condensation issues in summer",
+      "Severe dust or IAQ complaints tied to return leakage or poor filtration design"
+    ],
+    "upgrade_considerations": [
+      "Variable-speed air handler for longer runtimes and better dehumidification",
+      "Whole-home dehumidifier (essential in hot-humid climates)",
+      "Media filter cabinet (4-5 inch) instead of restrictive 1-inch high-MERV",
+      "Balanced ventilation (ERV/HRV) in tighter, energy-efficient homes"
+    ]
+  },
+
+  "electrical_capacity_considerations": {
+    "why_it_matters": "Electrification and heat pumps often fail because the electrical side was ignored.",
+    "key_checks": [
+      "Main panel capacity and available breaker spaces",
+      "Heat strip kW requirements (air handlers)",
+      "Condenser/heat pump MCA/MOP compatibility",
+      "Voltage stability issues (brownouts, frequent trips)"
+    ],
+    "replacement_plan_must_include": [
+      "Electrical scope and budget",
+      "Permitting timeline for electrical upgrades if needed"
+    ],
+    "red_flag": "If a contractor quotes a heat pump swap with no mention of electrical capacity, the quote is incomplete."
+  },
+
+  "reliability_patterns_vs_isolated_failures": {
+    "why_it_matters": "Pros don't just look at one broken part. They look for patterns.",
+    "systemic_failure_indicators": [
+      "Multiple major parts in 18 months (capacitor + contactor + compressor symptoms)",
+      "Recurring refrigerant loss without permanent leak repair",
+      "Repeated high head pressure trips after coil cleanings",
+      "High static pressure causing repeated blower failures",
+      "History of water damage to control boards from drain issues"
+    ],
+    "isolated_failure_indicators": [
+      "Single component failure with no history (contactor/capacitor at normal lifespan)",
+      "Wear items at expected life stage",
+      "Clear root cause that can be permanently fixed (debris, blocked drain)"
+    ],
+    "decision_impact": {
+      "systemic_pattern": "Lean toward replacement - chasing individual repairs won't solve underlying issues",
+      "isolated_failure": "Repair is usually the right choice"
+    }
+  },
+
+  "regional_replacement_considerations": {
+    "hot_humid_southeast_gulf": {
+      "replace_bias_triggers": [
+        "Oversized systems causing chronic humidity complaints",
+        "Air handler/duct microbial growth from wet operation",
+        "Attic duct failures (sweating, collapsed insulation)"
+      ],
+      "upgrade_priorities": [
+        "Variable-speed systems with humidity control",
+        "Ducts inside conditioned space or sealed/encapsulated attic",
+        "Whole-home dehumidifier in tight/efficient homes",
+        "Coastal corrosion protection where applicable"
+      ]
+    },
+    "hot_dry_southwest": {
+      "replace_bias_triggers": [
+        "Condenser chronic overheating due to placement/airflow limits",
+        "Dust-related coil damage and repeated compressor stress"
+      ],
+      "upgrade_priorities": [
+        "High EER focus for peak conditions",
+        "Shading and airflow-correct condenser placement",
+        "UV protection for exposed insulation and linesets"
+      ]
+    },
+    "cold_northeast_midwest": {
+      "replace_bias_triggers": [
+        "Heat pump can't carry load and relies heavily on backup heat",
+        "Frozen/icing problems due to poor outdoor placement"
+      ],
+      "upgrade_priorities": [
+        "Cold-climate heat pumps with verified low-temp capacity",
+        "Dual-fuel where gas is cost-effective and winters are severe",
+        "Outdoor unit elevation and snow/defrost drainage planning"
+      ]
+    },
+    "pacific_northwest": {
+      "replace_bias_triggers": [
+        "No cooling capacity for modern heat events",
+        "Damp-season mold/mustiness due to low runtime"
+      ],
+      "upgrade_priorities": [
+        "Heat pump retrofits (often best fit for climate)",
+        "Ventilation and filtration planning (wildfire smoke events)",
+        "Moisture strategy for shoulder seasons"
+      ]
+    },
+    "coastal_any_region": {
+      "replace_bias_triggers": [
+        "Outdoor coil repeatedly leaking from corrosion",
+        "Cabinet deterioration and fastener failure"
+      ],
+      "upgrade_priorities": [
+        "Coastal-grade coatings and corrosion-resistant hardware",
+        "Elevated equipment in flood zones",
+        "Hurricane anchoring and surge protection"
+      ]
+    },
+    "mountain_high_altitude": {
+      "replace_bias_triggers": [
+        "Combustion appliances with chronic drafting/venting issues",
+        "Heat pump performance issues due to extreme temperature swings"
+      ],
+      "upgrade_priorities": [
+        "Altitude-aware combustion setup",
+        "Cold-weather capacity planning",
+        "Snow drift and roof dump avoidance for outdoor units"
+      ]
+    }
+  },
+
+  "warranty_realities": {
+    "common_gotchas": [
+      "Warranty may require registration within 60-90 days of install",
+      "Some warranties require licensed contractor maintenance records",
+      "Compressor/coils may be covered but labor is not",
+      "Mismatched indoor/outdoor components can reduce warranty coverage",
+      "'Parts warranty' doesn't cover duct defects or installation problems"
+    ],
+    "homeowner_questions_to_ask": [
+      "Is labor covered? For how long?",
+      "Is the warranty transferable if I sell the home?",
+      "What maintenance documentation do I need to keep?",
+      "Is this a matched AHRI-rated system?"
+    ]
+  },
+
+  "remaining_useful_life_assessment": {
+    "how_pros_estimate": [
+      "Age + usage hours + climate severity",
+      "Compressor sound and amp draw trends",
+      "Coil condition (corrosion, leaks, fin damage)",
+      "History of refrigerant additions (proxy for ongoing leak risk)",
+      "Static pressure and airflow health (stress indicator)"
+    ],
+    "practical_outputs": [
+      "'Likely stable for 1-3 years with minor repairs'",
+      "'High risk of major failure within 12 months'",
+      "'Replace now is economically safer than repeated repairs'"
+    ],
+    "rule_of_thumb": "If the system has multiple stress indicators, treat remaining life as short even if it 'still runs.'"
+  },
+
+  "financing_and_payment_options": {
+    "common_options": [
+      "Manufacturer or contractor financing (promotional 0% APR periods)",
+      "HELOC or home improvement loans (often better rates, longer terms)",
+      "Utility rebates and efficiency incentives (require specific models/documentation)",
+      "Federal tax credits (heat pumps/efficiency upgrades - verify current rules at energystar.gov)"
+    ],
+    "practical_guidance": [
+      "Ask for the total installed price, not just 'monthly payment'",
+      "Compare same scope: duct fixes, electrical upgrades, permits, thermostat, filtration",
+      "Be wary of financing that hides inflated equipment pricing"
+    ]
+  },
+
+  "scams_and_overselling_tactics": {
+    "red_flags": [
+      "'You need a whole new system' without showing measurements or evidence",
+      "Pressure to decide immediately ('today only' pricing)",
+      "Blaming refrigerant type alone without diagnosing leaks or airflow",
+      "Quoting SEER upgrades without addressing duct/static pressure limitations",
+      "Selling UV lights and IAQ gadgets as a cure for humidity problems",
+      "Offering to 'top off refrigerant' repeatedly without leak repair plan",
+      "Claiming heat exchanger is cracked without showing proof and CO test results"
+    ],
+    "green_flags": [
+      "Documents findings (static pressure, temp split, combustion test, amperage)",
+      "Explains options with pros/cons and expected outcomes",
+      "Talks about airflow and duct health, not just equipment",
+      "Provides model numbers and AHRI match-ups",
+      "Gives clear scope and permit plan"
+    ]
+  },
+
+  "timing_considerations": {
+    "best_times_to_replace": [
+      "Shoulder seasons (spring and fall) when demand is lower",
+      "Before peak season to avoid emergency pricing and limited inventory"
+    ],
+    "why_timing_matters": [
+      "More scheduling flexibility",
+      "Better equipment availability",
+      "Time to correct duct and electrical issues properly",
+      "Less pressure-driven decision-making"
+    ],
+    "emergency_vs_planned_replacement": {
+      "emergency_breakdown": {
+        "goals": ["Restore safety and basic comfort quickly", "Avoid rushed upsells"],
+        "recommended_actions": [
+          "Ask for a 'stabilize now' option plus a 'replace later' plan",
+          "Request temporary solutions if replacement lead time is long",
+          "Get at least one second opinion if time allows"
+        ]
+      },
+      "planned_replacement": {
+        "goals": ["Optimize comfort, efficiency, and long-term cost", "Fix ducts and electrical correctly"],
+        "recommended_actions": [
+          "Schedule Manual J and duct review early",
+          "Compare 2-3 bids with matched scopes",
+          "Plan improvements: media filtration, dehumidification, or ventilation if needed"
+        ]
+      }
+    }
+  },
+
+  "quote_questions_homeowners_should_ask": {
+    "scope_and_design": [
+      "Is this a matched AHRI-rated system? What's the AHRI certificate number?",
+      "What's included: permits, line set, pad, electrical disconnect, float switch, thermostat?",
+      "Are you evaluating duct leakage and static pressure? Will you measure and document it?",
+      "Will you verify airflow at startup (CFM/static) and provide the readings?"
+    ],
+    "quality_and_protection": [
+      "How will you protect the home during install (dust, flooring, debris)?",
+      "What's your condensate overflow protection plan (especially in attics)?",
+      "Will you add surge protection if the area has outages or lightning?"
+    ],
+    "warranty_and_service": [
+      "What's the parts warranty and what's the labor warranty?",
+      "Is the warranty transferable if I sell?",
+      "Do you register the equipment and provide proof?",
+      "Do you offer a maintenance plan and what does it actually include?"
+    ],
+    "pricing_clarity": [
+      "Can you itemize: equipment, labor, duct modifications, electrical upgrades, permit fees?",
+      "What change orders could occur and why?",
+      "What's the total installed price (not just monthly payment)?"
+    ]
+  },
+
+  "professional_diagnostic_heuristics": {
+    "what_experienced_techs_look_for": [
+      "Coil condition and leak likelihood (especially microchannel and coastal corrosion)",
+      "Compressor sound and current draw trends",
+      "History of refrigerant additions (leak proxy)",
+      "Static pressure (system stress indicator)",
+      "Heat exchanger integrity and combustion safety (furnaces)",
+      "Water damage history to control boards and drain pans",
+      "Installation quality issues (incorrect airflow, poor drainage, undersized returns)"
+    ],
+    "systemic_vs_isolated_failure_diagnosis": {
+      "systemic_indicators": [
+        "Repeated failures tied to airflow (high static pressure, dirty blower wheel)",
+        "Recurring condensate overflow causing control board damage",
+        "Chronic high head pressure despite clean coil",
+        "Refrigerant loss over time (leak not properly resolved)"
+      ],
+      "isolated_indicators": [
+        "Single known-failure part at normal life stage",
+        "Clear one-time event damage (surge) with no recurring pattern"
+      ]
+    },
+    "remaining_useful_life_inputs": [
+      "Age and environment severity (coastal, desert, extreme cold)",
+      "Runtime intensity (long cooling seasons vs mild climates)",
+      "Maintenance history (coil cleanliness, filters, drain management)",
+      "Major component health signals (amps, noise, vibration, heat)",
+      "Probability-weighted failure risk (what's likely to fail next and cost)"
+    ]
+  }
+}

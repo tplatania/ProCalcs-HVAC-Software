@@ -1,0 +1,208 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HVAC Refrigerant Retrofits & Replacements Guide",
+  "last_updated": "2025-12-28",
+  "intended_use": "Decision support for homeowners and HVAC technicians about R-22 systems, retrofit options, and regulatory changes.",
+  "core_principles": {
+    "refrigerant_work_is_professional_only": true,
+    "assistant_behavior": [
+      "Always emphasize that refrigerant handling requires EPA Section 608 certification",
+      "Never coach homeowners through adding/charging refrigerant",
+      "If system is leaking, prioritize leak repair or replacement over 'topping off'"
+    ]
+  },
+  "r22_phase_out": {
+    "why_phased_out": "R-22 (HCFC-22) depletes the ozone layer. Phased out under Clean Air Act and Montreal Protocol.",
+    "timeline": {
+      "2010": "Ban on new equipment manufacturing using R-22",
+      "2020": "Total ban on production and import of virgin R-22 in US",
+      "current": "Only recycled/reclaimed R-22 available. Supplies finite and shrinking."
+    },
+    "pricing_reality": "Extremely high and volatile (often 5-10x cost of modern refrigerants). Prices vary by region and supplier.",
+    "implication": "Repairing a major R-22 leak is often economically unviable compared to system replacement."
+  },
+  "replacement_options": {
+    "critical_warning": "NEVER MIX REFRIGERANTS. System must be recovered and evacuated first. 'Drop-in' means compatible with existing oil, NOT mixable with R-22.",
+    "drop_in_replacements": {
+      "description": "Compatible with mineral oil in older R-22 systems. No oil change typically required.",
+      "R-438A_MO99": {
+        "common_names": ["MO99", "Freon MO99"],
+        "pros": ["Closest pressure/temperature match to R-22", "Compatible with mineral oil", "Widely available"],
+        "cons": ["Slight capacity loss (5-10%)", "Blend with temperature glide"],
+        "best_for": "Most residential AC retrofits where oil change is too costly",
+        "when_to_use": ["System mechanically healthy", "No chronic leaks", "Need short-term bridge to replacement"]
+      },
+      "R-422D_MO29": {
+        "common_names": ["MO29", "ISCEON MO29", "Freon MO29"],
+        "pros": ["Mineral oil compatible", "Non-ozone-depleting"],
+        "cons": ["Significant capacity loss (up to 15-20%)", "Can be hard on compressors"],
+        "best_for": "Low/medium temp refrigeration, less ideal for high-load residential AC"
+      },
+      "R-417A": {
+        "common_names": ["ISCEON 59"],
+        "pros": ["Non-ozone-depleting", "Historical R-22 retrofit option"],
+        "cons": ["Performance differences noticeable", "May be harder to source"],
+        "best_for": "Specific legacy systems with known good performance"
+      }
+    },
+    "near_drop_in": {
+      "description": "Requires POE oil. Since R-22 units have mineral oil, an oil change/flush is required (labor intensive).",
+      "R-407C": {
+        "pros": ["Excellent capacity match to R-22", "Very efficient", "Well-known retrofit pathway"],
+        "cons": ["REQUIRES POE oil - will cause compressor failure if used with mineral oil", "Temperature glide", "May require TXV adjustments"],
+        "best_for": "Commercial systems or when technician is willing to change oil"
+      },
+      "R-407A": {
+        "pros": ["Non-ozone-depleting"],
+        "cons": ["Application-sensitive", "More common in refrigeration than comfort cooling"],
+        "best_for": "Specific applications with contractor experience"
+      },
+      "R-427A": {
+        "pros": ["Non-ozone-depleting", "Retrofit option"],
+        "cons": ["Not simple swap", "Requires lubricant considerations"],
+        "best_for": "When supported by contractor's process"
+      }
+    },
+    "NOT_compatible": {
+      "R-410A": {
+        "status": "ABSOLUTELY NOT COMPATIBLE - DANGEROUS",
+        "reasons": [
+          "Operates at pressures ~50% higher than R-22",
+          "Would cause catastrophic equipment failure (burst coils/compressor)",
+          "Uses POE oil vs R-22's mineral oil",
+          "Components not rated for R-410A pressures"
+        ],
+        "assistant_response": "R-410A cannot be used in R-22 equipment. The pressures are incompatible and would cause equipment failure and safety risks."
+      }
+    }
+  },
+  "retrofit_procedure": {
+    "technician_only": true,
+    "steps": [
+      "Confirm system condition: leak history, compressor health, coil condition",
+      "Recover all existing R-22 (do NOT vent - illegal)",
+      "Repair leaks FIRST - retrofit into leaking system is wasted money",
+      "Replace filter-drier (mandatory for retrofits)",
+      "Evaluate lubricant compatibility; perform oil change if required",
+      "Evacuate system to 500 microns",
+      "Charge with new refrigerant (LIQUID charge for blends due to glide)",
+      "Commission using appropriate PT charts for retrofit refrigerant",
+      "Label system with new refrigerant type, oil type, and charge amount"
+    ],
+    "performance_expectations": {
+      "capacity": "Expect 5-10% loss in cooling power with most retrofits",
+      "efficiency": "Energy consumption may increase slightly",
+      "seals": "Elastomer O-rings may shrink after removing R-22, causing leaks"
+    }
+  },
+  "decision_framework": {
+    "quick_rule": "If system is old, inefficient, or has confirmed leak, replacement usually delivers better long-term value.",
+    "replace_system_if": [
+      "System is over 15 years old",
+      "Repair cost > 50% of new system cost",
+      "Compressor has failed (burnout)",
+      "System has needed refrigerant multiple times (chronic leak)",
+      "Major component failure (coil, compressor)"
+    ],
+    "retrofit_can_work_if": [
+      "System is mechanically healthy and leak-free (or leak repaired once)",
+      "System is relatively newer (rare for R-22 at this point)",
+      "Owner needs short-term bridge while planning replacement",
+      "Budget is strictly limited and compressor is healthy"
+    ],
+    "cost_comparison": {
+      "retrofit_cost": "Service call + leak repair + drier + recovery + new refrigerant ($500-$1,500+)",
+      "risk": "If compressor dies 6 months later, retrofit money is wasted",
+      "owner_guidance": "If paying for refrigerant more than once, the system is telling you it's time for replacement"
+    }
+  },
+  "r410a_systems": {
+    "status": "Current standard but phasing down",
+    "characteristics": {
+      "pressure": "Significantly higher than R-22 (~1.6x)",
+      "oil": "Synthetic POE oil (absorbs moisture rapidly)",
+      "compatibility": "Cannot retrofit R-22 equipment to use R-410A"
+    }
+  },
+  "upcoming_changes": {
+    "aim_act": {
+      "legislation": "American Innovation and Manufacturing Act",
+      "goal": "Phase down high-GWP HFCs (including R-410A) by 85% by 2036"
+    },
+    "timeline": {
+      "2025_jan": "Ban on manufacturing NEW residential/light commercial systems using R-410A",
+      "2026_jan": "Installation deadline for some equipment manufactured before cutoff"
+    },
+    "new_refrigerants": {
+      "R-454B": {
+        "brand_name": "Puron Advance",
+        "class": "A2L (mildly flammable)",
+        "notes": "Requires equipment designed for A2L, leak sensors, updated safety standards"
+      },
+      "R-32": {
+        "class": "A2L (mildly flammable)",
+        "notes": "Similar planning impacts as R-454B"
+      }
+    },
+    "impact_on_current_owners": [
+      "Existing R-410A equipment can still be serviced",
+      "R-410A will become more expensive over time (like R-22 did)",
+      "No requirement to replace functioning systems solely due to policy",
+      "When replacing, expect A2L refrigerant options"
+    ]
+  },
+  "safety_and_regulations": {
+    "epa_section_608": {
+      "requirement": "Federal law requires EPA certification to buy or handle refrigerants",
+      "fines": "Up to $44,539 per day for violations (venting refrigerant)",
+      "homeowner_restriction": "Homeowners cannot legally purchase R-22 or R-410A without certification"
+    },
+    "venting_prohibition": "Illegal. Refrigerants must be recovered into specialized tank and sent to reclaimer.",
+    "environmental_impact": "Improper handling damages ozone layer (R-22) or contributes to climate change (HFCs)"
+  },
+  "common_homeowner_questions": {
+    "can_i_add_freon_myself": {
+      "answer": "NO",
+      "reasons": [
+        "Illegal without EPA Section 608 certification",
+        "Dangerous - refrigerants can cause frostbite and displace oxygen",
+        "Requires specialized tools (manifolds, scales, recovery equipment)",
+        "Overcharging kills compressors",
+        "Topping off without fixing leak is temporary and wasteful"
+      ],
+      "what_to_do": "Call licensed HVAC technician to find/repair leak, then charge correctly"
+    },
+    "my_system_uses_r22_options": {
+      "option_1": "Pay high price for reclaimed R-22 (best performance, temporary solution)",
+      "option_2": "Retrofit to MO99 or similar (cheaper refrigerant, labor cost, slight performance loss)",
+      "option_3": "Replace system (recommended if unit is 15+ years old)",
+      "recommendation": "If system is 15+ years old, replacement is usually smarter financial move"
+    },
+    "how_much_does_r22_cost": {
+      "answer": "Prices vary widely by region and supplier. Typically very expensive because production ended in 2020. Ask local HVAC contractor for current pricing."
+    },
+    "retrofit_or_replace": {
+      "answer": "Simple rule: If system is 15+ years old, has a leak, or needs major repairs, replacement usually wins. If mechanically healthy and need short-term bridge, retrofit may be reasonable.",
+      "ask_for": "Written estimate separating leak repair, retrofit labor, and expected performance changes"
+    },
+    "what_refrigerant_new_system": {
+      "answer": "Many new systems use R-410A (still available) or transitioning to R-454B or R-32 (A2L refrigerants). Ask your contractor about specific model."
+    }
+  },
+  "assistant_decision_flow": {
+    "first_questions": [
+      "Is this a homeowner or technician?",
+      "What refrigerant does system use (R-22 or R-410A)?",
+      "How old is the system?",
+      "Is there a leak, or just planning for future?",
+      "Has it needed refrigerant before?"
+    ],
+    "response_flow": [
+      "1. Safety/regulatory callout (EPA 608, no DIY refrigerant)",
+      "2. Clarify system age/condition and leak status",
+      "3. Present options: reclaimed R-22, retrofit, or replacement",
+      "4. Provide decision framework based on age, leak history, cost",
+      "5. Recommend next action (what to ask the tech, info to gather)"
+    ]
+  }
+}

@@ -1,0 +1,511 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HVAC Preventive Maintenance Checklists (Homeowner vs Professional)",
+  "last_updated": "2025-12-28",
+  "intended_use": "Actionable preventive maintenance guidance for homeowners and HVAC technicians. Clear safety boundaries: homeowner-safe tasks vs professional-only work.",
+  
+  "core_safety_rules": {
+    "always_emphasize": [
+      "If you smell gas, see smoke, hear arcing/sparking, or suspect carbon monoxide: stop and seek emergency help immediately.",
+      "Homeowners should not open electrical compartments, handle capacitors, or work with refrigerants or gas valves.",
+      "Always turn the system OFF at the thermostat before any homeowner cleaning tasks; never touch wiring."
+    ],
+    "stop_and_call_pro_triggers": [
+      "Burning smell, smoke, or sparking/arcing",
+      "Water standing near electrical components",
+      "Repeated breaker trips",
+      "CO alarm sounding or flu-like symptoms that improve outdoors",
+      "Ice buildup on refrigerant lines that returns after filter/airflow corrections",
+      "Gas smell near furnace or outdoor meter"
+    ]
+  },
+
+  "roles": {
+    "homeowner": "Safe DIY tasks only (no panels opened, no wiring touched).",
+    "technician": "Licensed/qualified HVAC technician performing electrical, refrigerant, combustion, and performance testing."
+  },
+
+  "homeowner_maintenance_safe_diy": {
+    "overview": "Simple routine checks reduce breakdowns and help catch problems early. If anything looks unsafe or abnormal, stop and call a professional.",
+    
+    "monthly_tasks": [
+      {
+        "task": "Filter Inspection/Replacement",
+        "frequency": "Monthly check; replace as needed",
+        "steps": [
+          "Turn system OFF at thermostat.",
+          "Locate filter (return grille, filter cabinet, or air handler slot).",
+          "Check for visible dirt buildup - if you cannot see light through it, replace it.",
+          "Replace with the same size; align airflow arrow toward equipment.",
+          "Turn system back ON and confirm normal airflow."
+        ],
+        "notes": [
+          "Standard 1-inch filters typically need replacement every 30-90 days.",
+          "If you have pets, construction dust, or allergies, expect more frequent replacement.",
+          "If replacing the filter causes airflow to drop noticeably, the filter may be too restrictive."
+        ]
+      },
+      {
+        "task": "Thermostat Check",
+        "frequency": "Monthly",
+        "steps": [
+          "Confirm correct mode (COOL/HEAT/AUTO) and setpoint.",
+          "Confirm schedule/hold settings match your routine.",
+          "Check that the display is responsive.",
+          "Look for low battery icon - replace batteries if needed."
+        ]
+      },
+      {
+        "task": "Visual Equipment Inspection (look only)",
+        "frequency": "Monthly",
+        "steps": [
+          "Walk around indoor and outdoor units without opening panels.",
+          "Look for water around indoor equipment or rust staining.",
+          "Look for ice on the refrigerant line or outdoor unit.",
+          "Check that outdoor unit has 2-foot clearance and isn't buried in debris."
+        ],
+        "what_to_watch_for": [
+          "Water pooling, rust streaks, moldy odors",
+          "Oil stains at refrigerant connections (possible leak)",
+          "Chewed wires or damaged insulation",
+          "Excessive vibration or loose panels"
+        ]
+      },
+      {
+        "task": "Sound Check",
+        "frequency": "Monthly (and whenever the system runs)",
+        "what_sounds_mean": [
+          { "sound": "Buzzing or arcing", "action": "Turn system off and call a pro immediately (electrical hazard)." },
+          { "sound": "Grinding/squealing", "action": "Call a pro soon (bearing/motor risk)." },
+          { "sound": "Loud rattling", "action": "Check for loose panels/nearby debris; call a pro if persistent." },
+          { "sound": "Hissing + oil stains", "action": "Call a pro (possible refrigerant leak)." }
+        ]
+      }
+    ],
+
+    "seasonal_tasks": {
+      "spring_cooling_prep": [
+        {
+          "task": "Outdoor Unit Cleaning (basic exterior)",
+          "steps": [
+            "Turn system OFF at thermostat (and allow fan to stop).",
+            "Remove leaves/grass around the unit; maintain 2-foot clearance.",
+            "Gently rinse exterior fins with a garden hose from the outside (no pressure washer).",
+            "Do not spray into electrical compartments or disturb wiring."
+          ],
+          "notes": "If coils are impacted with heavy grease/dirt, schedule professional coil cleaning."
+        },
+        {
+          "task": "Condensate Drain Test",
+          "steps": [
+            "Look for water around the indoor unit and at the drain termination.",
+            "Pour 1 cup of distilled vinegar or warm water into the drain line access port to verify flow.",
+            "If safe and accessible, use a wet/dry vacuum at the termination (power OFF)."
+          ],
+          "notes": "If you see repeated overflow, stop and schedule service."
+        },
+        {
+          "task": "Test Run Before Hot Weather",
+          "steps": [
+            "Run AC for 15 minutes on a warm day before the first heat wave.",
+            "Confirm steady airflow and expected temperature change.",
+            "Note any odors, noises, or short cycling."
+          ],
+          "when_to_call_pro": [
+            "Weak airflow",
+            "Repeated on/off cycling within a few minutes",
+            "Ice forming on lines",
+            "Burning smells or electrical buzzing"
+          ]
+        }
+      ],
+      "fall_heating_prep": [
+        {
+          "task": "Register/Vent Check",
+          "action": "Ensure all supply and return vents are open and not blocked by furniture or rugs."
+        },
+        {
+          "task": "Humidifier Prep (if equipped)",
+          "action": "Replace the water panel (evaporator pad) and turn the humidistat ON."
+        },
+        {
+          "task": "Test Run Before Cold Weather",
+          "steps": [
+            "Run heat for 10-15 minutes before sustained cold arrives.",
+            "Note any burning smell (dust burning off is normal for first run).",
+            "Confirm warm air at registers."
+          ]
+        }
+      ]
+    },
+
+    "annual_tasks": [
+      {
+        "task": "Schedule Professional Tune-Up",
+        "frequency": "Annually (or twice/year for heat + cool climates)",
+        "action": "Book spring AC check and fall furnace check.",
+        "notes": "Best practice is spring (cooling) and fall (heating) to catch issues before peak demand."
+      },
+      {
+        "task": "Battery Replacement",
+        "frequency": "Annually",
+        "action": "Replace batteries in thermostats, Carbon Monoxide detectors, and Smoke detectors.",
+        "notes": "If devices are hardwired with battery backup, still replace backup batteries."
+      },
+      {
+        "task": "Check/Clean Registers and Returns",
+        "frequency": "Annually",
+        "steps": [
+          "Vacuum visible dust from grilles.",
+          "Ensure furniture/rugs aren't blocking returns or supplies.",
+          "Confirm each room has adequate return pathway (doors not tightly sealed without transfer)."
+        ]
+      }
+    ]
+  },
+
+  "professional_maintenance_cooling": {
+    "overview": "Cooling tune-ups focus on coil condition, electrical reliability, airflow, condensate safety, and confirming performance.",
+    
+    "outdoor_unit_condenser": [
+      {
+        "task": "Chemical Coil Cleaning",
+        "purpose": "Restore heat rejection and reduce compressor stress.",
+        "action": "Remove dirt/pollen/cottonwood buildup with appropriate cleaner."
+      },
+      {
+        "task": "Fan Blade Inspection",
+        "checks": ["Blade condition and balance", "Cracks or damage", "Motor mounting and vibration", "Bearing noise"]
+      },
+      {
+        "task": "Compressor and Fan Amp Draws",
+        "purpose": "Compare to nameplate ratings to detect motor stress."
+      },
+      {
+        "task": "Contactor Inspection",
+        "checks": ["Contact wear/pitting", "Coil voltage stability", "Ant/insect contamination"]
+      },
+      {
+        "task": "Capacitor Testing",
+        "checks": ["Capacitance within +/- 6% tolerance", "Bulging/leakage", "Terminal condition"],
+        "action": "Replace if outside tolerance."
+      },
+      {
+        "task": "Electrical Connections",
+        "checks": ["Tighten lugs/terminals to spec", "Heat discoloration or melted insulation", "Disconnect condition"]
+      },
+      {
+        "task": "Refrigerant Charge Verification",
+        "purpose": "Verify proper operation and efficiency.",
+        "method": "Check Subcooling/Superheat per manufacturer method.",
+        "notes": [
+          "Only hook up gauges if necessary.",
+          "If low charge is found, leak detection/repair is the priority - not just adding refrigerant."
+        ]
+      }
+    ],
+
+    "indoor_unit_air_handler": [
+      {
+        "task": "Evaporator Coil Inspection",
+        "checks": ["Coil cleanliness and airflow restriction", "Mold/dust buildup", "Signs of icing history", "Drain pan condition"]
+      },
+      {
+        "task": "Blower Motor and Wheel",
+        "checks": ["Wheel cleanliness and balance", "Debris buildup (impacts airflow)", "Motor amps vs nameplate", "ECM diagnostics where applicable"]
+      },
+      {
+        "task": "Condensate Drain and Pan",
+        "checks": ["Clear drain line and P-trap", "Verify slope and proper termination", "Test float switch/overflow protection", "Check pan for rust/standing water"]
+      },
+      {
+        "task": "Electric Heat Strips (if air handler)",
+        "checks": ["Strip condition", "Sequencer operation", "Amp draw"]
+      },
+      {
+        "task": "Electrical Connections",
+        "checks": ["Overheated terminals", "Control board connections", "Transformer output"]
+      },
+      {
+        "task": "Air Filter Verification",
+        "checks": ["Correct size and fit", "Reasonable restriction level", "Recommend appropriate MERV based on system static pressure"]
+      }
+    ],
+
+    "system_performance_checks": [
+      {
+        "task": "Temperature Split (Supply vs Return)",
+        "target": "16-22°F delta T",
+        "notes": "Interpretation depends on indoor humidity, airflow, and outdoor conditions. Not a standalone diagnostic."
+      },
+      {
+        "task": "Static Pressure Measurement",
+        "purpose": "Detect airflow restriction, undersized ducts, and filter issues.",
+        "notes": "High static pressure causes noise, poor comfort, and premature motor failures."
+      },
+      {
+        "task": "Thermostat Calibration",
+        "checks": ["Accuracy vs reference thermometer", "Staging behavior", "Proper sensor placement"]
+      }
+    ]
+  },
+
+  "professional_maintenance_heating": {
+    "overview": "Heating tune-ups prioritize safety (combustion/CO), venting, ignition reliability, and heat pump defrost functionality.",
+    
+    "gas_furnace": {
+      "safety_critical": [
+        {
+          "task": "Heat Exchanger Inspection",
+          "purpose": "Detect failure risk and CO hazards.",
+          "action": "Check for cracks, holes, or rust.",
+          "notes": "Inspection requires training and appropriate tools; do not rely on visual-only shortcuts."
+        },
+        {
+          "task": "Carbon Monoxide (CO) Testing",
+          "checks": ["Ambient CO levels", "Flue gas CO levels", "Backdraft risk indicators"]
+        },
+        {
+          "task": "Gas Leak Search",
+          "action": "Soap test gas piping and valve connections."
+        }
+      ],
+      "performance": [
+        {
+          "task": "Flame Sensor Cleaning",
+          "purpose": "Fixes common lockout issues.",
+          "checks": ["Sensor contamination", "Secure mounting", "Proper flame rectification"]
+        },
+        {
+          "task": "Hot Surface Igniter Inspection",
+          "checks": ["White spots or cracks (failure indicators)", "Resistance testing", "Secure wiring"]
+        },
+        {
+          "task": "Burner Cleaning and Inspection",
+          "checks": ["Burner condition", "Flame pattern", "Rust/debris", "Cross-over alignment"]
+        },
+        {
+          "task": "Gas Pressure Verification",
+          "checks": ["Inlet pressure", "Manifold pressure (adjust to nameplate WC)", "Regulator performance"],
+          "notes": "Adjustments must follow manufacturer instructions."
+        },
+        {
+          "task": "Flue/Venting Inspection",
+          "checks": ["Clearances", "Termination condition", "Pitch/slope", "Condensation or corrosion", "Obstructions"]
+        }
+      ]
+    },
+
+    "heat_pump_heating_mode": [
+      {
+        "task": "Reversing Valve Operation",
+        "checks": ["Proper mode switching (whooshing sound)", "No abnormal noise", "No performance anomalies"]
+      },
+      {
+        "task": "Defrost Cycle Verification",
+        "purpose": "Confirm outdoor coil defrost operates and clears ice reliably.",
+        "action": "Force defrost to ensure sensors/board work.",
+        "checks": ["Defrost initiation/termination timing", "Sensor operation", "Drainage path clear"]
+      },
+      {
+        "task": "Auxiliary/Emergency Heat Test",
+        "purpose": "Ensure backup heat functions and staging is correct.",
+        "checks": ["Electric strip operation and amperage", "Sequencing and limits", "Lockout function"]
+      },
+      {
+        "task": "Outdoor Coil Condition",
+        "checks": ["Cleanliness", "Airflow obstructions", "Ice accumulation patterns", "Clearance for defrost drainage"]
+      }
+    ]
+  },
+
+  "filter_guide": {
+    "types_and_merv": [
+      {
+        "type": "Fiberglass (spun glass)",
+        "merv": "1-4",
+        "pros": ["Low restriction", "Cheap"],
+        "cons": ["Captures fewer fine particles"],
+        "use": "Basic equipment protection only. Catches lint/large dust.",
+        "replacement": "Every 30 days."
+      },
+      {
+        "type": "Pleated (Standard)",
+        "merv": "5-8",
+        "pros": ["Better particle capture than fiberglass", "Common in residential"],
+        "use": "Good balance. Catches pollen, mites, mold spores. Standard for most homes.",
+        "replacement": "Every 60-90 days."
+      },
+      {
+        "type": "High Performance Pleated",
+        "merv": "9-12",
+        "pros": ["Better allergy/particle control"],
+        "cons": ["Can restrict airflow if system/ducts are not designed for it"],
+        "use": "Superior filtration (pet dander, fine dust).",
+        "replacement": "Every 90 days (check monthly).",
+        "warning": "Can raise static pressure and harm comfort/equipment if not compatible with system."
+      },
+      {
+        "type": "HEPA / High Efficiency",
+        "merv": "13-16",
+        "pros": ["Excellent filtration for smoke, virus carriers"],
+        "cons": ["Usually requires dedicated system design"],
+        "use": "Hospital grade filtration.",
+        "warning": "CRITICAL: Do not use 1-inch MERV 13+ filters in standard systems. High restriction can freeze coils and kill compressors. Requires deep pleat (4-5 inch) media cabinet or dedicated filtration module."
+      }
+    ],
+
+    "how_to_choose": [
+      "Start with the equipment and duct system's airflow tolerance (static pressure).",
+      "Use a filter that matches the rack size exactly; avoid gaps/bypass.",
+      "The 'best' filter is the one that keeps the air clean without choking the equipment.",
+      "MERV 8 is the safe standard for 1-inch slots.",
+      "For allergies/smoke concerns, consider a thicker media filter cabinet rather than a restrictive 1-inch high-MERV.",
+      "If airflow is already weak, do not jump to high MERV without technician verification."
+    ],
+
+    "replacement_frequency": {
+      "notes": "Frequency varies by home conditions: pets, smoking, construction dust, occupancy, and runtime.",
+      "typical_ranges": [
+        { "filter_type": "Fiberglass", "replace_every": "30 days" },
+        { "filter_type": "1-inch pleated (mid-MERV)", "replace_every": "30-90 days" },
+        { "filter_type": "4-5 inch media", "replace_every": "6-12 months (check every 3 months)" }
+      ],
+      "increase_frequency_when": ["Pets in home", "Allergy season", "Renovations/construction", "Wildfire smoke", "High system runtime"]
+    }
+  },
+
+  "signs_maintenance_overdue": {
+    "symptoms": [
+      { 
+        "sign": "Energy bills rising unexpectedly", 
+        "common_causes": ["Dirty coils", "Dirty filters", "Low airflow", "Refrigerant issues", "Duct leakage"],
+        "note": "System running longer to maintain temperature."
+      },
+      { 
+        "sign": "Uneven temperatures between rooms", 
+        "common_causes": ["Airflow imbalance", "Duct restrictions/leaks", "Thermostat location", "Zoning issues"] 
+      },
+      { 
+        "sign": "Short cycling (unit turns on/off every 5 mins)", 
+        "common_causes": ["Dirty filter", "Dirty flame sensor", "Oversizing", "Airflow problems", "Thermostat issues"] 
+      },
+      { 
+        "sign": "Ice visible on copper refrigerant lines", 
+        "common_causes": ["Low airflow", "Dirty filter", "Low refrigerant charge/leak", "Dirty coil"],
+        "note": "If it returns after filter/airflow corrections, call a pro."
+      },
+      { 
+        "sign": "Unusual smells", 
+        "types": [
+          "Musty smell = mold in coil/ducts",
+          "Burning smell = dust on heat strips (normal first run) or electrical issue",
+          "Rotten egg smell = gas leak (evacuate immediately)"
+        ]
+      },
+      { 
+        "sign": "Water leaking around indoor unit", 
+        "common_causes": ["Clogged drain", "Pan overflow", "Frozen coil thawing"],
+        "note": "Standing water near electrical components is a safety hazard."
+      },
+      { 
+        "sign": "Reduced airflow from vents", 
+        "common_causes": ["Dirty filter", "Dirty blower wheel", "Coil restriction", "Duct issues"] 
+      },
+      { 
+        "sign": "Unusual sounds", 
+        "action": "If burning smell or electrical buzzing: stop and call a pro immediately." 
+      }
+    ]
+  },
+
+  "maintenance_agreement_value": {
+    "whats_typically_included": [
+      "Two visits per year (Spring AC, Fall Heat)",
+      "Priority scheduling (jump the line during heat waves/cold snaps)",
+      "Discount on repairs (usually 10-15%)",
+      "Waived or reduced diagnostic fees",
+      "Basic cleaning, safety checks, and performance verification"
+    ],
+    
+    "benefits": [
+      "Prevents 90% of breakdowns by catching issues early",
+      "Maintains manufacturer warranty (proof of maintenance often required)",
+      "Extends equipment life",
+      "Budget predictability and priority response",
+      "Documentation helpful for home resale"
+    ],
+
+    "what_to_look_for_in_good_agreement": [
+      "Clear checklist of what the visit includes",
+      "Coil inspection and cleaning",
+      "Electrical checks (amp draws, capacitors, connections)",
+      "Static pressure measurement",
+      "Combustion safety testing for furnaces (CO check)",
+      "Proof of measured performance provided to you",
+      "Transparent pricing for what's extra",
+      "Qualified technicians with licensing/insurance"
+    ],
+
+    "red_flags_bad_contractors": [
+      "'Tune-up' that is only a quick look with no measurements",
+      "Techs who find a 'major part' broken every single visit",
+      "Hard-sell tactics for unnecessary add-ons without evidence",
+      "Pressure to buy a new system when yours is <10 years old and working",
+      "Adding refrigerant every year without fixing the leak",
+      "No documentation or vague 'everything looks good' reports",
+      "No combustion safety testing on gas furnaces",
+      "Won't show you what they found or explain the work"
+    ]
+  },
+
+  "seasonal_timing_recommendations": {
+    "cooling_tune_up": {
+      "best_time": "March - May (before sustained heat)",
+      "why_it_matters": [
+        "Finds weak capacitors/contactors before they fail on the hottest day",
+        "Ensures coils are clean and airflow is correct for peak efficiency",
+        "Techs are available before the summer rush",
+        "Catching a weak capacitor now prevents failure in July"
+      ]
+    },
+    "heating_tune_up": {
+      "best_time": "September - November (before sustained cold)",
+      "why_it_matters": [
+        "Combustion safety checks reduce CO risk before closing windows for winter",
+        "Confirms ignition reliability and venting integrity",
+        "Heat pump defrost and backup heat can be verified before cold snaps"
+      ]
+    },
+    "notes": [
+      "In year-round climates or heat pump-heavy regions, consider two visits per year (spring + fall).",
+      "If the system is older or heavily used, more frequent professional checks can prevent costly failures."
+    ]
+  },
+
+  "record_keeping": {
+    "what_to_track": [
+      "Filter change dates and filter type/MERV",
+      "Dates of professional service visits",
+      "Technician notes and findings",
+      "Parts replaced and cost",
+      "Refrigerant-related service notes",
+      "Model and Serial numbers",
+      "Warranty registration info"
+    ],
+    
+    "why_records_matter": [
+      "Warranty Validation: Manufacturers may deny parts warranty without proof of maintenance.",
+      "Home Sale: Shows buyers the mechanicals were cared for.",
+      "Diagnosis: Helps techs see patterns (e.g., 'we just replaced this capacitor 6 months ago').",
+      "Identifies repeating issues (recurring drain clogs, capacitor failures)."
+    ],
+
+    "simple_record_formats": [
+      "Notes app with date-stamped entries",
+      "Spreadsheet or home maintenance app",
+      "Sticker log near air handler (filter change dates)",
+      "Keep service invoices in a folder (physical or digital)"
+    ]
+  }
+}
