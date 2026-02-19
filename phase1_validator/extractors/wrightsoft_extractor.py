@@ -426,8 +426,9 @@ class WrightsoftExtractor:
                                         "cooling_cfm": room["cooling_cfm"],
                                     })
 
-        # Now add equipment data from Manual S pages AND Load Short Form pages
-        # Load Short Form has Make/Model/AHRI/Efficiency in a clean format
+        # Extract equipment data from Load Short Form pages
+        # The LSF equipment section (between "HEATING EQUIPMENT" and "ROOM NAME")
+        # has ALL equipment info in a consistent line-by-line format
         for pg_idx in self.pages.get("load_short_form", []):
             text = self.doc[pg_idx].get_text()
             ahu_match = re.search(r"(AHU\s*-\s*\d+)", text)
@@ -435,48 +436,167 @@ class WrightsoftExtractor:
                 continue
             ahu_id = ahu_match.group(1).strip()
 
-            # Only process if this is a header page (has "Date:" near AHU)
-            if not re.search(r"Date:", text):
+            # Only process header pages (not continuations)
+            if not re.search(r"HEATING EQUIPMENT", text):
                 continue
 
             for system in systems:
-                if system["system_id"] == ahu_id:
-                    lines = text.split("\n")
-                    lines = [l.strip() for l in lines]
+                if system["system_id"] != ahu_id:
+                    continue
 
-                    equip = system.get("equipment", {})
-                    if not equip:
-                        equip = {"type": "", "manufacturer": "",
-                                 "outdoor_model": "", "indoor_model": "",
-                                 "ahri_ref": "", "hspf2": 0, "seer2": 0,
-                                 "eer2": 0}
+                lines = [l.strip() for l in text.split("\n")]
+                equip = {
+                    "manufacturer": "",
+                    "outdoor_model": "",
+                    "indoor_model": "",
+                    "ahri_ref": "",
+                    "type": "Split ASHP",
+                    "hspf2": 0.0,
+                    "seer2": 0.0,
+                    "eer2": 0.0,
+                    "nominal_tons": 0.0,
+                    "heating_input_btuh": 0,
+                    "heating_output_btuh": 0,
+                    "sensible_cooling_btuh": 0,
+                    "latent_cooling_btuh": 0,
+                    "total_cooling_btuh": 0,
+                    "heating_airflow_cfm": 0,
+                    "cooling_airflow_cfm": 0,
+                    "heating_static_pressure": 0.0,
+                    "cooling_static_pressure": 0.0,
+                    "temperature_rise_f": 0,
+                    "load_sensible_heat_ratio": 0.0,
+                    "capacity_balance_point_f": 0,
+                    "backup_model": "",
+                    "backup_kw": 0.0,
+                    "backup_btuh": 0,
+                    "backup_afue": 0,
+                }
 
-                    for k, line in enumerate(lines):
-                        nl = lines[k+1] if k+1 < len(lines) else ""
-                        if line == "Make" and nl and "Make" not in nl:
-                            if not equip.get("manufacturer"):
-                                equip["manufacturer"] = nl
-                        elif line == "Cond" and nl:
-                            equip["outdoor_model"] = nl
-                        elif line == "Coil" and nl:
-                            equip["indoor_model"] = nl
-                        elif line == "AHRI ref" and re.match(r"\d+", nl):
-                            if not equip.get("ahri_ref"):
-                                equip["ahri_ref"] = nl
+                # Walk lines sequentially — the format alternates
+                # heating label, cooling label on the same "row"
+                for k, line in enumerate(lines):
+                    nl = lines[k + 1] if k + 1 < len(lines) else ""
 
-                    # Efficiency from Load Short Form
-                    hspf = re.search(r"([\d.]+)\s*HSPF2", text)
-                    if hspf:
-                        equip["hspf2"] = float(hspf.group(1))
-                    seer = re.search(r"([\d.]+)\s*SEER2", text)
-                    if seer:
-                        equip["seer2"] = float(seer.group(1))
-                    eer = re.search(r"([\d.]+)\s*EER2", text)
-                    if eer:
-                        equip["eer2"] = float(eer.group(1))
+                    # Manufacturer (first "Make" is heating side)
+                    if line == "Make" and nl and nl != "Make":
+                        if not equip["manufacturer"]:
+                            equip["manufacturer"] = nl
 
-                    system["equipment"] = equip
-                    break
+                    # Trade name
+                    elif line == "Trade" and nl and nl != "Trade":
+                        if not equip.get("trade"):
+                            equip["trade"] = nl
+
+                    # Model (heating side) / Condenser (cooling outdoor)
+                    elif line == "Model" and nl:
+                        equip["outdoor_model"] = nl
+                    elif line == "Cond" and nl:
+                        equip["outdoor_model"] = nl
+                    elif line == "Coil" and nl:
+                        equip["indoor_model"] = nl
+
+                    # AHRI ref
+                    elif line == "AHRI ref" and re.match(r"\d+", nl):
+                        if not equip["ahri_ref"]:
+                            equip["ahri_ref"] = nl
+
+                    # Efficiency ratings
+                    elif "HSPF2" in line:
+                        m = re.search(r"([\d.]+)\s*HSPF2", line)
+                        if m:
+                            equip["hspf2"] = float(m.group(1))
+                    elif "SEER2" in line:
+                        m = re.search(r"([\d.]+)\s*SEER2", line)
+                        if m:
+                            equip["seer2"] = float(m.group(1))
+                        m2 = re.search(r"([\d.]+)\s*EER2", line)
+                        if m2:
+                            equip["eer2"] = float(m2.group(1))
+
+                    # Heating input (line before "Heating output")
+                    elif line == "Heating input":
+                        # Next meaningful number after "Btuh"
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["heating_input_btuh"] = int(lines[n])
+                                break
+
+                    # Heating output
+                    elif line == "Heating output":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["heating_output_btuh"] = int(lines[n])
+                                break
+
+                    # Sensible cooling
+                    elif line == "Sensible cooling":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["sensible_cooling_btuh"] = int(lines[n])
+                                break
+
+                    # Latent cooling
+                    elif line == "Latent cooling":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["latent_cooling_btuh"] = int(lines[n])
+                                break
+
+                    # Total cooling
+                    elif line == "Total cooling":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["total_cooling_btuh"] = int(lines[n])
+                                break
+
+                    # Temperature rise
+                    elif line == "Temperature rise":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["temperature_rise_f"] = int(lines[n])
+                                break
+
+                    # Static pressure (first is heating, second is cooling)
+                    elif line == "Static pressure":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            m = re.match(r"^[\d.]+$", lines[n])
+                            if m:
+                                if equip["heating_static_pressure"] == 0:
+                                    equip["heating_static_pressure"] = float(lines[n])
+                                else:
+                                    equip["cooling_static_pressure"] = float(lines[n])
+                                break
+
+                    # Load SHR
+                    elif line == "Load sensible heat ratio":
+                        if nl and re.match(r"^[\d.]+$", nl):
+                            equip["load_sensible_heat_ratio"] = float(nl)
+
+                    # Balance point
+                    elif "Capacity balance point" in line:
+                        m = re.search(r"=\s*([-\d]+)", line)
+                        if m:
+                            equip["capacity_balance_point_f"] = int(m.group(1))
+
+                    # Backup equipment
+                    elif line.startswith("Backup:"):
+                        equip["backup_model"] = line.replace("Backup:", "").strip()
+                    elif line.startswith("Input ="):
+                        m = re.search(r"Input = ([\d.]+) kW.*Output = (\d+) Btuh.*?(\d+) AFUE", line)
+                        if m:
+                            equip["backup_kw"] = float(m.group(1))
+                            equip["backup_btuh"] = int(m.group(2))
+                            equip["backup_afue"] = int(m.group(3))
+
+                # Calculate nominal tons from total cooling
+                if equip["total_cooling_btuh"] > 0:
+                    equip["nominal_tons"] = round(
+                        equip["total_cooling_btuh"] / 12000, 1
+                    )
+
+                system["equipment"] = equip
+                break
 
         # Add Manual S compliance data (capacities and percentages)
         # AND equipment identification from Manual S pages
