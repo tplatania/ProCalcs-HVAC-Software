@@ -174,15 +174,104 @@ If ProCalcs becomes the standard verification layer:
 
 ---
 
+## ACCA APPROVAL STRATEGY — CRITICAL PATH
+
+### Why This Can't Wait Until Phase 3
+The original build plan had ACCA approval in Phase 3. But with the building department
+market identified, ACCA engagement needs to start much earlier — as soon as we have
+a working prototype that can demonstrate verification on real reports.
+
+### What ACCA Approves Today
+ACCA's "Powered by Manual J" certification is for software that PERFORMS load calculations.
+The currently approved list includes:
+- Wrightsoft (Right-J)
+- Elite Software (RHVAC)
+- CarmelSoft (HVAC ResLoad-J)
+- Avenir (HeatCAD / LoopCAD)
+- Conduit Tech
+- Cool Calc
+- Florida Solar Energy Center (EnergyGauge)
+- ADTEK Software (AccuLoads)
+
+ProCalcs does NOT perform load calculations. We VERIFY them.
+There is no existing ACCA certification category for what we do.
+Nobody has built a verification tool before. This is new territory.
+
+### The Partnership Pitch (Not Just an Approval Application)
+ProCalcs should approach ACCA as a PARTNER, not just an applicant.
+
+**What ACCA gets from ProCalcs:**
+- Scalable enforcement of their own standards (their biggest frustration)
+- A tool that catches the manipulation they've been writing blog posts about for years
+- Increased relevance with building departments and code officials
+- Data on how their standards are being used (and misused) in the field
+- A complement to their existing QA/QI program with measureQuick
+  (measureQuick verifies INSTALLATION quality; ProCalcs verifies DESIGN quality)
+
+**What ProCalcs gets from ACCA:**
+- Credibility with building departments — the #1 requirement for this market
+- Access to ACCA's network of building officials, code councils, and state boards
+- Potential co-branding or endorsement
+- Possible integration into the ANSI/ACCA/RESNET/ICC Standard 310 framework
+- Marketing through ACCA's training programs and conferences
+
+### The ACCA Call — Tom's Responsibility
+This conversation MUST come from Tom directly. Not Catherine, not Gerald, not a
+sales pitch deck sent via email. Here's why:
+
+- ACCA's technical team will ask probing HVAC questions. Tom can answer them.
+- Tom is the ACCA-qualified person at ProCalcs. He speaks their language.
+- This is a partnership conversation, not a sales call. It requires technical
+  credibility and industry understanding.
+- When they ask "how do you handle encapsulated attics?" or "what about
+  variable-capacity heat pump sizing?" — Tom answers in real time.
+
+**Call Preparation:**
+1. Have the working prototype ready to demonstrate (even if basic)
+2. Prepare 2-3 examples of reports where ProCalcs caught real issues
+3. Lead with ACCA's OWN published concerns about input manipulation
+4. Frame it as: "We built the enforcement tool for YOUR standards"
+5. Reference the building code forum where officials are literally asking
+   for this tool to exist
+6. Ask about the right path for recognition — new category? QA extension?
+   Standard 310 integration?
+
+**Key Quote from Building Code Forum (use this in the call):**
+A building official wrote: "As a code official, I do not have the time or the
+resources to review every one of these calculations for accuracy."
+Another responded: "How do you know if what you are receiving hasn't been
+manipulated, even if it is a program approved by ACCA?"
+
+**These are ACCA's own constituents asking for ProCalcs.**
+
+### Related Standards to Reference
+- ANSI/ACCA 2 Manual J — the load calculation standard we verify against
+- ANSI/ACCA 3 Manual S — equipment selection we cross-check
+- ANSI/ACCA 1 Manual D — duct design we validate
+- ANSI/ACCA 5 (QI Specification) — quality installation standard
+- ANSI/ACCA 9 — quality installation verification protocols
+- ANSI/RESNET/ACCA/ICC Standard 310 — grading HVAC installations
+- California CEC Docket 23-HERS-02 — California pushing for mandatory load calcs
+
+### Timeline
+- NOW: Build the prototype, test against real reports
+- WHEN PROTOTYPE WORKS: Tom calls ACCA to open the conversation
+- 3-6 MONTHS: Formal partnership proposal based on pilot data
+- 6-12 MONTHS: Official recognition/endorsement
+- ONGOING: Integrate feedback from ACCA into the product
+
 ## ACTION ITEMS
 1. Ask Richard about his building department contacts and relationships
 2. Research permit management software APIs (Accela, OpenGov) for future integration
 3. Identify 2-3 building departments in NC that might pilot
 4. Research ICC conference schedule for presentation opportunities
 5. Draft a one-page pitch specifically for building officials
+6. TOM: Call ACCA once prototype demonstrates verification on real reports
+7. Research ANSI/RESNET/ACCA/ICC Standard 310 requirements for potential alignment
+8. Track California CEC Docket 23-HERS-02 — could create a regulatory tailwind
 
 ---
 
-Document Status: v1.0 — February 19, 2026
-Originated by: Tom Platania, Creative Director (from a cruise ship — best ideas
-come when you're relaxed and looking at the ocean)
+Document Status: v1.1 — February 19, 2026
+Updated: Added ACCA Approval Strategy section
+Originated by: Tom Platania, Creative Director
