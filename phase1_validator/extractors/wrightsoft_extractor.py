@@ -514,50 +514,74 @@ class WrightsoftExtractor:
                         if m2:
                             equip["eer2"] = float(m2.group(1))
 
-                    # Heating input (line before "Heating output")
+                    # === CAPACITY SECTION ===
+                    # Two-column layout interleaves when extracted as text:
+                    # Left column (heating) and right column (cooling) labels
+                    # alternate, but values follow their own column's label.
+                    #
+                    # Line sequence:
+                    #   "Heating input" / "Sensible cooling" / "Btuh" / VALUE
+                    #   VALUE is Heating input Btuh (left column)
+                    #   "Heating output" / "Btuh @ 47°F" / VALUE
+                    #   VALUE is Heating output Btuh
+                    #   "Latent cooling" / "Btuh" / VALUE
+                    #   VALUE is Latent cooling Btuh
+                    #   "Temperature rise" / "°F" / VALUE
+                    #   VALUE is Temp rise
+                    #   "Total cooling" / "Btuh" / VALUE
+                    #   VALUE is Total cooling Btuh
+                    #   "Actual air flow" / "cfm" / VALUE  (heating)
+                    #   "Actual air flow" / "cfm" / VALUE  (cooling)
+                    #
+                    # Parse by anchoring on the left-column labels which
+                    # are unambiguous, then get cooling from right-column labels.
+
                     elif line == "Heating input":
-                        # Next meaningful number after "Btuh"
-                        for n in range(k + 1, min(k + 4, len(lines))):
+                        # Value is after "Sensible cooling", "Btuh"
+                        for n in range(k + 1, min(k + 5, len(lines))):
                             if re.match(r"^\d+$", lines[n]):
                                 equip["heating_input_btuh"] = int(lines[n])
                                 break
 
-                    # Heating output
                     elif line == "Heating output":
                         for n in range(k + 1, min(k + 4, len(lines))):
                             if re.match(r"^\d+$", lines[n]):
                                 equip["heating_output_btuh"] = int(lines[n])
                                 break
 
-                    # Sensible cooling
-                    elif line == "Sensible cooling":
-                        for n in range(k + 1, min(k + 4, len(lines))):
-                            if re.match(r"^\d+$", lines[n]):
-                                equip["sensible_cooling_btuh"] = int(lines[n])
-                                break
-
-                    # Latent cooling
                     elif line == "Latent cooling":
                         for n in range(k + 1, min(k + 4, len(lines))):
                             if re.match(r"^\d+$", lines[n]):
                                 equip["latent_cooling_btuh"] = int(lines[n])
                                 break
 
-                    # Total cooling
-                    elif line == "Total cooling":
-                        for n in range(k + 1, min(k + 4, len(lines))):
-                            if re.match(r"^\d+$", lines[n]):
-                                equip["total_cooling_btuh"] = int(lines[n])
-                                break
-
-                    # Temperature rise
                     elif line == "Temperature rise":
                         for n in range(k + 1, min(k + 4, len(lines))):
                             if re.match(r"^\d+$", lines[n]):
                                 equip["temperature_rise_f"] = int(lines[n])
                                 break
 
-                    # Static pressure (first is heating, second is cooling)
+                    elif line == "Total cooling":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                equip["total_cooling_btuh"] = int(lines[n])
+                                break
+
+                    # Airflow — appears twice: heating then cooling
+                    elif line == "Actual air flow":
+                        for n in range(k + 1, min(k + 4, len(lines))):
+                            if re.match(r"^\d+$", lines[n]):
+                                if equip["heating_airflow_cfm"] == 0:
+                                    equip["heating_airflow_cfm"] = int(lines[n])
+                                else:
+                                    equip["cooling_airflow_cfm"] = int(lines[n])
+                                break
+
+                    # Air flow factor — appears twice, skip for now
+                    elif line == "Air flow factor":
+                        pass
+
+                    # Static pressure — appears twice: heating then cooling
                     elif line == "Static pressure":
                         for n in range(k + 1, min(k + 4, len(lines))):
                             m = re.match(r"^[\d.]+$", lines[n])
@@ -589,10 +613,15 @@ class WrightsoftExtractor:
                             equip["backup_btuh"] = int(m.group(2))
                             equip["backup_afue"] = int(m.group(3))
 
-                # Calculate nominal tons from total cooling
+                # Calculate derived values
                 if equip["total_cooling_btuh"] > 0:
                     equip["nominal_tons"] = round(
                         equip["total_cooling_btuh"] / 12000, 1
+                    )
+                # Sensible = Total - Latent
+                if equip["total_cooling_btuh"] > 0 and equip["latent_cooling_btuh"] > 0:
+                    equip["sensible_cooling_btuh"] = (
+                        equip["total_cooling_btuh"] - equip["latent_cooling_btuh"]
                     )
 
                 system["equipment"] = equip
@@ -617,7 +646,13 @@ class WrightsoftExtractor:
                                     system["equipment"][key] = val
 
                         ms_data = parse_manual_s_compliance(text)
-                        system["equipment"].update(ms_data)
+                        # Only take percentage fields from Manual S
+                        # Actual capacities come from Load Short Form
+                        for key in ["heating_percentage",
+                                    "cooling_sensible_percentage",
+                                    "cooling_total_percentage"]:
+                            if ms_data.get(key):
+                                system["equipment"][key] = ms_data[key]
 
                         # Get sensible/latent from Manual S page
                         sens_match = re.search(

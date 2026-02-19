@@ -194,8 +194,8 @@
         "sensible_cooling_btuh": 44720,
         "latent_cooling_btuh": 7280,
         "total_cooling_btuh": 52000,
-        "heating_airflow_cfm": 0,
-        "cooling_airflow_cfm": 0,
+        "heating_airflow_cfm": 1678,
+        "cooling_airflow_cfm": 1678,
         "heating_static_pressure": 0.7,
         "cooling_static_pressure": 0.7,
         "temperature_rise_f": 32,
@@ -206,14 +206,9 @@
         "backup_btuh": 34121,
         "backup_afue": 100,
         "trade": "BOSCH",
-        "heating_capacity_btuh": 86,
-        "cooling_sensible_btuh": 38192,
-        "cooling_latent_btuh": 0,
-        "cooling_total_btuh": 46366,
         "heating_percentage": 86,
         "cooling_sensible_percentage": 108,
-        "cooling_total_percentage": 113,
-        "sensible_heat_ratio": 0
+        "cooling_total_percentage": 113
       }
     },
     {
@@ -494,11 +489,11 @@
         "nominal_tons": 4.3,
         "heating_input_btuh": 47320,
         "heating_output_btuh": 55000,
-        "sensible_cooling_btuh": 47320,
+        "sensible_cooling_btuh": 48767,
         "latent_cooling_btuh": 3233,
         "total_cooling_btuh": 52000,
-        "heating_airflow_cfm": 0,
-        "cooling_airflow_cfm": 0,
+        "heating_airflow_cfm": 1649,
+        "cooling_airflow_cfm": 1649,
         "heating_static_pressure": 0.8,
         "cooling_static_pressure": 0.8,
         "temperature_rise_f": 33,
@@ -509,14 +504,9 @@
         "backup_btuh": 34121,
         "backup_afue": 100,
         "trade": "BOSCH",
-        "heating_capacity_btuh": 60,
-        "cooling_sensible_btuh": 39313,
-        "cooling_latent_btuh": 0,
-        "cooling_total_btuh": 46366,
         "heating_percentage": 60,
         "cooling_sensible_percentage": 115,
-        "cooling_total_percentage": 124,
-        "sensible_heat_ratio": 0
+        "cooling_total_percentage": 124
       }
     }
   ],
