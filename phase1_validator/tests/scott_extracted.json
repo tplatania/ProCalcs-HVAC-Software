@@ -1,0 +1,499 @@
+{
+  "report_metadata": {
+    "source_software": "Wrightsoft Right-Suite Universal",
+    "software_version": "2025 25.0.03",
+    "report_date": "2025-Aug-04",
+    "project_name": "Scott Residence",
+    "acca_approved": true,
+    "extraction_confidence": "high"
+  },
+  "project_info": {
+    "client_name": "Scott Residence",
+    "project_address": "15 Stuyvesant Rd, Biltmore Forest, NC 28803",
+    "city": "Biltmore Forest",
+    "state": "NC",
+    "zip": "28803",
+    "weather_station": "Asheville 8 Ssw, NC, US",
+    "elevation_ft": 2151,
+    "latitude": 35.0
+  },
+  "design_conditions": {
+    "heating": {
+      "outdoor_temp_f": 17,
+      "indoor_temp_f": 70,
+      "temperature_difference_f": 53
+    },
+    "cooling": {
+      "outdoor_temp_f": 84,
+      "indoor_temp_f": 75,
+      "temperature_difference_f": 9,
+      "daily_range": "M",
+      "grains_difference": 26.0
+    }
+  },
+  "infiltration": {
+    "method": "Blower door",
+    "tightness_category": "",
+    "ach_at_50pa": 3.0,
+    "cfm_at_50pa": 3669,
+    "blower_door_tested": true
+  },
+  "ventilation": {},
+  "systems": [
+    {
+      "system_id": "AHU - 1",
+      "system_name": "AHU - 1",
+      "total_area_sqft": 2682,
+      "heating_load_btuh": 35662,
+      "cooling_sensible_btuh": 35311,
+      "cooling_latent_btuh": 5597,
+      "cooling_total_btuh": 40908,
+      "cooling_cfm": 1678,
+      "heating_cfm": 1678,
+      "zones": [
+        {
+          "zone_id": "default",
+          "zone_name": "AHU - 1",
+          "total_area_sqft": 2583,
+          "rooms": [
+            {
+              "room_name": "BREAKFAST",
+              "area_sqft": 267,
+              "heating_load_btuh": 4784,
+              "cooling_total_btuh": 3563,
+              "heating_cfm": 225,
+              "cooling_cfm": 173
+            },
+            {
+              "room_name": "DINING",
+              "area_sqft": 270,
+              "heating_load_btuh": 775,
+              "cooling_total_btuh": 108,
+              "heating_cfm": 36,
+              "cooling_cfm": 5
+            },
+            {
+              "room_name": "FOYER",
+              "area_sqft": 170,
+              "heating_load_btuh": 4014,
+              "cooling_total_btuh": 3495,
+              "heating_cfm": 189,
+              "cooling_cfm": 169
+            },
+            {
+              "room_name": "HALL",
+              "area_sqft": 104,
+              "heating_load_btuh": 5110,
+              "cooling_total_btuh": 4154,
+              "heating_cfm": 240,
+              "cooling_cfm": 201
+            },
+            {
+              "room_name": "HALL 1",
+              "area_sqft": 94,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "HALL 2",
+              "area_sqft": 159,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "KITCHEN",
+              "area_sqft": 264,
+              "heating_load_btuh": 443,
+              "cooling_total_btuh": 2011,
+              "heating_cfm": 21,
+              "cooling_cfm": 97
+            },
+            {
+              "room_name": "LAUNDRY 1",
+              "area_sqft": 136,
+              "heating_load_btuh": 2592,
+              "cooling_total_btuh": 1421,
+              "heating_cfm": 122,
+              "cooling_cfm": 69
+            },
+            {
+              "room_name": "LIVING",
+              "area_sqft": 415,
+              "heating_load_btuh": 8709,
+              "cooling_total_btuh": 8943,
+              "heating_cfm": 410,
+              "cooling_cfm": 433
+            },
+            {
+              "room_name": "MUDROOM",
+              "area_sqft": 144,
+              "heating_load_btuh": 689,
+              "cooling_total_btuh": 87,
+              "heating_cfm": 32,
+              "cooling_cfm": 4
+            },
+            {
+              "room_name": "ORANGERY",
+              "area_sqft": 274,
+              "heating_load_btuh": 6613,
+              "cooling_total_btuh": 10067,
+              "heating_cfm": 311,
+              "cooling_cfm": 488
+            },
+            {
+              "room_name": "PWDR 1",
+              "area_sqft": 38,
+              "heating_load_btuh": 473,
+              "cooling_total_btuh": 29,
+              "heating_cfm": 22,
+              "cooling_cfm": 1
+            },
+            {
+              "room_name": "SCULLERY",
+              "area_sqft": 149,
+              "heating_load_btuh": 1461,
+              "cooling_total_btuh": 761,
+              "heating_cfm": 69,
+              "cooling_cfm": 37
+            },
+            {
+              "room_name": "STAIRS 1",
+              "area_sqft": 99,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "STAIRS 2",
+              "area_sqft": 99,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            }
+          ]
+        }
+      ],
+      "equipment": {
+        "type": "Split ASHP",
+        "manufacturer": "Bosch Thermotechnology Corp.",
+        "outdoor_model": "BOVA-60RTB-M20S",
+        "indoor_model": "BIVA-60RCB-M20X",
+        "ahri_ref": "214771733",
+        "hspf2": 9.5,
+        "seer2": 18.0,
+        "eer2": 11.7,
+        "heating_capacity_btuh": 86,
+        "cooling_sensible_btuh": 38192,
+        "cooling_latent_btuh": 0,
+        "cooling_total_btuh": 46366,
+        "heating_percentage": 86,
+        "cooling_sensible_percentage": 108,
+        "cooling_total_percentage": 113,
+        "sensible_heat_ratio": 0
+      }
+    },
+    {
+      "system_id": "AHU - 2",
+      "system_name": "AHU - 2",
+      "total_area_sqft": 4806,
+      "heating_load_btuh": 51483,
+      "cooling_sensible_btuh": 34139,
+      "cooling_latent_btuh": 3233,
+      "cooling_total_btuh": 37372,
+      "cooling_cfm": 1649,
+      "heating_cfm": 1649,
+      "zones": [
+        {
+          "zone_id": "ZONE 2A",
+          "zone_name": "ZONE 2A",
+          "total_area_sqft": 1735,
+          "rooms": [
+            {
+              "room_name": "LESLIE CLOS",
+              "area_sqft": 135,
+              "heating_load_btuh": 1287,
+              "cooling_total_btuh": 259,
+              "heating_cfm": 41,
+              "cooling_cfm": 13
+            },
+            {
+              "room_name": "P BATH",
+              "area_sqft": 162,
+              "heating_load_btuh": 2694,
+              "cooling_total_btuh": 1531,
+              "heating_cfm": 86,
+              "cooling_cfm": 76
+            },
+            {
+              "room_name": "P HALL",
+              "area_sqft": 49,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "P TLT",
+              "area_sqft": 47,
+              "heating_load_btuh": 555,
+              "cooling_total_btuh": 75,
+              "heating_cfm": 18,
+              "cooling_cfm": 4
+            },
+            {
+              "room_name": "PRIMARY BED",
+              "area_sqft": 315,
+              "heating_load_btuh": 4711,
+              "cooling_total_btuh": 3676,
+              "heating_cfm": 151,
+              "cooling_cfm": 182
+            },
+            {
+              "room_name": "ROB CLOS",
+              "area_sqft": 44,
+              "heating_load_btuh": 92,
+              "cooling_total_btuh": 18,
+              "heating_cfm": 3,
+              "cooling_cfm": 1
+            },
+            {
+              "room_name": "STUDY",
+              "area_sqft": 142,
+              "heating_load_btuh": 1880,
+              "cooling_total_btuh": 2246,
+              "heating_cfm": 60,
+              "cooling_cfm": 111
+            },
+            {
+              "room_name": "B BATH",
+              "area_sqft": 188,
+              "heating_load_btuh": 1077,
+              "cooling_total_btuh": 3,
+              "heating_cfm": 35,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "B STORAGE",
+              "area_sqft": 88,
+              "heating_load_btuh": 372,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 12,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "BASEMENT",
+              "area_sqft": 533,
+              "heating_load_btuh": 3730,
+              "cooling_total_btuh": 3006,
+              "heating_cfm": 119,
+              "cooling_cfm": 149
+            },
+            {
+              "room_name": "PWDR 2",
+              "area_sqft": 33,
+              "heating_load_btuh": 38,
+              "cooling_total_btuh": 7,
+              "heating_cfm": 1,
+              "cooling_cfm": 0
+            }
+          ]
+        },
+        {
+          "zone_id": "ZONE 2B",
+          "zone_name": "ZONE 2B",
+          "total_area_sqft": 3072,
+          "rooms": [
+            {
+              "room_name": "2F HALL",
+              "area_sqft": 144,
+              "heating_load_btuh": 3233,
+              "cooling_total_btuh": 3204,
+              "heating_cfm": 104,
+              "cooling_cfm": 159
+            },
+            {
+              "room_name": "2F STAIRS 1",
+              "area_sqft": 142,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "2F STAIRS 2",
+              "area_sqft": 110,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "BUNK ROOM",
+              "area_sqft": 174,
+              "heating_load_btuh": 3114,
+              "cooling_total_btuh": 1115,
+              "heating_cfm": 100,
+              "cooling_cfm": 55
+            },
+            {
+              "room_name": "GRAHAM BATH",
+              "area_sqft": 89,
+              "heating_load_btuh": 933,
+              "cooling_total_btuh": 131,
+              "heating_cfm": 30,
+              "cooling_cfm": 7
+            },
+            {
+              "room_name": "GRAHAM BED",
+              "area_sqft": 210,
+              "heating_load_btuh": 2855,
+              "cooling_total_btuh": 3228,
+              "heating_cfm": 91,
+              "cooling_cfm": 160
+            },
+            {
+              "room_name": "GRAHAM CLOS",
+              "area_sqft": 44,
+              "heating_load_btuh": 109,
+              "cooling_total_btuh": 22,
+              "heating_cfm": 3,
+              "cooling_cfm": 1
+            },
+            {
+              "room_name": "GRAHAM VEST",
+              "area_sqft": 55,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            },
+            {
+              "room_name": "GUEST BATH",
+              "area_sqft": 76,
+              "heating_load_btuh": 661,
+              "cooling_total_btuh": 129,
+              "heating_cfm": 21,
+              "cooling_cfm": 6
+            },
+            {
+              "room_name": "GUEST BED",
+              "area_sqft": 203,
+              "heating_load_btuh": 2022,
+              "cooling_total_btuh": 1955,
+              "heating_cfm": 65,
+              "cooling_cfm": 97
+            },
+            {
+              "room_name": "GUEST CLOS",
+              "area_sqft": 52,
+              "heating_load_btuh": 1019,
+              "cooling_total_btuh": 174,
+              "heating_cfm": 33,
+              "cooling_cfm": 9
+            },
+            {
+              "room_name": "LAUNDRY 2",
+              "area_sqft": 90,
+              "heating_load_btuh": 2919,
+              "cooling_total_btuh": 2427,
+              "heating_cfm": 93,
+              "cooling_cfm": 120
+            },
+            {
+              "room_name": "SHARED BATH",
+              "area_sqft": 70,
+              "heating_load_btuh": 1560,
+              "cooling_total_btuh": 442,
+              "heating_cfm": 50,
+              "cooling_cfm": 22
+            },
+            {
+              "room_name": "UTIL",
+              "area_sqft": 58,
+              "heating_load_btuh": 117,
+              "cooling_total_btuh": 24,
+              "heating_cfm": 4,
+              "cooling_cfm": 1
+            },
+            {
+              "room_name": "VIEW RM",
+              "area_sqft": 1133,
+              "heating_load_btuh": 13355,
+              "cooling_total_btuh": 14578,
+              "heating_cfm": 428,
+              "cooling_cfm": 723
+            },
+            {
+              "room_name": "WELL BATH",
+              "area_sqft": 85,
+              "heating_load_btuh": 963,
+              "cooling_total_btuh": 552,
+              "heating_cfm": 31,
+              "cooling_cfm": 27
+            },
+            {
+              "room_name": "WELL BED",
+              "area_sqft": 206,
+              "heating_load_btuh": 2020,
+              "cooling_total_btuh": 1511,
+              "heating_cfm": 65,
+              "cooling_cfm": 75
+            },
+            {
+              "room_name": "WELL CLOS",
+              "area_sqft": 44,
+              "heating_load_btuh": 167,
+              "cooling_total_btuh": 42,
+              "heating_cfm": 5,
+              "cooling_cfm": 2
+            },
+            {
+              "room_name": "WELL VEST",
+              "area_sqft": 87,
+              "heating_load_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            }
+          ]
+        }
+      ],
+      "equipment": {
+        "type": "Split ASHP",
+        "manufacturer": "Bosch Thermotechnology Corp.",
+        "outdoor_model": "BOVA-60RTB-M20S",
+        "indoor_model": "BIVA-60RCB-M20X",
+        "ahri_ref": "214771733",
+        "hspf2": 9.5,
+        "seer2": 18.0,
+        "eer2": 11.7,
+        "heating_capacity_btuh": 60,
+        "cooling_sensible_btuh": 39313,
+        "cooling_latent_btuh": 0,
+        "cooling_total_btuh": 46366,
+        "heating_percentage": 60,
+        "cooling_sensible_percentage": 115,
+        "cooling_total_percentage": 124,
+        "sensible_heat_ratio": 0
+      }
+    }
+  ],
+  "construction": {},
+  "duct_system": {},
+  "whole_house_summary": {
+    "total_conditioned_area_sqft": 7488,
+    "total_heating_load_btuh": 87145,
+    "total_cooling_sensible_btuh": 69450,
+    "total_cooling_latent_btuh": 8830,
+    "total_cooling_total_btuh": 78280,
+    "number_of_systems": 2,
+    "number_of_rooms": 45,
+    "sensible_heat_ratio": 0.89
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "$schema": "ProCalcs Manual J Report Schema v1.0",
+  "$description": "Standardized output format for all Manual J PDF extractors",
+
+  "report_metadata": {
+    "source_software": "",
+    "software_version": "",
+    "report_date": "",
+    "project_name": "",
+    "acca_approved": false,
+    "extraction_confidence": ""
+  },
+
+  "project_info": {
+    "client_name": "",
+    "project_address": "",
+    "city": "",
+    "state": "",
+    "zip": "",
+    "weather_station": "",
+    "elevation_ft": 0,
+    "latitude": 0.0
+  },
+
+  "design_conditions": {
+    "heating": {
+      "outdoor_temp_f": 0,
+      "indoor_temp_f": 70,
+      "temperature_difference_f": 0
+    },
+    "cooling": {
+      "outdoor_temp_f": 0,
+      "indoor_temp_f": 75,
+      "temperature_difference_f": 0,
+      "daily_range": "",
+      "grains_difference": 0
+    }
+  },
+
+  "infiltration": {
+    "method": "",
+    "tightness_category": "",
+    "ach_at_50pa": 0.0,
+    "cfm_at_50pa": 0,
+    "blower_door_tested": false
+  },
+
+  "ventilation": {
+    "standard": "",
+    "method": "",
+    "cfm": 0
+  },
+
+  "systems": [
+    {
+      "system_id": "AHU 1",
+      "system_name": "",
+      "total_area_sqft": 0,
+      "heating_load_btuh": 0,
+      "cooling_sensible_btuh": 0,
+      "cooling_latent_btuh": 0,
+      "cooling_total_btuh": 0,
+      "cooling_cfm": 0,
+      "heating_cfm": 0,
+
+      "zones": [
+        {
+          "zone_id": "",
+          "zone_name": "",
+          "total_area_sqft": 0,
+
+          "rooms": [
+            {
+              "room_name": "",
+              "area_sqft": 0,
+              "heating_load_btuh": 0,
+              "cooling_sensible_btuh": 0,
+              "cooling_total_btuh": 0,
+              "heating_cfm": 0,
+              "cooling_cfm": 0
+            }
+          ]
+        }
+      ],
+
+      "equipment": {
+        "manufacturer": "",
+        "outdoor_model": "",
+        "indoor_model": "",
+        "ahri_ref": "",
+        "type": "",
+        "nominal_tons": 0,
+        "heating_capacity_btuh": 0,
+        "cooling_sensible_capacity_btuh": 0,
+        "cooling_total_capacity_btuh": 0,
+        "heating_percentage": 0,
+        "cooling_sensible_percentage": 0,
+        "cooling_total_percentage": 0,
+        "hspf2": 0.0,
+        "seer2": 0.0,
+        "eer2": 0.0
+      }
+    }
+  ],
+
+  "construction": {
+    "walls": [
+      {
+        "name": "",
+        "type": "",
+        "r_value": 0.0,
+        "u_value": 0.0
+      }
+    ],
+    "windows": [
+      {
+        "name": "",
+        "type": "",
+        "u_value": 0.0,
+        "shgc": 0.0,
+        "internal_shade": ""
+      }
+    ],
+    "ceilings": [
+      {
+        "name": "",
+        "type": "",
+        "r_value": 0.0,
+        "u_value": 0.0
+      }
+    ],
+    "floors": [
+      {
+        "name": "",
+        "type": "",
+        "r_value": 0.0,
+        "u_value": 0.0
+      }
+    ],
+    "doors": [
+      {
+        "name": "",
+        "type": "",
+        "u_value": 0.0
+      }
+    ]
+  },
+
+  "duct_system": {
+    "location": "",
+    "insulation_r_value": 0.0,
+    "leakage_tested": false,
+    "leakage_cfm25": 0
+  },
+
+  "whole_house_summary": {
+    "total_conditioned_area_sqft": 0,
+    "total_heating_load_btuh": 0,
+    "total_cooling_sensible_btuh": 0,
+    "total_cooling_latent_btuh": 0,
+    "total_cooling_total_btuh": 0,
+    "number_of_systems": 0,
+    "number_of_rooms": 0,
+    "sensible_heat_ratio": 0.0
+  }
+}
