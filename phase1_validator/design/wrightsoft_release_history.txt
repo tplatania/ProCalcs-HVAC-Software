@@ -1,0 +1,1564 @@
+Version 25.0.05
+
+* ResCheck-Web file format export.
+
+* Right-Energy Title 24 integration with CBECC 2025.2.0
+
+* Unico parts update
+
+* Right-Click menu item to select all wall objects in Right-Draw
+
+* Added default settings in More constructions screen for wall objects
+
+* Added AirFlow/Size and DuctSize/Size items to register notation options
+
+* 3D Viewer automatically saves its settings
+
+* Duct Free report shows full manufacturer name instead of manufacturer code
+
+* Allow objects to be inserted in the drawing even when current layer is locked if objects belong to different (not locked) layer.
+
+* When opening project by double clicking in windows explorer the program will remember the folder it was opened from, so will save in the same folder.
+
+* Includes AHRI equipment data effective as of January 5, 2026.
+
+
+Version 25.0.04
+
+* Added design workflow Ribbon
+
+* Added Friction rate and TEL data to the Duct Monitor Screen
+
+* Allow editing individual supply branch elevations for Unico and Rheia systems
+
+* Allow setting Global outlet elevations for Unico systems
+
+* Allow editing Stud/joist Return Material elevation
+
+* Increased equipment total capacity limit
+
+* Made Layer tree control in Right-Draw to fit more items without scrolling
+
+* Improved Main RSU Ribbon Icon
+
+* Improved automatic Radial System layout for Rheia designs with multiple manifolds
+
+* Removed Damper Position column from Rheia Supply Branches screen
+
+* Removed 'Rheia Auto Sizing' feature
+
+* Added 'Select All' button for the print zones screen
+
+* Includes AHRI equipment data effective as of October 3, 2025.
+
+
+Version 25.0.03
+
+* Right-DuctFree manufacturer data update
+
+* Added Gree and MrCool data to the Right-DuctFree module
+
+* 3D Viewer - added duct texturing option for metal appearance
+
+* 3D Viewer - added variable duct transparency control
+
+* Save last selected 'zones to print' with the project
+
+* Generic equipment selection to use SEER2 / COP2 ratings
+
+* Right-Energy Title24 - added IAQ room vent HRV values
+
+* Updated Unico part pricing info
+
+* Rheia - improve evaluation tool speed by only evaluating one heating orientation instead of 8
+
+* Rheia - added QR code to the drawing report
+
+* Increased duct liner internal insulation maximum value to 2"
+
+* Includes AHRI equipment data effective as of June 17, 2025.
+
+
+Version 25.0.02
+
+* Implemented Zurn 2-Panel Therma-board system
+
+* Unico preferences, parts, and bill of material rules update
+
+* Added Duct Monitor, Radiant Monitor, Load Meter, Equipment, Edit to Quick Access Toolbar
+
+* Update Energy Star Report to Rev 14
+
+* Ability to preserve last selected zones to print
+
+* Drawing print option dialog to come every time on drawing print/print preview
+
+* Allow decimal points for quantity when mapping drawing objects to part
+
+* Improved printing drawing with text notations to PDF - no more loosing spacing between words
+
+* 3D Viewer – object colors are now the same as 2D colors in the drawing.
+
+* Improved calculation speed when multiple windows are opened.
+
+* Added ventilation screen Ctrl+F shortcut for Manual-N load method.
+
+* Includes AHRI equipment data effective as of March 25, 2025.
+
+
+Version 25.0.01
+
+* Mini-Splits - added automatic refrigeration pipe notations.
+
+* Added additional inputs to populate F280 Form Set report accreditation fields.
+
+* Added option to select dot or line grid type for Right-Draw
+
+* 3D Viewer - added transfer grills and VAV objects to RSU 3D Display.
+
+* Added Return connection type property to the fan property sheet for 3D connection display
+
+* Removed obsolete Sales wizard item from ribbons
+
+* Removed obsolete Blower button from drawing ribbon HVAC shapes
+
+* Includes 'Ribbon User Manual' with RSU installer, which is accessible through help ribbon.
+
+* Made room name text background to be always white when print or print-preview drawing.
+
+* Drawing toolbar, some lines and text in the drawing didn’t scale correctly and displayed fuzzy for 4K monitors. Fixed
+
+* Draw Toolbar disappeared by itself in some cases and required RSU restart to reappear. Fixed.
+
+
+Version 24.0.04
+
+* Added 3D Viewer to be able to view HVAC design in full 3D mode.
+
+* Implemented modern user interface using ribbons.
+
+* Drawing grid improvements (lines instead of dots)
+
+* Added CSA F280-12 Form Set report based on HVAC Designers of Canada template.
+
+* Added ability to turn on/off transfer grill notations like for transfer ducts.
+
+* Provide ability to enter foot and inch dimensions in window option dialog, like we have in property sheets and views.
+
+* Allow to set gable dormer H1 dimension to zero.
+
+* Add option to use entire building volume or only above-grade volume for infiltration calculations.
+
+* Rheia - implemented update for 4 inch high wall boot calculations and parts.
+
+* Rheia - add notes to Pull Order Report for Rheia designs.
+
+* Rheia - changed static pressure rule for Average mode.
+
+* Add command to reset all supply register names to sequential names.
+
+* Right-CAD - Export to separate DWG file feature now includes mini-split and radiant / snowmelt system objects.
+
+* Includes AHRI equipment data effective as of December 12, 2024.
+
+
+Version 24.0.03
+
+* Implemented Rheia Dual Floor Boot Feature
+
+* Energy Star Report rev 13
+
+* Allow ductless outdoor units to be moved inside building perimeter to model rooftop units
+
+* Updated ductless equipment data 
+
+* Improve Standard 310 Design Report to handle non-equipment zones.
+
+* Zurn parts and pricing update
+
+* Includes AHRI equipment data effective as of Sep 5, 2024.
+
+
+----------------------------------
+Version 24.0.02
+
+* Updated ACCA Residential Plans Examiner Review Report
+
+* Integrated Energy Star Report Validation with Latest Energy Star Design Temperature data 
+
+* Added AHRI reference numbers to the Commercial Load Short Form Report.
+
+* Right-Draw Flip objects commands properly flip duct notatcions.
+
+* Includes AHRI equipment data effective as of June 15, 2024.
+
+----------------------------------
+Version 24.0.01
+
+* Mini-Split Module is included with this version.
+
+* Duct dampers can be optionaly generated in Right-Draw.
+
+* Added ability to turn on/off individual duct notations.
+
+* Commercial Short Form report includes coil and ASHP backup information.
+
+* Added option to Reset all modeless dialogs to default position and size. 
+
+* Added central ventilation equipment model field to the Project summary report.
+
+* F280-12 load calculations are verified by HVAC Designers of Canada
+
+* Updated Unico Pricing information
+
+* Includes AHRI equipment data effective as of March 15, 2024.
+
+---------------------------------
+Version 23.0.05
+
+* Right-Energy Title 24 integration with CBECC-Res version 2022.3.0
+
+* Rheia – updated part numbers and takeoff rules
+
+* F280-12 calculation update for windows and doors SHGC and R values
+
+* Ability to set duct notation background using the drawing property sheet.
+
+* Display duct insulation value in the Project Summary report.
+
+* Added AirFlow, Part, Duct size option to register notation options.
+
+* Added separate property for transfer grille notation in the drawing property sheet.
+
+* Includes AHRI equipment data effective as of October 21, 2023.
+
+---------------------------------
+Version 23.0.04
+
+* Right-Energy Florida 2023 support is included with this release
+
+* Energy Star Report rev 12
+
+* Manual D duct size rounding rule changes
+
+* Duct System Monitor Excel Export
+
+* Make Bi-level zoning option to be always off for Rheia Duct Systems
+
+-------------------------------
+Version 23.0.03
+
+* Maintenance release
+
+-------------------------------
+Version 23.0.02
+
+* Clarify equipment selection filter efficiency labels
+
+* Include main trunk elbows in Rheia calculations
+
+* Add ability to hide sell prices on the Quotation report
+
+* Right-CAD: Export Ducts to Dwg now works for transfer registers and grills in Right-CAD and Right-HVAC
+
+* Right-CAD: Ability to specify junction box dimensions to draw accurately in 3D
+
+* Includes AHRI equipment data effective as of June 15, 2023.
+
+-------------------------------
+Version 23.0.01
+
+* Right-Energy Title 24 - 2022 support is included with this release
+
+* ASHRAE 2021 weather data is now available
+
+* Unico pricing and takeoff rules update
+
+* Option to include design airflow, room area with room name in Right-Draw
+
+* Supply and return duct tabs added to the Duct Systme Monitor screen
+
+* Rheia module updates
+
+* Includes AHRI equipment data effective as of March 15, 2023.
+
+-------------------------------
+Version 22.0.07
+
+* Maintenance release
+
+-------------------------------
+Version 22.0.06
+
+* Implemented SEER/SEER2 rating options - changes in UI, Reports, equipment data selection
+
+* Added window/floor ratio field to the building analysis report
+
+* Implement cooling load adjustments for southern hemisphere in residential methods
+
+* Improve flex duct Length display in Right-Draw status bar
+
+* Transfer grill notation improvements
+
+* Rheia: added ability to override Ceiling Diffuser type
+
+* Rheia: added new slotted diffuser part number and takeoff logic
+
+* Includes AHRI equipment data effective as of December 13, 2022.
+
+
+-------------------------------
+Version 22.0.05
+
+* Right-Energy Florida 2020 with 2022 Supplement support is included with this release.
+
+* Viega parts, pricing, and takeoff rules update.
+
+* Ability to turn off duct notations for branches.
+
+* Added contractor license # to draw report title block.
+
+* Improved BOM excel export, so it takes into consideration show item cost option.
+
+* Includes AHRI equipment data effective as of September 9, 2022.
+
+
+-------------------------------
+Version 22.0.04
+
+* This release includes Rheia module update
+
+* This release includes Energy Star Supplement for STD 310 HVAC Design Report
+
+* Allow water heater recovery efficiency to be > 100%
+
+* Improved error messages for Right-Energy Title 24
+
+* Includes AHRI equipment data effective as of June 17, 2022.
+
+-------------------------------
+Version 22.0.03
+
+* This release includes support for CBECC-Res 2019 v2 SP2
+  (California Title 24).
+
+* Populate Prepared By field in Right-Energy Florida report from Project Info screen
+
+* Added blower door ACH field to the project information report
+
+* Added separate branch and trunk 3D horizontal duct preferences in Right-CAD
+
+* Added user options to specify how to connect return duct to a unit in Right-CAD
+
+* Includes AHRI equipment data effective as of April 01, 2022.
+
+
+-------------------------------
+Version 22.0.02
+
+* Maintenance release
+
+--------------------------------------------
+Version 22.0.01
+
+* Added Duct System Monitor screen
+
+* Added hotkeys for HVAC shapes
+
+* Warning for unconnected registers is added to the system monitor messages
+
+* Added ability to rotate fan objects in Right-Draw
+
+* Added total number of supply and return register properties to the fan object in Right-Draw
+
+* Includes AHRI equipment data effective as of December 20, 2021.
+
+--------------------------------------------
+Version 21.0.11
+This release includes Right-Energy(R) Florida 2020 for Florida Energy Code compliance
+
+--------------------------------------------
+Version 21.0.10
+
+* Includes an updated Energy Star HVAC Report to the 
+  latest revision (Rev11)
+
+* Automatic default output file name when export to 
+  PDF or use Microsoft Print to Pdf driver
+
+* Includes AHRI equipment data effective 
+  as of September 20, 2021.
+
+-------------------------------
+Version 21.0.08
+
+* High Velocity Unico module includes new unico parts and
+  automatic bill of material rules
+
+* Added ANSI / RESNET/ ACCA 310 HVAC Design Report
+
+* Flip object command in Right-Draw automatically
+  adjust register airflow arrows
+
+* This release includes AHRI equipment data effective
+  as of July 6, 2021
+
+-------------------------------
+Version 21.0.07
+
+* Maintenance release
+
+-------------------------------
+
+Version 21.0.06
+
+* This release includes AHRI equipment data effective
+  as of March 21, 2021.
+
+-------------------------------
+
+Version 21.0.04
+
+* This release includes AHRI equipment data effective
+  as of February 21, 2021.
+
+-------------------------------
+
+Version 21.0.03
+
+* This release includes AHRI equipment data effective
+  as of December 13, 2020.
+
+* ASHRAE 62.2-2016 Ventilation option has been added
+  in Residential calculation methods
+
+* ASHRAE 62.2-2019 Ventilation option has been added
+  in Residential calculation methods
+
+* Jump duct sizing from airflow
+
+* Colored ducts by zone
+
+* Radiant and Snowmelt summary report now displays the
+  fluid type
+
+-------------------------------
+
+Version 21.0.02
+
+Welcome to Right-Suite Universal 2021
+
+* This release includes AHRI equipment data effective
+  as of October 25, 2020.
+
+* The Building Notation Layer of Right-Draw now automatically 
+  displays window and door dimensions.
+
+* There is now an option to specify separate construction 
+  materials for the vaulted and flat portions of frustrum 
+  ceilings.
+
+* ASHRAE 2017 weather data is now available.
+
+* The File open/save screen now has the ability to search.
+
+* There is now a Drawing Menu command to re-snap building 
+  objects to the snap grid.
+
+* Roth Radiant parts and automatic BOM update, summary report 
+  improvements.
+
+* There is now a Duct Multi-Orientation report export to Excel.
+
+* AutoCAD read/write now supports the latest DWG file format.
+
+-------------------------------
+
+Version 19.0.21
+
+* This release includes an updated Energy Star HVAC Report 
+  to the latest revision (Rev10)
+
+* This release includes AHRI equipment data effective
+  as of September 8, 2020
+
+-------------------------------
+
+Version 19.0.20
+
+* This release includes AHRI equipment data effective
+  as of May 18, 2020
+
+-------------------------------
+
+Version 19.0.19
+
+* This release includes AHRI equipment data effective
+  as of March 25, 2020
+
+-------------------------------
+
+Version 19.0.17 - 19.0.18
+
+* Maintenance release
+
+-------------------------------
+
+Version 19.0.16
+
+* This release includes AHRI equipment data effective
+  as of February 2, 2020
+* This release includes support for the following California
+  Title 24 versions:
+    o CBECC-Res 2019
+    o CBECC-Res 2016
+
+-------------------------------
+
+Version 19.0.15
+
+* Maintenance release
+
+-------------------------------
+
+Version 19.0.14
+
+* This release includes AHRI equipment data effective
+  as of December 1, 2019
+
+-------------------------------
+
+Version 19.0.13
+
+* This release includes AHRI equipment data effective
+  as of September 22, 2019
+
+-------------------------------
+
+Version 19.0.12
+
+* This release includes AHRI equipment data effective
+  as of August 4, 2019
+
+-------------------------------
+
+Version 19.0.09
+
+* Improved slab-on-grade floor calcs for RTS/CLTD 
+  Load Calc methods
+* Allow for overriding ceiling and floor TD for 
+  residential methods in the Right-Draw property sheet
+
+-------------------------------
+
+Version 19.0.08
+
+* This release includes AHRI equipment data effective
+  as of April 29, 2019
+* Duct leakage calculation can now optionally use the 
+  following additional methods:
+    system airflow percent
+    directly entered system leakage CFM
+    Energy Star method
+* The Floor tab of the Room Property Sheet now has a
+  'Open to space below' property.  This allows you to
+  remove room floor area from the conditioned floor 
+  area calculations.
+
+-------------------------------
+
+Version 19.0.05 - 19.0.07
+
+* Maintenance release
+
+-------------------------------
+
+Version 19.0.04
+
+* This release includes AHRI equipment data effective
+  as of March 4, 2019
+* This release allows you to import Package Air 
+  Conditioners and Heat Pumps from a spreadsheet
+
+-------------------------------
+
+Version 19.0.03
+
+* Maintenance release
+
+-------------------------------
+
+Version 19.0.01
+
+* This release includes the ability to import RMC/RJM
+  projects into Right-Suite Universal.
+* In this release, Print Preview automatically refreshes
+  opened preview pages.
+* User libraries are automatically reconciled when an
+  existing project is opened.
+* This release includes the ability to move return 
+  registers from one floor to another by changing the
+  sheet name property.
+* This release includes the ability to specify supply
+  and return duct system colors per air handler zone.
+* This release includes the ability to read and write
+  AutoCAD 2019 files.
+
+-------------------------------
+
+Version 18.0.32
+
+* This release includes AHRI equipment data effective
+  as of November 25, 2018
+
+* The number of bedrooms override was moved from the 
+  Project Information screen to the Zone Information 
+  screen.
+
+* This release includes the Energy Star HVAC Design 
+  Report Rev.09.
+
+-------------------------------
+
+Version 18.0.31
+
+* This release includes AHRI equipment data effective
+  as of August 19, 2018
+
+-------------------------------
+
+Version 18.0.27
+
+Maintenance release.
+
+-------------------------------
+
+Version 18.0.26
+
+Maintenance release.
+
+-------------------------------
+
+Version 18.0.25
+
+* This release includes AHRI equipment data effective 
+  as of July 1, 2018.
+
+-------------------------------
+
+Version 18.0.19
+
+* This release includes AHRI equipment data effective 
+  as of April 29, 2018.
+
+-------------------------------
+
+Version 18.0.14 - 18.0.16
+
+* Maintenance release.
+
+-------------------------------
+
+Version 18.0.13
+
+* This release includes AHRI equipment data effective 
+  as of March 25, 2018.
+
+-------------------------------
+
+Version 18.0.11
+
+* This release includes AHRI equipment data effective 
+  as of February 11, 2018.
+
+* This release includes the ability to edit the door type
+  for custom glazings when specified as a door.
+
+-------------------------------
+
+Version 18.0.10
+
+* This release includes AHRI equipment data effective 
+  as of January 14, 2018.
+
+* This release includes the ability to map ducts, fittings,
+  and registers to parts directly in the Right-Draw
+  property sheet.
+
+* Choices help for internal gains for appliances for
+  Right-CommLoad are now updated from the ASHRAE 2017
+  Handbook of Fundamentals.
+
+-------------------------------
+
+Version 18.0.08
+
+* This release includes Right-Energy(R) Florida 2017 for 
+  Florida Energy Code compliance.  Please call our sales 
+  hotline for more information - 800-225-8697. 
+
+* This release includes support for CBECC-Res 2017 v3 SP2
+  (California Title 24).
+
+-------------------------------
+
+Version 18.0.07
+
+* This release includes AHRI equipment data effective
+  as of December 17, 2017
+
+* This release includes automatic sizing of the Title
+  Block in Right-Draw printed reports.  The Title Block
+  will be bigger if you print to large-format paper.
+
+-------------------------------
+
+Version 18.0.04
+
+Maintenance release.
+
+-------------------------------
+
+Version 18.0.03
+
+This is the first release of Right-Suite Universal 2018.
+
+Improvements include:
+
+* The longest supply and return duct runs are now displayed 
+  on the Right-Draw screen.
+
+* There is a new supply/return register library.
+
+* You can specify different duct preferences for each floor.
+
+* You can divide or merge rooms in Right-Draw.
+
+* You can now specify a target ACH for the blower door
+  infiltration method.
+
+* You can set zone colors in Right-Draw to be per zone or
+  per system.
+
+* In Right-CommLoad, the suggestions for supply ventilation
+  CFM have been updated to ASHRAE Standard 62.1-2016.
+
+* In Right-CommLoad, the heat gains for Occupancy has been
+  updated to be based on ASHRAE Handbook of Fundamentals 2017.
+
+* Add the ability to make walls, ceilings, and floors to be 
+  transparent in Right-Draw.
+
+* The J1 Form report has been added.
+
+* The J1 Form, Worksheet A report has been added.
+
+* The ASHRAE Standard 183 report has been added.
+
+* The Duct System Multi-orientation report has been added.
+
+* New AHRI equipment data effective as of October 16, 2017.
+
+-------------------------------
+
+Version 17.0.29
+
+* This release includes new AHRI equipment data effective
+  as of Semptember 25, 2017
+
+-------------------------------
+
+Version 17.0.28
+
+* This release includes new AHRI equipment data effective
+  as of August 24, 2017
+
+-------------------------------
+
+Version 17.0.23
+
+* This release includes new AHRI equipment data effective
+  as of April 16, 2017
+
+-------------------------------
+
+Version 17.0.21
+
+* This release includes new AHRI equipment data effective
+  as of February 24, 2017
+
+* This release includes support for California Title 24
+  additions/alterations.
+
+-------------------------------
+
+Version 17.0.19
+
+Maintenance release.
+
+-------------------------------
+
+Version 17.0.17
+
+* This release includes support for the following California
+  Title 24 versions:
+    * CBEC-Res 2016 v2.1
+    * CBECC-Res 2013 v4c
+
+-------------------------------
+
+Version 17.0.16
+
+* This release includes new AHRI equipment data effective
+  as of November 20, 2016
+
+-------------------------------
+
+Version 17.0.10 - 17.0.14
+
+Maintenance releases.
+
+-------------------------------
+
+Version 17.0.09
+
+* Right-B improvements
+  * improved report layout, notes now appear on Right-B reports
+  * Right-B Worksheet now has copy/paste, etc.
+  * Right-B Worksheet now has a '#' column.  This allows you to
+    sort the list of ducts by their original duct order
+
+* Multi-zone tree can now be resized veritcally.  This allows
+  you to see all of the rooms and zones without scrolling.
+
+* The Layer lock/unlock feature in Right-Draw now requires you
+  to double-click on the Layer rather than just single-click.
+  This will prevent 'accidental' locking/unlocking.
+
+-------------------------------
+
+Version 17.0.08
+
+Maintenance release.
+
+-------------------------------
+
+Version 17.0.07
+
+This release includes the following enhancements:
+
+* New AHRI equipment data effective as of August 1, 2016
+
+* Viega Radiant parts and calculations have been added to
+  the Radiant Heating module.
+
+* Right-B  is now available.  This module is for
+  performing Duct System Balancing.  Call our sales 
+  hotline for more information - 800-225-8697. 
+
+* The number of return registers can now be larger than 
+  the number of supply registers by assigning a supply 
+  register cfm to multiple return registers.  This is
+  useful for commercial duct system duct designs.
+
+* Multiple registers can now be rotated at the same time.
+  Select several registers and change the rotation angle
+  from the Property Sheet.
+
+* The 'Bitmap tool' has been replaced by the 'Picture
+  tool' in Right-Draw.  This new tool allows you to insert
+  more image types into the Right-Draw drawing (ex. jpg, 
+  gif, bmp, pmg).
+
+* You can now use 'undo' while adding a new room using 
+  the wall-by-wall tool.
+
+-------------------------------
+
+Version 17.0.04
+
+* This release includes new AHRI equipment data effective
+  as of March 26, 2016.
+
+* This release includes support for the following California
+  Title 24 versions:
+    * CBECC-Res 2016 v1
+    * CBECC-Res 2013 v4b
+
+* This release includes support for linking to EnergyPro 6.  This release
+  will also support EnergyPro 7 when it becomes available.  Previous
+  versions supported EnergyPro 5.
+
+* This release includes the following enhancements:
+    * You can now lock and unlock drawing layers by clicking 
+      on the layer icons in the layer tree
+    * You can now specify 'Is Shaded' for a wall, window or 
+      door surface per orientation
+    * You can now move existing return registers to a different 
+      level using the Property Sheet
+    * You can now search / filter equipment by the AHRI Reference 
+      Number
+    * There is a new report - Duct: Static Pressure and Friction Rate
+    * In the Short Room Summary and Project Summary reports,
+      the Heat Pump Balance Point and Heat Pump Backup Equipment
+      information has been added
+
+-------------------------------
+
+Version 17.0.02 - 17.0.03
+
+Maintenance releases.
+
+-------------------------------
+
+Version 17.0.01
+
+This release includes:
+  * new weather data - ASHRAE 2013, ACCA standard and
+    micro-climate data from Manual J Eighth Edition
+    Addendum E 2014
+  * new Energy Star report
+  * ASHRAE 62.2 - 2010 Ventilation calculations
+  * new AHRI equipment data effective as of
+    February 29, 2016
+
+-------------------------------
+
+Version 15.0.25
+
+This release includes new AHRI equipment data effective as of January 18, 2016.
+
+-------------------------------
+
+Version 15.0.24
+
+Maintenance release.
+
+-------------------------------
+
+Version 15.0.23
+
+This release includes new AHRI equipment data effective as of November 30, 2015.
+
+-------------------------------
+
+Version 15.0.21 - 15.0.22
+
+Maintenance releases.
+
+-------------------------------
+
+Version 15.0.20
+
+This release includes new AHRI equipment data effective as of September 17, 2015.
+
+-------------------------------
+
+Version 15.0.19
+
+This release includes new 'Basement / Slab On Grade Heat Loss Report' for F280-12 Load Calculation Method.
+
+-------------------------------
+
+Version 15.0.18
+
+This release includes support for CBECC-Res version 4 (California Title 24).
+
+-------------------------------
+
+Version 15.0.16 - 15.0.17
+
+Maintenance releases.
+
+-------------------------------
+
+Version 15.0.15
+
+This release includes new AHRI equipment data effective as of March 23, 2015.
+
+-------------------------------
+
+Version 15.0.14
+
+This release includes the new CSA F280-12 load calculation method for Canada.
+
+This release includes support for CBECC-Res version 3c (California Title 24).
+
+-------------------------------
+
+Version 15.0.13
+
+This release includes new AHRI equipment data effective as of February 15, 2015.
+
+-------------------------------
+
+Version 15.0.12
+
+Maintenance release.
+
+-------------------------------
+
+Version 15.0.11
+
+This release includes new AHRI equipment data effective as of January 19, 2015.
+
+This release includes support for CBECC-Res version 3b1 (California Title 24)
+
+-------------------------------
+
+Version 15.0.10
+
+This release includes new AHRI equipment data effective as of December 29, 2014.
+
+-------------------------------
+
+Version 15.0.09
+
+Maintenance release.
+
+-------------------------------
+
+Version 15.0.08
+
+This release includes new AHRI equipment data effective as of December 15, 2014.
+
+-------------------------------
+
+Version 15.0.07
+
+This release includes new AHRI equipment data effective as of December 01, 2014.
+
+-------------------------------
+
+Version 15.0.06
+
+This release includes new AHRI equipment data effective as of November 17, 2014.
+
+-------------------------------
+
+Version 15.0.05
+
+This release includes new AHRI equipment data effective as of October 27, 2014.
+
+-------------------------------
+
+Version 15.0.04
+
+This release includes:
+  * Automatic register placement using customized user rules
+  * Default building material options for partition and interior
+    walls, vaulted ceilings, and skylights
+  * In Right-Energy Title 24, added duct supply and return
+    surface area calculations, whichcan be seen on the Simulation
+    tab on the Equipment Screen by unchecking 'Automatic' and 
+    checking 'Verified design'.
+  * In Right-Energy Title 24, updated zoning to model
+    unconditioned zones as garages due to CBECC-Res not supporting
+    unconditioned rooms.
+
+This release includes new AHRI equipment data effective as of
+October 6, 2014.
+
+-------------------------------
+
+Version 15.0.03
+
+This release includes:
+  * Support for CBECC-Res version 3 (Title 24)
+  * Support for ASHRAE 62.2 Ventilation for the 
+    commercial load calculations.
+  * Improved Right-Draw glass doors
+  * Smart-checker for branch-to-trunk connections
+  * Auto-Branch run - automaticaly connects registers to trunks
+  * Auto-Input flex duct - fixed length flex duct at the end of 
+    every branch run
+  * Optional side notations for vaulted ceiling objects
+
+This release includes new AHRI equipment data effective as of
+August 24, 2014.
+
+-------------------------------
+
+Version 15.0.02
+
+This release includes new AHRI equipment data effective as of August 18, 2014.
+
+-------------------------------
+
+Version 15.0.01
+
+This release includes support for crawl spaces and additional attic properties
+in the Right-Energy Title 24 module.
+
+This release includes new AHRI equipment data effective as of August 4, 2014.
+
+-------------------------------
+
+Version 15.0.00
+
+This release includes:
+  * Improved register notation and new register types (high wall,
+    low wall, ceiling one way, ceiling two ways, etc.)
+  * Improved 2-line duct drawing
+  * Can read and write to AutoCAD version 2014 and lower drawings
+  * Ability to run a horizontal trunk or branch from mid-section
+    of a duct riser
+  * Will auto-size oll your registers to maintain you target
+    register face velocity
+
+* This release includes support for CBECC-Res version 2b (Title 24).
+
+* This release includes new AHRI equipment data effective as of July 27, 2014.
+
+-------------------------------
+
+Version 13.0.15
+
+* This release includes a new module.  Right-Energy Title 24 will perform a
+  California Title 24 code compliance calculation for any RSU project.  Call 
+  our sales hotline for more information - 800-225-8697. 
+
+* This release includes new AHRI equipment data effective as of June 16, 2014.
+
+-------------------------------
+
+Version 13.0.13
+
+This release includes new AHRI equipment data effective as of June 2, 2014.
+
+-------------------------------
+
+Version 13.0.12
+
+This release includes new AHRI equipment data effective as of April 27, 2014.
+
+-------------------------------
+
+Version 13.0.11
+
+This release includes new AHRI equipment data effective as of April 14, 2014.
+
+-------------------------------
+
+Version 13.0.10
+
+This release includes new AHRI equipment data effective as of March 24, 2014.
+
+-------------------------------
+
+Version 13.0.09
+
+This release includes new AHRI equipment data effective as of January 6, 2014.
+
+-------------------------------
+
+Version 13.0.02 - 13.0.08
+
+Maintenance release.
+
+-------------------------------
+
+Version 13.0.01
+
+This release includes:
+
+* Smart ceiling tool - convert frustrum ceiling to double shed ceiling by changing dimensions,
+  new Dormer HVAC Shape, can attach windows to a ceiling's walls, there is a separate wall 
+  construction for ceilings with walls
+
+* Multi-zone control - drag and drop multiple rooms/zones
+
+* Component Construction report is broken down per room
+
+* PDF reader in Right-Draw - panning support, rotation support
+
+* New AHRI equipment data effective as of July 7, 2013
+
+-------------------------------
+
+Version 12.1.08
+
+This release includes new AHRI equipment data effective as of May 6, 2013.
+
+-------------------------------
+
+Version 12.1.06
+
+This release includes new AHRI equipment data effective as of March 4, 2013.
+
+-------------------------------
+
+Version 12.1.05
+
+This release includes new AHRI equipment data effective as of December 31, 2012.
+
+-------------------------------
+
+Version 12.1.04
+
+Maintenance release
+
+-------------------------------
+
+Version 12.1.03
+
+This release includes new AHRI equipment data effective as of November 12, 2012.
+
+-------------------------------
+
+Version 12.1.01 - 12.1.02
+
+Maintenance release
+
+-------------------------------
+
+Version 12.1.00
+
+This release includes new AHRI equipment data effective as of October 14, 2012.
+
+-------------------------------
+
+Version 12.0.13
+
+This release includes new AHRI equipment data effective as of August 20, 2012.
+
+-------------------------------
+
+Version 12.0.12
+
+Maintenance release
+
+-------------------------------
+
+Version 12.0.11
+
+This release includes new AHRI equipment data effective as of July 23, 2012.
+
+-------------------------------
+
+Version 12.0.10
+
+This release includes new AHRI equipment data effective as of July 9, 2012.
+
+-------------------------------
+
+Version 12.0.09
+
+This release includes new AHRI equipment data effective as of June 28, 2012.
+
+-------------------------------
+
+Version 12.0.08
+
+This release includes new AHRI equipment data effective as of May 28, 2012.
+
+-------------------------------
+
+Version 12.0.07
+
+This release includes new AHRI equipment data effective as of April 23, 2012.
+
+-------------------------------
+
+Version 12.0.06
+
+This release includes new AHRI equipment data effective as of April 2, 2012.
+
+Florida users - This release includes an enhanced Fla-J that writes .enb files that can be read into EnergyGauge USA 2010.  It includes multiple zones, interior walls and floors, etc.  See the help for additional information.
+
+-------------------------------
+
+Version 12.0.04
+
+This release includes new AHRI equipment data effective as of February 27, 2012.
+
+-------------------------------
+
+Version 12.0.03
+
+* 5/16" tubing is now available in Right-Radiant loop tubing selection
+  for Wrghtsoft radiant manufacturer source.
+* System Builder now allows selecting natural gas or propane for
+  furnaces.
+
+This release includes new AHRI equipment data effective as of January 30, 2012.
+
+-------------------------------
+
+Version 12.0.02
+
+This release includes new AHRI equipment data effective as of January 16, 2012.
+
+-------------------------------
+
+Version 12.0.00
+
+Welcome to version 12!  This release has many new features...
+
+* In Right-Draw you can easily add separate walls that are different than
+  the rest of the walls in the room.
+* In Right-Draw you can map items in the Notation Layer to proposal parts.  
+  These parts will automatically appear in the Bill of Materials.
+* The supply branches that are associated with a particular return branch
+  are displayed bold.
+* You can easily change which supply branches are associated with a
+  return branch.
+* You can now have ducts outside the building.
+* You can rotate duct registers.
+* The wizards have been updated.
+* There is a link to EnergyPro available.
+
+This release includes new AHRI equipment data effective as of January 9, 2012.
+
+-------------------------------
+
+Version 8.0.24
+
+This release includes new AHRI equipment data effective as of November 14, 2011.
+
+-------------------------------
+
+Version 8.0.23
+
+This release includes new AHRI equipment data effective as of November 7, 2011.
+
+-------------------------------
+
+Version 8.0.22
+
+Maintenance release
+
+-------------------------------
+
+Version 8.0.21
+
+This release includes new AHRI equipment data effective as of October 17, 2011.
+
+-------------------------------
+
+Version 8.0.18 - 8.0.20
+
+Maintenance releases
+
+-------------------------------
+
+Version 8.0.17
+
+This release includes new AHRI equipment data effective as of August 15, 2011.
+
+-------------------------------
+
+Version 8.0.16
+
+This release includes new AHRI equipment data effective as of July 18, 2011.
+
+-------------------------------
+
+Version 8.0.15
+
+This release includes two new reports - the Residential Plans Examiner 
+Review Form and the Manual S Compliance report.  There are also tabs
+in the Equipment Screen where you can enter detailed manufacturer 
+performance data used to calculate equipment performance at your 
+projects design conditions.
+
+This release includes new AHRI equipment data effective as of June 27, 2011.
+
+-------------------------------
+
+Version 8.0.11
+
+This release includes new AHRI equipment data effective as of April 25, 2011.
+
+-------------------------------
+
+Version 8.0.10
+
+Maintenance release
+
+-------------------------------
+
+Version 8.0.09
+
+This release includes new AHRI equipment data effective as of March 28, 2011.
+
+-------------------------------
+
+Version 8.0.08
+
+This release includes new AHRI equipment data effective as of March 7, 2011.
+
+-------------------------------
+
+Version 8.0.07
+
+This release includes new AHRI equipment data effective as of February 21, 2011.
+
+-------------------------------
+
+Version 8.0.06
+
+This release includes new AHRI equipment data effective as of January 24, 2011.
+
+-------------------------------
+
+Version 8.0.05
+
+This release includes new AHRI equipment data effective as of January 10, 2011.
+
+-------------------------------
+
+Version 8.0.04
+
+This release includes new AHRI equipment data effective as of December 13, 2010.
+
+-------------------------------
+
+Version 8.0.03
+
+This release includes new AHRI equipment data effective as of November 15, 2010.
+
+-------------------------------
+
+Version 8.0.02
+
+Welcome to Right-Suite Universal version 8!
+
+This release includes new AHRI equipment data effective as of November 1, 2010.
+
+===============================
+
+Version 7.1.25
+
+This release includes new AHRI equipment data effective as of August 23, 2010.
+
+This release includes enhanced support for Windows(R) Vista and Windows(R) 7
+
+-------------------------------
+
+Version 7.1.24
+
+This release includes new AHRI equipment data effective as of August 2010.
+
+-------------------------------
+
+Version 7.1.23
+
+This release includes new AHRI equipment data effective as of June 2010.
+
+-------------------------------
+
+Version 7.1.22
+
+This release includes new AHRI equipment data effective as of April 2010.
+
+-------------------------------
+
+Version 7.1.19
+
+Maintenance release
+
+-------------------------------
+
+Version 7.1.17
+
+This release includes AHRI Unitary and Applied equipment data as of January 2010.
+
+This release includes enhanced internal loads and ventilation for the Manual J Eighth Edition.
+
+-------------------------------
+
+Version 7.1.14 - 7.1.16
+
+Maintenance release
+
+-------------------------------
+
+Version 7.1.12
+
+This release includes new AHRI equipment data effective as of June 2009.
+
+-------------------------------
+
+Version 7.1.09 - 7.1.11
+
+Maintenance releases
+
+-------------------------------
+
+Version 7.1.08
+Florida users:  This release includes a module for linking Right-Suite Universal to 
+EnergyGauge USA - FlaRes 2008.  Call our sales hotline for more information - 800-225-8697.
+
+-------------------------------
+
+Version 7.1.06-7.1.07
+
+Maintenance releases.
+
+-----------------------------------
+
+Version 7.1.05
+
+This release has Right-SolarDHW(tm) available.  With this new module, 
+you can quickly design and select the components for solar hot water 
+heater systems.
+
+This release also includes the GAMA directory of hot water heaters 
+that can be selected in the equipment screen.
+
+The COMcheck(tm) link is also available.  This module allows you to 
+transfer commercial project data for use in COMcheck(tm).
+
+Please call our sales hotline (800-225-8697) for more information about 
+these new modules.
+
+-------------------------------
+
+Version 7.1.03
+
+This release includes ARI Unitary and Applied equipment data as of August 2008 and GAMA equipment as of August 2008.
+
+-----------------------------------
+
+Version 7.1.01
+
+This release includes ARI Unitary and Applied equipment data as of June 2008 and GAMA equipment as of June 2008.
+
+-----------------------------------
+
+Version 7.1.00
+
+Manual N 5th Edition commercial load calculations are now available.
+
+Right-Radiant  now includes many enhancements:
+
+* The loop leader can now contribute heat to room
+
+* The Radiant Navigator has been enhanced to include the 
+  ability to include a condensing boiler or water heater, 
+  baseboard, DHW, and air handlers
+
+-------------------------------
+
+Version 7.0.25-7.0.27
+
+Maintenance releases
+
+-----------------------------------
+
+Version 7.0.14
+
+This version can read AutoCAD  2008 files
+
+-----------------------------------
+
+Version 7.0.02-7.0.11
+
+Maintenance release
+
+---------------------------------
+
+Version 7.0.00
+
+Welcome to Right-Suite  Universal!

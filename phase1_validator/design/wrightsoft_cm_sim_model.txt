@@ -1,0 +1,425 @@
+2026-Jan-23 09:38:57
+
+--------------------
+cseTOP            cseTOP                            #Props: 23/ 23  MaxDefinable:    1  SingleRecord: F  XMLIgnoreName: F
+
+      repHdrL                   repHdrL                                                       Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      repHdrR                   repHdrR                                                       Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      repTestPfx                Beginning of CSE report lines that are expected to differ...  Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wfName                    wfName                                                        Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      begDay                    begDay                                                        Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      endDay                    endDay                                                        Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ebTolHour                 ebTolHour                                                     Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ebTolDay                  ebTolDay                                                      Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ebTolMon                  ebTolMon                                                      Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ebTolSubHr                ebTolSubHr                                                    Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      jan1DOW                   jan1DOW                                                       Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  4
+                                            0:  "SUN"
+                                            1:  "MON"
+                                            2:  "TUE"
+                                            3:  "WED"
+                                            4:  "THU"
+                                            5:  "FRI"
+                                            6:  "SAT"
+      wuDays                    wuDays                                                        Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      nSubSteps                 nSubSteps                                                     Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      skyModel                  skyModel                                                      Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            0:  "isotropic"
+                                            1:  "anisotropic"
+      skyModelLW                skyModelLW                                                    Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            0:  "Default"
+                                            1:  "BerdahlMartin"
+                                            2:  "Blast"
+                                            3:  "Drybulb"
+      dflExH                    dflExH                                                        Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      bldgAzm                   bldgAzm                                                       Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      elevation                 elevation                                                     Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dt                        dt                                                            Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            0:  "NO"
+                                            1:  "YES"
+      dtBegDay                  dtBegDay                                                      Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dtEndDay                  dtEndDay                                                      Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      heatDsTDbO                heatDsTDbO                                                    Type: Float        #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      coolDsDay_x               coolDsDay                                                     Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+SchDay            ScheduleDay                       #Props:  2/  2  MaxDefinable:100000  SingleRecord: F  XMLIgnoreName: F
+
+      Type                      ScheduleDayType                                               Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            1:  "Fraction"
+                                            2:  "OnOff"
+                                            3:  "Temperature"
+      Hr                        ScheduleDayHour                                               Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+
+--------------------
+cseLAYER          cseLAYER                          #Props:  2/  3  MaxDefinable: 1000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseCONSTRUCTION
+
+      lrMat                     Layer material                                                Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMATERIAL
+      lrThk                     Thickness (feet)                                              Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseMATERIAL       cseMATERIAL                       #Props:  6/  7  MaxDefinable: 1000  SingleRecord: F  XMLIgnoreName: F
+
+      matThk                    Thickness (feet)                                              Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      matDens                   Density                                                       Type: Float        #Vals:  1  Units: lb/ft3            WriteSimFlag: 1  WriteXMLArrayIndices: F
+      matSpHt                   Specific heat of material                                     Type: Float        #Vals:  1  Units: Btu/lb-°F         WriteSimFlag: 1  WriteXMLArrayIndices: F
+      matCond                   Conductivity (always per foot of thickness)                   Type: Float        #Vals:  1  Units: Btuh-ft/ft2-°F    WriteSimFlag: 1  WriteXMLArrayIndices: F
+      matCondCT                 Coefficient for temperature adjustment of matCond in the ...  Type: Float        #Vals:  1  Units: F(-1)             WriteSimFlag: 1  WriteXMLArrayIndices: F
+      matRNom                   Resistance (insulation materials only - documentation only)   Type: Float        #Vals:  1  Units: °F-ft2-h/Btu      WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseMETER          cseMETER                          #Props:  0/  0  MaxDefinable:  100  SingleRecord: F  XMLIgnoreName: F
+
+
+--------------------
+cseIZXFER         cseIZXFER                         #Props: 23/ 23  MaxDefinable:  500  SingleRecord: F  XMLIgnoreName: F
+
+      izNVType                  Choice determining interzone ventilation                      Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  0
+                                            0:  "NONE"
+                                            1:  "TWOWAY"
+                                            2:  "AIRNETIZ"
+                                            3:  "AIRNETEXT"
+                                            4:  "AIRNETHORIZ"
+                                            5:  "AIRNETEXTFAN"
+                                            6:  "AIRNETIZFAN"
+                                            7:  "AIRNETEXTFLOW"
+                                            8:  "AIRNETIZFLOW"
+      izZn1                     Name of primary zone (flow rates > 0 are into the primary...  Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseZONE
+      izZn2                     Name of secondary zone                                        Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseZONE
+      izHConst                  Conductance between zones                                     Type: Float        #Vals:  1  Units: Btu/°F            WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izHConst_x                expression describing Conductance between zones               Type: String       #Vals:  1  Units: Btu/°F            WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izALo                     Area of low or only vent (typically VentOff)                  Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izAHi                     Additional vent area (high vent or VentOn)                    Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izAHi_x                   Additional vent area (high vent or VentOn)  (expression/f...  Type: String       #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izL1                      Length or width of AIRNETHORIZ opening                        Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izL2                      Width or length of AIRNETHORIZ opening                        Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izHD                      Vent center-to-center height difference (for TWOWAY) or v...  Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izNVEff                   Vent discharge coefficient coefficient                        Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izVFmin                   Minimum volume flow rate (VentOff mode)                       Type: Float        #Vals:  1  Units: cfm               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izVFmax                   Maximum volume flow rate (VentOn mode)                        Type: Float        #Vals:  1  Units: cfm               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izVFmax_x                 expression describing Maximum volume flow rate (VentOn mode)  Type: String       #Vals:  1  Units: cfm               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izFanPress                Design or rated pressure                                      Type: Float        #Vals:  1  Units: in H2O            WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izFanVfDs                 Fan design or rated flow at rated pressure                    Type: Float        #Vals:  1  Units: cfm               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izCpr                     Wind pressure coefficient (for AIRNETEXT)                     Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izExp                     Opening exponent                                              Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izFanElecPwr              Fan input power per unit air flow (at design flow and pre...  Type: Float        #Vals:  1  Units: W/cfm             WriteSimFlag: 1  WriteXMLArrayIndices: F
+      izFanCurvePy              [1-4] coefficients of a cubic polynomial for the curve re...  Type: Float        #Vals:  5  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+      izFanMtr                  Name of meter, if any, to record energy used by supply fa...  Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+      izFanEndUse               Enduse to apply fan energy usage to                           Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseZONE           cseZONE                           #Props: 25/ 29  MaxDefinable:  200  SingleRecord: F  XMLIgnoreName: F
+                               Children:  cseGAIN  /  cseSURFACE
+
+      znModel                   Zone model (CNE, CSE, CZM, UZM)                               Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  0
+                                            0:  "- select -"
+                                            1:  "CNE"
+                                            2:  "CSE"
+                                            3:  "CZM"
+                                            4:  "UZM"
+                                            5:  "UZX"
+      znArea                    Zone area                                                     Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znVol                     Zone volume                                                   Type: Float        #Vals:  1  Units: ft3               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znEaveZ                   Height of top of the wall in this zone above the ground       Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znCeilingHt               Nominal zone ceiling height relative to zone floor (typic...  Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znCAir                    Zone 'air' heat capacity: represents heat capacity of air...  Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znHCAirX                  Zone air change rate used for determining inside air conv...  Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znAzm                     Zone azimuth with respect to building azimuth (bldgAzm)       Type: Float        #Vals:  1  Units: deg               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znSC                      Zone shade closure                                            Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znSC_x                    Expression representing zone shade closure                    Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTH                      Heating setpoint                                              Type: Float        #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTH_x                    Expression representing heating setpoint                      Type: String       #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTC                      Cooling setpoint                                              Type: Float        #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTC_x                    Expression representing cooling setpoint                      Type: String       #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTD                      Desired setpoint                                              Type: Float        #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znTD_x                    Expression representing desired setpoint                      Type: String       #Vals:  1  Units: °F                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znQMxH                    Heating capacity at current conditions                        Type: Float        #Vals:  1  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znQMxHRated               Rated heating capacity                                        Type: Float        #Vals:  1  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znQMxC                    Cooling capacity at current conditions                        Type: Float        #Vals:  1  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znQMxCRated               Rated cooling capacity                                        Type: Float        #Vals:  1  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      infAC                     Zone infiltration air changes per hour                        Type: Float        #Vals:  1  Units: 1/hr              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      infELA                    Zone effective leakage area (ELA)                             Type: Float        #Vals:  1  Units: in2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      infShld                   Zone local shielding class, used in ELA model                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      infStories                Number of stories in zone (used in ELA model)                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      znRSys                    RSYS component conditioning this ZONE                         Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseRSYS
+
+--------------------
+cseGAIN           cseGAIN                           #Props:  9/ 11  MaxDefinable: 1000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseZONE
+
+      gnMeter                   Meter that tracks internal gain                               Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+      gnEndUse                  Internal gain enduse                                          Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      gnPower                   Internal gain power (single value or hourly profile)          Type: Float        #Vals: 24  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: T
+      gnPower_x                 Expression representing internal gain power                   Type: String       #Vals:  1  Units: Btuh              WriteSimFlag: 1  WriteXMLArrayIndices: F
+      gnFrZn                    Fraction of internal gain to Zone (single value or hourly...  Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+      gnFrPl                    Fraction of internal gain to Plenum (single value or hour...  Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+      gnFrRtn                   Fraction of internal gain to Return (single value or hour...  Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+      gnFrRad                   Fraction of internal gain to Zone that is Radiant (single...  Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+      gnFrLat                   Fraction of internal gain to Zone that is Latent (single ...  Type: Float        #Vals: 24  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: T
+
+--------------------
+ExtWall           Exterior Wall                     #Props:  2/ 35  MaxDefinable:  300  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  Zone  /  Garage
+                               Children:  Win  /  Door
+
+      sfExHcModel               For transmission of sfExHcModel to CSE                        Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Unified"
+                                            2:  "Input"
+      sfInHcModel               For transmission of sfInHcModel to CSE                        Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Unified"
+                                            2:  "Input"
+
+--------------------
+cseSURFACE        cseSURFACE                        #Props: 24/ 40  MaxDefinable:  500  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseZONE
+                               Children:  cseWINDOW  /  cseDOOR
+
+      like                      Surface that this surface is like                             Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseSURFACE
+      sfType                    Type of opaque surface                                        Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Floor"
+                                            2:  "Wall"
+                                            3:  "Ceiling"
+                                            4:  "IntMass1"
+                                            5:  "IntMass2"
+      sfCon                     Surface construction                                          Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseCONSTRUCTION
+      sfArea                    Wall area                                                     Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfDepthBG                 Depth of bottom of wall or floor slab below grade             Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfTilt                    Surface tilt                                                  Type: Float        #Vals:  1  Units: deg               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfAzm                     Surface azimuth                                               Type: Float        #Vals:  1  Units: deg               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExAbs                   Surface exterior solar absorptivity                           Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfInAbs                   Surface interior solar absorptivity                           Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExH                     Surface exterior (air film) conductance                       Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfInH                     Surface interior (air film) conductance                       Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExEpsLW                 Surface exterior long wave (thermal) emittance                Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfInEpsLW                 Surface interior long wave (thermal) emittance                Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfModel                   Modeling option                                               Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Forward_Difference"
+      sfExCnd                   Exterior condition description                                Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Ambient"
+                                            2:  "SpecifiedT"
+                                            3:  "AdjZn"
+                                            4:  "Adiabatic"
+                                            5:  "Ground"
+      sfAdjZn                   Zone that lies on the other side of this surface              Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseZONE
+      sfLthkF                   Layer thickness (for auto layering) ???                       Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExCTGrnd                Surface ???                                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExCTaDbAvgYr            Surface ???                                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExCTaDbAvg14            Surface ???                                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExRConGrnd              Surface ???                                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sfExHcModel               Surface ???                                                   Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Unified"
+                                            2:  "Input"
+      sfInHcModel               Surface ???                                                   Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Unified"
+                                            2:  "Input"
+      sfExRf                    ASHRAE roughness factor for exterior opaque walls sfExRf,...  Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseWINDOW         cseWINDOW                         #Props: 14/ 18  MaxDefinable: 2000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseSURFACE
+                               Children:  cseSHADE  /  cseSGDIST
+
+      wnArea                    Area                                                          Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnHeight                  Height                                                        Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnWidth                   Width                                                         Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnMult                    Multiplier                                                    Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnModel                   Window model                                                  Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            1:  "ASHWAT"
+      wnFMult                   F? multiplier                                                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnNGlz                    Number of glazing layers                                      Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnUnfrc                   NFRC U-factor                                                 Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnSHGC                    NFRC solar heat gain coefficient                              Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnDirtLoss                Dirt loss factor                                              Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnExShd                   Exterior shade type                                           Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            0:  "None"
+                                            1:  "Inscrn"
+      wnInShd                   Interior shade type                                           Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  1
+                                            0:  "None"
+                                            1:  "DrapeMed"
+      wnInH                     Interior surface (air film) conductance                       Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+      wnExH                     Exterior surface (air film) conductance                       Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseSHADE          cseSHADE                          #Props: 13/ 14  MaxDefinable: 2000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseWINDOW
+
+      ohDepth                   Overhang Depth                                                Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ohDistUp                  Overhang DistUp                                               Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ohExL                     Overhang ExL                                                  Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ohExR                     Overhang ExR                                                  Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      ohFlap                    Overhang Flap                                                 Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      lfDepth                   Left fin Depth                                                Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      lfTopUp                   Left fin TopUp                                                Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      lfDistL                   Left fin DistL                                                Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      lfBotUp                   Left fin BotUp                                                Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rfDepth                   Right fin Depth                                               Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rfTopUp                   Right fin TopUp                                               Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rfDistR                   Right fin DistR                                               Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rfBotUp                   Right fin BotUp                                               Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseSGDIST         cseSGDIST                         #Props:  4/  5  MaxDefinable: 6000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseWINDOW
+
+      sgSurf                    solar gain surface                                            Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseSURFACE
+      sgSide                    solar gain surface side                                       Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  0
+                                            1:  "INTERIOR"
+                                            2:  "EXTERIOR"
+      sgFSO                     solar gain fraction directed to surface when shade open       Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      sgFSC                     solar gain fraction directed to surface when shade closed     Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseDOOR           cseDOOR                           #Props:  4/  5  MaxDefinable:  100  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseSURFACE
+
+      drArea                    Area                                                          Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      drModel                   Modeling option                                               Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "Forward_Difference"
+      drU                       U-factor                                                      Type: Float        #Vals:  1  Units: Btuh/ft2-°F       WriteSimFlag: 1  WriteXMLArrayIndices: F
+      drCon                     Door construction                                             Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseCONSTRUCTION
+
+--------------------
+HVACSys           HVAC System                       #Props:  2/ 29  MaxDefinable:  100  SingleRecord: F  XMLIgnoreName: F
+
+      AutoSizeCool              Autosize cooling                                              Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      AutoSizeHeat              Autosize heating                                              Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseRSYS           cseRSYS                           #Props: 16/ 35  MaxDefinable:  100  SingleRecord: F  XMLIgnoreName: F
+                               Children:  cseDUCTSEG
+
+      AUTOSIZE_x                Autosize                                                      Type: String       #Vals:  5  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsFxCapC                  Cooling sizing factor                                         Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsCapC                    Cooling capacity                                              Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsSEER                    Cooling SEER                                                  Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsEER                     Cooling EER (defaults per ACM if missing)                     Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsVfPerTon                CFM per Ton (default = 350)                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsFanPwrH                 Heating fan power.  Heating air flow is estimated based o...  Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsFanPwrC                 Cooling fan power.                                            Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsDSEH                    Heating distribution system efficiency (0 < DSE <= 1).        Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsDSEC                    Cooling distribution system efficiency (0 < DSE <= 1).        Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsParElec_x               Parasitic electric use                                        Type: String       #Vals:  1  Units: W                 WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsFxCapH                  Heating sizing factor                                         Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsCapH                    Heating capacity                                              Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsAFUE                    Heating AFUE                                                  Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rsElecMtr                 Electric use meter                                            Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+      rsFuelMtr                 Natural gas use meter                                         Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+
+--------------------
+cseDUCTSEG        cseDUCTSEG                        #Props: 10/ 10  MaxDefinable: 1000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseRSYS
+
+      dsTy                                                                                    Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  0
+                                            1:  "SUPPLY"
+                                            2:  "RETURN"
+      dsInArea                  Duct segment inside surface area (at duct wall, duct wall...  Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsExArea                  Duct segment surface area at outside face of insulation f...  Type: Float        #Vals:  1  Units: ft2               WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsDiameter                Duct segment round duct diameter (duct wall thickness ass...  Type: Float        #Vals:  1  Units: ft                WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsAdjZn                                                                                 Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseZONE
+      dsInsulMat                                                                              Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMATERIAL
+      dsInsulR                                                                                Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsLeakF                                                                                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsExH                                                                                   Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      dsEpsLW                                                                                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseEXPORT         cseEXPORT                         #Props:  7/  7  MaxDefinable:  100  SingleRecord: F  XMLIgnoreName: F
+
+      exExportfile              Name of file to write simulation results to                   Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      exType                    Export type                                                   Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "ZEB"
+                                            2:  "ZST"
+                                            3:  "MTR"
+                                            4:  "AH"
+                                            5:  "UDT"
+                                            6:  "SUM"
+      exFreq                    Time interval for generating rows of export data              Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  -1
+                                            1:  "YEAR"
+                                            2:  "MONTH"
+                                            3:  "DAY"
+                                            4:  "HOUR"
+                                            5:  "HOURANDSUB"
+                                            6:  "SUBHOUR"
+      exMeter                   Meter to report                                               Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+      exBtuSf                   Result scaling factor (1,000 reports kBtu)                    Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      exDayBeg_x                                                                              Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      exDayEnd_x                                                                              Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseREPORT         cseREPORT                         #Props:  8/  9  MaxDefinable:10000  SingleRecord: F  XMLIgnoreName: F
+                               Children:  cseREPORTCOL
+
+      rpType                    Export type                                                   Type: Enumeration  #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                                      default:  5
+                                            1:  "ERR"
+                                            2:  "LOG"
+                                            3:  "INP"
+                                            4:  "SUM"
+                                            5:  "ZDD"
+                                            6:  "ZST"
+                                            7:  "ZEB"
+                                            8:  "MTR"
+                                            9:  "AH"
+                                           10:  "AHSIZE"
+                                           11:  "AHLOAD"
+                                           12:  "TUSIZE"
+                                           13:  "TULOAD"
+                                           14:  "UDT"
+      rpFreq                    Frequency reported                                            Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rpZone                    Zone to report                                                Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseZONE
+      rpMeter                   Meter to report                                               Type: ObjectRef    #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+                               cseMETER
+      rpHeader                  report header                                                 Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rpTitle                   report title                                                  Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rpBtuSF                   report Btu/SF                                                 Type: Float        #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      rpCPL                     report characters per line                                    Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+
+--------------------
+cseREPORTCOL      cseREPORTCOL                      #Props:  5/  5  MaxDefinable:10000  SingleRecord: F  XMLIgnoreName: F
+                               Parent(s):  cseREPORT
+
+      colVal                    column value (string)                                         Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      colVal_x                  column value (expression)                                     Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      colHead                   Frequency reported                                            Type: String       #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      colWid                    column width (characters)                                     Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
+      colDec                    decimal precision                                             Type: Integer      #Vals:  1  Units:                   WriteSimFlag: 1  WriteXMLArrayIndices: F
