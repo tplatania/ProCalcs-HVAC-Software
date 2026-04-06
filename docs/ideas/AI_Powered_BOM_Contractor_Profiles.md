@@ -1,5 +1,5 @@
 # AI-Powered BOM with Contractor Intelligence Profiles
-### ProCalcs Feature Concept | Status: IDEA — Not Yet Scoped
+### ProCalcs Feature Concept | Status: ACTIVE — Phase 1 Priority
 
 ---
 
@@ -136,9 +136,9 @@ This isn't just a feature. It's a **switching cost that compounds over time** �
 
 ## Phase Placement
 
-This feature is **not Phase 1 (Validator)**. It belongs in **Phase 2 (Experience Layer)** — after ProCalcs has market presence and active contractors on the platform.
+**This is Phase 1.** As of April 2026, the AI-powered BOM with Contractor Intelligence Profiles is the primary build target. The Validator has been deprioritized and is a distant project.
 
-However, the **data architecture for contractor profiles should be designed in Phase 1** so it doesn't have to be rebuilt later. Store the profile schema early, even if the BOM feature itself isn't live yet.
+The BOM goes to market first. It solves a real, immediate pain point contractors already feel every day, requires no ACCA approval, and generates revenue from day one. The contractor profile architecture built here becomes the data foundation every future ProCalcs feature builds on top of.
 
 ---
 

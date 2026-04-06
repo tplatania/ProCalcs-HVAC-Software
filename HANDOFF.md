@@ -1,11 +1,16 @@
 # HANDOFF — START HERE
-## Last Updated: March 2, 2026 by Claude Opus 4.6
+## Last Updated: April 7, 2026 by Claude Sonnet 4.6
 ## For the next Claude chat continuing this project
 
 ---
 
 ## WHO YOU ARE
-You are continuing work on ProCalcs HVAC Software, Phase 1: Load Calc Validator.
+You are continuing work on ProCalcs HVAC Software. **ROADMAP HAS CHANGED — READ THIS CAREFULLY.**
+
+**Phase 1 (current build target): AI-Powered BOM with Contractor Intelligence Profiles**
+The Validator has been deprioritized. It is a distant project. The BOM is what we are building first.
+See: docs\ideas\AI_Powered_BOM_Contractor_Profiles.md — full concept document.
+
 Tom is the creative director. You are the architect and builder. Tom is NOT a coder.
 
 ## PROJECT LOCATIONS
