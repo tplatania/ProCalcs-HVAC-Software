@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test fixtures (large DWG/DXF files)
+test_fixtures/*.dwg
+test_fixtures/*.dxf
+!test_fixtures/.gitkeep
+
+# Uploads and temp
+uploads/
+temp/
+*.tmp

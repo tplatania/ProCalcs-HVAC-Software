@@ -1,0 +1,149 @@
+/* ProCalcs CAD Cleaner — Global Styles */
+
+:root {
+  --color-primary: #d97706;
+  --color-primary-hover: #b45309;
+  --color-dark: #1e293b;
+  --color-dark-lighter: #334155;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-border: #475569;
+  --color-bg: #0f172a;
+  --color-card: #1e293b;
+  --radius: 12px;
+  --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+.app-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.app-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.app-subtitle {
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+  font-size: 0.95rem;
+}
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.drop-zone:hover,
+.drop-zone--active {
+  border-color: var(--color-primary);
+  background: rgba(217, 119, 6, 0.06);
+}
+
+.drop-zone--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drop-zone__icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.drop-zone__text {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+/* Status Messages */
+.status-message {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.status-message--loading {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+}
+
+.status-message--success {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid var(--color-success);
+}
+
+.status-message--error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--color-error);
+}
+
+.status-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Spinner */
+.status-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Button */
+.btn-reset {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-left: auto;
+}
+
+.btn-reset:hover {
+  background: var(--color-primary-hover);
+}

@@ -1,5 +1,5 @@
 # HANDOFF — START HERE
-## Last Updated: April 7, 2026 by Claude Sonnet 4.6 — End of Session 2
+## Last Updated: April 7, 2026 by Claude Opus 4.6 — End of Session 3
 ## For the next Claude chat continuing this project
 
 ---
@@ -13,7 +13,7 @@ See: docs\ideas\AI_Powered_BOM_Contractor_Profiles.md — full concept document.
 
 **Also in active development: PDF-to-CAD Cleanup Tool**
 See: docs\ideas\PDF_to_CAD_Cleanup_Tool.md — full confirmed spec.
-Next session task: set up procalcs-pdf-cleaner folder structure in the repo.
+Code built at: procalcs-pdf-cleaner\ — backend, frontend, tests all scaffolded.
 
 Tom is the creative director. You are the architect and builder. Tom is NOT a coder.
 
@@ -42,7 +42,13 @@ Tom is the creative director. You are the architect and builder. Tom is NOT a co
 6. API-first architecture decision locked in
 7. Confirmed contractors submit PDFs, not .rup files
 8. ACCA Protocol analyzed — costs, process, timeline documented
-9. DOE Common Engine intel gathered (see below)
+9. DOE Common Engine intel gathered
+10. procalcs-bom — Full backend + frontend built (Session 2)
+11. procalcs-pdf-cleaner — Full backend + frontend scaffolded (Session 3)
+    - Core ezdxf cleanup engine with Smart INSERT Filter
+    - 29 pytest test cases covering filter, cleaner, and validators
+    - React frontend with drag-drop upload and auto-download
+    - Richard's feedback integrated: keep interior doors + ventilation appliances
 
 ## CRITICAL STRATEGIC INTEL (March 2, 2026)
 
@@ -72,11 +78,25 @@ ACCA is working with DOE to build a shared Manual J calculation engine.
 - Revenue from Validator funds everything without the $83K ACCA anchor
 
 ## WHAT IS NEXT
-1. **Design the Phase 1 Validator workflow spec** — This is a DESIGN DOCUMENT, not code.
-2. **Build the Wrightsoft PDF parser** — Extract Manual J data from contractor-submitted PDFs
-3. **Design the comparison engine** — How plan measurements get compared to report values
-4. **Define confidence scoring** — What thresholds trigger green/yellow/red flags
-5. **Test with Scott Residence** as first validation case (PDF in phase1_validator\tests\)
+
+### procalcs-pdf-cleaner — Immediate priorities
+1. Get sample DWG files from designers to test against real-world data
+2. Install ODA File Converter and wire up DWG→DXF→clean→DXF→DWG pipeline
+3. Gerald: review code, run tests (`pytest -v` from procalcs-pdf-cleaner root)
+4. Test Smart INSERT Filter against real architect block names
+5. Frontend polish once backend is validated with real files
+
+### procalcs-bom — Ongoing
+- Gerald has handoff doc at docs/GERALD_HANDOFF_BOM.md
+- Backend and frontend built in Session 2
+
+### Designer Workflow Context (from Richard)
+The cleaned CAD file stays visible throughout the Wrightsoft design process:
+1. Import clean CAD as background layer
+2. Retrace building over it
+3. CAD layer stays ON during load calcs and duct design (designer sees actual plans)
+4. When done, turn off WS layer, keep CAD, convert back for final equipment schedules
+Wrightsoft performance degrades badly with cluttered imports — cleanup is mandatory.
 
 ## THREE CONTRACTOR MANIPULATION POINTS THE VALIDATOR CATCHES
 1. Inflated square footage (claiming rooms are bigger than plans show)
@@ -88,50 +108,31 @@ ACCA is working with DOE to build a shared Manual J calculation engine.
 - **Claude** — Architect, system design, documentation
 - **Gerald** — Developer (part-time, Claude Desktop issues, jury still out)
 - **Catherine** — CEO, ACCA liaison, business operations
+- **Richard** — Designer, provided CAD cleanup workflow + entity filter feedback
 - **Two Filipino developers** — Being sourced, $800-1,500/mo + commission
 
 ## CONTACT AT ACCA
 Wesley R. Davis, Director of Technical Services
 wes.davis@acca.org | (703) 824-8847
 
-## SESSION 2 SUMMARY — April 7, 2026
+## SESSION 3 SUMMARY — April 7, 2026
 
 ### What Was Built This Session
 
-**procalcs-bom — Full backend and frontend built and committed:**
-- Flask app factory, centralized config, startup validation
-- ClientProfile data model with full Firestore serialization
-- profile_service.py — Firestore CRUD (get/create/update/delete)
-- bom_service.py — AI engine (Claude API) + pricing logic + output formatter
-- validators.py — input validation for profiles and BOM requests
-- 18-test pytest suite covering validators, model roundtrip, pricing math
-- React frontend: Layout, Button, StatusBadge, Spinner components
-- ProfilesPage — card grid with empty state, delete confirm
-- ProfileDetailPage — full create/edit form with all sections
-- apiFetch utility, useProfiles custom hook
+**procalcs-pdf-cleaner — Complete scaffolding:**
+- Flask backend: app factory, config, health route, cleaner route, validators
+- Core engine: `cleaner_service.py` (ezdxf entity classifier + cleanup)
+- Smart INSERT Filter: `insert_filter.py` (keyword block classification)
+- 29 pytest tests across 3 test files
+- React frontend: drag-drop upload, status messages, auto-download
+- ProCalcs dark theme, README with tech decisions
 
-**docs/ideas/ — Three concept docs added:**
-- AI_Powered_BOM_Contractor_Profiles.md (status: ACTIVE Phase 1)
-- Wrightsoft_Default_Template_Parsed.md (RUT file analysis)
-- PDF_to_CAD_Cleanup_Tool.md (status: ACTIVE, high priority)
-
-**MASTER_IDEAS.md updated** with ideas #76 (BOM) and #77 (PDF cleaner)
-
-**Gerald handoff doc** written at docs/GERALD_HANDOFF_BOM.md
-
-### What To Build Next Session
-
-**procalcs-pdf-cleaner** — New subfolder in the repo, same ecosystem.
-
-Confirmed spec:
-- Input: DWG file (designer uploads after AutoCAD PDF→DWG conversion)
-- Process: ezdxf reads DWG, strips DIMENSION/TEXT/MTEXT/HATCH/INSERT entities
-- Keep: LINE, LWPOLYLINE, POLYLINE, ARC, CIRCLE (walls, stairs, doors, windows)
-- Output: Clean DWG via ODA File Converter (DXF→DWG, free, no AutoCAD needed)
-- Phase 1: Digital DWG only (80% of jobs)
-- Phase 2: Scanned blueprint AI vision engine (20%, later)
-
-Start with folder structure, then same slow build approach as procalcs-bom.
+**PDF-to-CAD spec updated with Richard's feedback:**
+- Interior doors: KEEP (block references, not just arcs)
+- Ventilation appliances: KEEP range hoods + dryers
+- Full designer workflow documented
+- Wrightsoft performance context (why cleanup is mandatory)
+- Smart INSERT Filter strategy section added
 
 ### GitHub
 https://github.com/tplatania/ProCalcs-HVAC-Software (branch: main)
