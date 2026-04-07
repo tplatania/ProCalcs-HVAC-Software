@@ -1,0 +1,103 @@
+/* global.css — ProCalcs BOM design tokens and base styles */
+
+/* ================================
+   Design Tokens
+   ================================ */
+:root {
+  /* Brand */
+  --color-primary:      #D97706;   /* ProCalcs amber/gold */
+  --color-primary-dark: #B45309;
+  --color-primary-light:#FEF3C7;
+
+  /* Surface */
+  --color-dark:         #1E293B;   /* ProCalcs dark */
+  --color-dark-mid:     #334155;
+  --color-dark-light:   #475569;
+
+  /* Neutral */
+  --color-surface:      #F8FAFC;
+  --color-border:       #E2E8F0;
+  --color-border-dark:  #CBD5E1;
+
+  /* Text */
+  --color-text:         #1E293B;
+  --color-text-muted:   #64748B;
+  --color-text-light:   #94A3B8;
+
+  /* Status */
+  --color-success:      #10B981;
+  --color-success-light:#D1FAE5;
+  --color-error:        #EF4444;
+  --color-error-light:  #FEE2E2;
+  --color-warning:      #F59E0B;
+  --color-warning-light:#FEF3C7;
+  --color-info:         #3B82F6;
+  --color-info-light:   #DBEAFE;
+
+  /* Typography */
+  --font-sans:  'DM Sans', system-ui, sans-serif;
+  --font-mono:  'DM Mono', 'Courier New', monospace;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+  /* Transitions */
+  --transition: 160ms ease;
+}
+
+/* ================================
+   Base Reset
+   ================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { color: var(--color-primary-dark); }
+
+button { cursor: pointer; font-family: var(--font-sans); }
+
+input, select, textarea {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+}
+
+/* ================================
+   Utility Classes
+   ================================ */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
+}
+
+.truncate {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
