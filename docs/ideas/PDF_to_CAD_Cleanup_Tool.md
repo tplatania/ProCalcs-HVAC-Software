@@ -39,20 +39,31 @@ Based on the team's experience, incoming PDFs fall into two categories:
 
 ### 80% — Digital PDFs (from architect's CAD software)
 
-When a digital PDF (AutoCAD, Revit, Chief Architect) is converted to DXF,
-every element has a distinct entity type in the file structure:
+**Confirmed by design team:** When PDFs are converted to DXF/DWG, ALL elements
+land on ONE layer regardless of whether the original PDF had layers. This means
+layer-based filtering is useless — which is exactly why designers have to manually
+delete element by element today.
 
-| Element | DXF Entity Type |
-|---|---|
-| Walls, room outlines | LINE, POLYLINE, LWPOLYLINE |
-| Dimensions | DIMENSION |
-| Text labels, tags | TEXT, MTEXT |
-| Furniture, symbols | INSERT (block references) |
-| Hatch patterns | HATCH |
+However, even with everything on one layer, the DXF file internally knows what
+each object IS via its entity type. This is what our tool exploits:
+
+| Element | DXF Entity Type | Action |
+|---|---|---|
+| Walls, room outlines | LINE, LWPOLYLINE, POLYLINE | ✅ Keep |
+| Door/window openings | ARC | ✅ Keep |
+| Columns, round features | CIRCLE | ✅ Keep |
+| Dimension strings | DIMENSION | ❌ Strip |
+| Text labels, room tags | TEXT, MTEXT | ❌ Strip |
+| Furniture, fixtures, symbols | INSERT (block references) | ❌ Strip |
+| Hatch/fill patterns | HATCH | ❌ Strip |
+
+**The one-layer problem does not affect our approach** — entity types always
+exist regardless of layer structure. Python reads each object, checks its type,
+keeps it or deletes it. Output is a clean single-layer DXF with only wall geometry.
 
 **Solution:** Python reads the DXF, keeps only geometry entity types
-(LINE, POLYLINE, ARC, CIRCLE), strips everything else, outputs clean file.
-High accuracy. Fast. Fully automatable.
+(LINE, LWPOLYLINE, POLYLINE, ARC, CIRCLE), strips everything else, outputs
+clean file. High accuracy. Fast. Fully automatable. No layer dependency.
 
 ### 20% — Scanned or photographed blueprints
 
