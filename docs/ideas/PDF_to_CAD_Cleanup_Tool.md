@@ -100,21 +100,31 @@ Designer downloads → imports to Wrightsoft → sets scale → traces walls
 
 ---
 
-## What Gets Stripped (Digital PDFs)
+## What Gets Kept (Confirmed by Design Team)
 
-- All DIMENSION entities
-- All TEXT and MTEXT entities (labels, tags, room names, notes)
-- All INSERT entities (furniture, symbols, fixtures, north arrow)
-- All HATCH entities (fill patterns)
-- All POINT entities
-- All SPLINE entities not part of wall geometry
+| Element | DXF Entity Type | Reason |
+|---|---|---|
+| Walls, room outlines | LINE, LWPOLYLINE, POLYLINE | Primary drawing surface |
+| Stairs | LINE, LWPOLYLINE | Reference points for room sizing |
+| Door swings | ARC | Spatial reference for openings |
+| Window openings | LINE | Wall break reference |
+| Columns, curved walls | CIRCLE, ARC | Structural geometry |
 
-## What Gets Kept
+**Key insight:** Stairs, doors, and windows are all drawn as geometric entities
+in DXF — the same types as walls. They are kept automatically by the
+entity-type filter with zero extra logic required.
 
-- LINE entities (walls, doors, windows)
-- LWPOLYLINE / POLYLINE entities (room outlines)
-- ARC entities (curved walls, arched openings)
-- CIRCLE entities (columns, round features)
+## What Gets Stripped
+
+| Element | DXF Entity Type |
+|---|---|
+| Dimension strings | DIMENSION |
+| Text labels, room tags, notes | TEXT, MTEXT |
+| Furniture, fixtures, appliances | INSERT (block references) |
+| Electrical symbols | INSERT (block references) |
+| Hatch / fill patterns | HATCH |
+| Title blocks | TEXT + INSERT |
+| North arrows, scale bars | INSERT |
 
 ---
 
