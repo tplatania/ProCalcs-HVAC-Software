@@ -176,15 +176,63 @@ Build order recommendation:
 
 ---
 
-## Open Questions (confirm with design team)
+## Confirmed Answers — Designer Team (April 2026)
 
-1. What CAD software do designers use to do the initial PDF→DXF conversion
-   before cleanup? (Adobe, AutoCAD, online tool?) — this may be automatable too
-2. Do any builders send DXF/DWG directly? If so, the PDF conversion step
-   is skippable entirely
-3. Are there specific element types they always keep beyond walls?
-   (e.g., always keep stairs, always keep exterior doors)
-4. Do they need layers preserved, or is a single-layer clean DXF acceptable?
+1. **What does cleanup mean?** Remove title blocks, dimension lines, notes,
+   furniture, electrical symbols — everything that isn't wall geometry
+2. **Output format needed?** DWG — imported into Wrightsoft as a plan background
+3. **PDF types?** Both digital/vector (80%) and scanned/photographed (20%).
+   Scanned drawings double the difficulty and manual work time.
+4. **What is background used for?** Tracing layer — designers retrace wall lines
+   over it in Wrightsoft for their duct design
+5. **Conversion tool?** AutoCAD — designers convert PDF→DWG in AutoCAD first,
+   then our tool handles the cleanup
+
+---
+
+## Critical Technical Note — DWG Output Format
+
+The output must be **DWG** (AutoCAD's proprietary format), not DXF.
+
+`ezdxf` (our Python library) reads/writes DXF natively but cannot write DWG.
+
+**Solution: ODA File Converter**
+- Free command-line tool from the Open Design Alliance
+- Converts DXF → DWG programmatically, no AutoCAD license on the server
+- Fully automatable — runs silently in the processing pipeline
+
+**Full processing pipeline:**
+```
+Designer uploads DWG
+    ↓
+Server reads DWG → converts to DXF internally (ezdxf)
+    ↓
+Python strips all non-geometry entities
+    ↓
+Clean DXF written to disk
+    ↓
+ODA Converter: DXF → DWG
+    ↓
+Designer downloads clean DWG — ready for Wrightsoft
+```
+
+Designer uploads DWG, downloads DWG. Never sees DXF at all.
+
+---
+
+## Phase Plan (Updated)
+
+**Phase 1 — Digital DWG cleanup (BUILD NOW)**
+- Accept DWG upload
+- Strip dimensions, text, furniture, symbols via entity-type filtering
+- Output clean DWG via ODA Converter
+- Saves 30-60 min per job on 80% of all incoming work
+
+**Phase 2 — Scanned blueprint engine (LATER)**
+- AI vision (Claude) analyzes scanned image
+- Traces wall geometry from pixel noise
+- Outputs approximated DWG
+- Complex, never perfect, but dramatically reduces manual work on the 20%
 
 ---
 
