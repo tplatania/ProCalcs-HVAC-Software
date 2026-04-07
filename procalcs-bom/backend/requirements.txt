@@ -1,0 +1,20 @@
+# ProCalcs BOM — Python dependencies
+
+# Web framework
+flask==3.1.0
+flask-cors==5.0.0
+
+# WSGI server (production)
+gunicorn==23.0.0
+
+# Anthropic AI
+anthropic==0.40.0
+
+# Google Cloud
+google-cloud-firestore==2.19.0
+
+# Environment
+python-dotenv==1.0.1
+
+# Utilities
+python-dateutil==2.9.0
