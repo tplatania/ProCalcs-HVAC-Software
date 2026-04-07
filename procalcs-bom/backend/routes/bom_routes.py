@@ -2,17 +2,20 @@
 bom_routes.py — BOM generation endpoint
 Gerald calls POST /api/v1/bom/generate with job design data.
 Returns a complete, client-profiled Bill of Materials.
+Follows ProCalcs Design Standards v2.0
 """
 
 import logging
 from flask import Blueprint, jsonify, request
+from services.bom_service import generate
+from utils.validators import validate_bom_request
 
 logger = logging.getLogger('procalcs_bom')
 bom_bp = Blueprint('bom', __name__)
 
 
 # ===============================
-# Routes — Placeholder
+# POST — Generate BOM
 # ===============================
 
 @bom_bp.route('/generate', methods=['POST'])
@@ -20,53 +23,63 @@ def generate_bom():
     """
     Generate a BOM from completed job design data.
 
-    Expected request body:
+    Request body:
     {
         "client_id": "beazer-001",
         "job_id": "job-12345",
+        "output_mode": "full",   (optional — defaults to client profile setting)
         "design_data": {
             "duct_runs": [...],
             "fittings": [...],
             "equipment": [...],
             "registers": [...],
-            "building": {...}
+            "building": {
+                "type": "single_level",
+                "duct_location": "attic"
+            }
         }
     }
-
-    Returns structured BOM JSON with client profile applied.
-    TODO: implement AI engine and profile lookup.
     """
     try:
         body = request.get_json(silent=True)
-        if not body:
+
+        # Validate input
+        errors = validate_bom_request(body)
+        if errors:
             return jsonify({
                 "success": False,
                 "data": None,
-                "error": "Request body is required."
+                "error": " | ".join(errors)
             }), 400
 
-        client_id  = body.get('client_id', '')
-        job_id     = body.get('job_id', '')
+        client_id   = body.get('client_id', '').strip()
+        job_id      = body.get('job_id', '').strip()
         design_data = body.get('design_data', {})
+        output_mode = body.get('output_mode')
 
-        if not client_id or not job_id or not design_data:
-            return jsonify({
-                "success": False,
-                "data": None,
-                "error": "client_id, job_id, and design_data are all required."
-            }), 400
+        logger.info("BOM requested — client: %s  job: %s  mode: %s",
+                    client_id, job_id, output_mode or 'profile default')
 
-        # TODO: call bom_service.generate(client_id, job_id, design_data)
-        logger.info("BOM generation requested for client %s job %s", client_id, job_id)
+        bom = generate(client_id, job_id, design_data, output_mode)
 
+        return jsonify({"success": True, "data": bom, "error": None}), 200
+
+    except ValueError as e:
+        # Missing profile or bad input
+        return jsonify({"success": False, "data": None, "error": str(e)}), 404
+
+    except RuntimeError as e:
+        # AI failure or processing error
+        logger.error("BOM generation runtime error for job %s: %s",
+                     body.get('job_id', 'unknown') if body else 'unknown', e)
         return jsonify({
-            "success": True,
-            "data": {"message": "BOM engine not yet implemented."},
-            "error": None
-        }), 200
+            "success": False,
+            "data": None,
+            "error": "BOM generation failed. Please try again."
+        }), 500
 
     except Exception as e:
-        logger.error("BOM generation failed for job %s: %s", body.get('job_id', 'unknown'), e)
+        logger.error("Unexpected error in generate_bom: %s", e)
         return jsonify({
             "success": False,
             "data": None,
