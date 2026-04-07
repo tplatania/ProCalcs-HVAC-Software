@@ -1,5 +1,5 @@
 # HANDOFF — START HERE
-## Last Updated: April 7, 2026 by Claude Sonnet 4.6
+## Last Updated: April 7, 2026 by Claude Sonnet 4.6 — End of Session 2
 ## For the next Claude chat continuing this project
 
 ---
@@ -10,6 +10,10 @@ You are continuing work on ProCalcs HVAC Software. **ROADMAP HAS CHANGED — REA
 **Phase 1 (current build target): AI-Powered BOM with Contractor Intelligence Profiles**
 The Validator has been deprioritized. It is a distant project. The BOM is what we are building first.
 See: docs\ideas\AI_Powered_BOM_Contractor_Profiles.md — full concept document.
+
+**Also in active development: PDF-to-CAD Cleanup Tool**
+See: docs\ideas\PDF_to_CAD_Cleanup_Tool.md — full confirmed spec.
+Next session task: set up procalcs-pdf-cleaner folder structure in the repo.
 
 Tom is the creative director. You are the architect and builder. Tom is NOT a coder.
 
@@ -89,3 +93,46 @@ ACCA is working with DOE to build a shared Manual J calculation engine.
 ## CONTACT AT ACCA
 Wesley R. Davis, Director of Technical Services
 wes.davis@acca.org | (703) 824-8847
+
+## SESSION 2 SUMMARY — April 7, 2026
+
+### What Was Built This Session
+
+**procalcs-bom — Full backend and frontend built and committed:**
+- Flask app factory, centralized config, startup validation
+- ClientProfile data model with full Firestore serialization
+- profile_service.py — Firestore CRUD (get/create/update/delete)
+- bom_service.py — AI engine (Claude API) + pricing logic + output formatter
+- validators.py — input validation for profiles and BOM requests
+- 18-test pytest suite covering validators, model roundtrip, pricing math
+- React frontend: Layout, Button, StatusBadge, Spinner components
+- ProfilesPage — card grid with empty state, delete confirm
+- ProfileDetailPage — full create/edit form with all sections
+- apiFetch utility, useProfiles custom hook
+
+**docs/ideas/ — Three concept docs added:**
+- AI_Powered_BOM_Contractor_Profiles.md (status: ACTIVE Phase 1)
+- Wrightsoft_Default_Template_Parsed.md (RUT file analysis)
+- PDF_to_CAD_Cleanup_Tool.md (status: ACTIVE, high priority)
+
+**MASTER_IDEAS.md updated** with ideas #76 (BOM) and #77 (PDF cleaner)
+
+**Gerald handoff doc** written at docs/GERALD_HANDOFF_BOM.md
+
+### What To Build Next Session
+
+**procalcs-pdf-cleaner** — New subfolder in the repo, same ecosystem.
+
+Confirmed spec:
+- Input: DWG file (designer uploads after AutoCAD PDF→DWG conversion)
+- Process: ezdxf reads DWG, strips DIMENSION/TEXT/MTEXT/HATCH/INSERT entities
+- Keep: LINE, LWPOLYLINE, POLYLINE, ARC, CIRCLE (walls, stairs, doors, windows)
+- Output: Clean DWG via ODA File Converter (DXF→DWG, free, no AutoCAD needed)
+- Phase 1: Digital DWG only (80% of jobs)
+- Phase 2: Scanned blueprint AI vision engine (20%, later)
+
+Start with folder structure, then same slow build approach as procalcs-bom.
+
+### GitHub
+https://github.com/tplatania/ProCalcs-HVAC-Software (branch: main)
+All work lives in D:\ProCalcs_HVAC_Software\
