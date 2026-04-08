@@ -96,3 +96,34 @@ The `mockups/` monorepo was retired from the `ProCalcs-HVAC-Software` parent rep
 - Initial user testing on the Flask frontends directly at `procalcs-hvac-bom` / `procalcs-hvac-cleaner` URLs, rather than via the (now retired) Designer Desktop shell
 - `.rup` parsing experiments on the new `experiments/rup-parsing` branch — Wrightsoft Right-Suite Universal load data extraction
 
+---
+
+## 🔄 Recovered — 08-04-2026 (Session 3)
+
+The earlier retirement killed the Designer Desktop staging by accident. The prior session had built the `procalcs-hvac-api` Cloud Run image from *inside* `mockups/`, which was supposed to be UI-component-reference-only. Deleting the directory took the demo surface with it.
+
+Recovered as a standalone app inside the parent repo: **`procalcs-designer/`** (parallel to `procalcs-bom/` and `procalcs-pdf-cleaner/`).
+
+**Architecture** — decoupled from `mockups/` entirely:
+- React 19 + Vite 7 + wouter + TanStack Query SPA, copy-assembled from the pristine mockups snapshot at `C:\Users\ermil\projects\mockups\` (HEAD `cdb8509`) — pages, components (55 shadcn/ui), hooks, and styles copied verbatim once; no build-time dependency on `mockups/`.
+- Thin Express 5 adapter (`server/`) that flattens/unflattens the nested Python `ClientProfile` schema to the flat camelCase shape the SPA expects, and computes a dashboard summary on the fly (there is no `/dashboard/summary` endpoint on Flask — the prior session persisted it in Cloud SQL, which we dropped).
+- Multi-stage `Dockerfile`: Node 20 builder → Vite SPA build + esbuild server bundle → Alpine runtime serving both from a single process on `:8080`.
+- **No Cloud SQL, no Drizzle, no Secret Manager entries, no pnpm workspace/catalog protocols**. Straight `npm install`. Windows-friendly.
+- Hardcoded upstream URLs in `server/config.ts` default to the two surviving Cloud Run services; env vars override for local dev.
+
+**Decoupling verified:** ran `mv C:\Users\ermil\projects\mockups C:\Users\ermil\projects\mockups.hidden && rm -rf dist dist-server && npm run build` — build succeeded with identical 599 KB JS output. `mockups/` can now be deleted safely at any time without breaking the parent repo.
+
+**Deployed:** `gcloud run deploy procalcs-hvac-api --source . --region us-east1 --project psychic-medley-469413-r3 --allow-unauthenticated --port 8080`. Cloud Run reused the original project-number hash on re-create — the URL is bit-for-bit the same as the deleted one: `https://procalcs-hvac-api-69864992834.us-east1.run.app`.
+
+**Smoke tests (all 200 / expected shape):**
+- `GET /` — SPA shell
+- `GET /api/healthz` — returns upstream URLs + `status: healthy`
+- `GET /api/client-profiles` — proxies to Flask `/api/v1/profiles/`, unwraps envelope, flattens; returns `[]` currently (empty Firestore)
+- `GET /api/dashboard/summary` — computed client-side, returns `{totalProfiles: 0, ...}`
+- `GET /profiles` — SPA client-side fallback to `index.html` via Express 5 regex route (`^(?!\/api(?:\/|$)).*$`)
+- `GET /api/nonsense` — returns `{"error":"API route not found"}`, does NOT fall through to SPA
+- Survivor checks: `procalcs-hvac-bom` and `procalcs-hvac-cleaner` `/health` both still 200
+
+**Known limitations (documented in `src/types/procalcs.ts`):** the SPA's `brandColor`, `logoUrl`, `supplierContact`, `supplierEmail`, and `markupTiers` fields don't exist on the Python side and are dropped on save. `defaultMarkupPercent` maps only to `markup.equipment_pct`. Acceptable for the Richard/Tom demo; revisit later by extending the Python `ClientProfile` or adding a persistence layer.
+
+
