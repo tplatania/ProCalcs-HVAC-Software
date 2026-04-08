@@ -88,11 +88,40 @@ def _build_ai_prompt(design_data: dict, profile: ClientProfile) -> str:
     Instructs AI to return ONLY quantities — no pricing, no math.
     Pricing is applied by Python after the AI responds.
     """
-    building = design_data.get('building', {})
+    building  = design_data.get('building', {})
     duct_runs = design_data.get('duct_runs', [])
     fittings  = design_data.get('fittings', [])
     equipment = design_data.get('equipment', [])
     registers = design_data.get('registers', [])
+    rooms     = design_data.get('rooms', [])
+    raw_ctx   = design_data.get('raw_rup_context', '')
+
+    # Hybrid fallback section — included when raw_rup_context is present
+    # (i.e. the design_data came from the .rup parser in procalcs-bom/
+    # backend/utils/rup_parser.py, which leaves duct_runs/fittings/registers
+    # empty and dumps the narrative text here). The AI is instructed to
+    # read this text to estimate quantities that couldn't be extracted
+    # structurally. Harmless when empty — the section is skipped entirely.
+    if raw_ctx:
+        fallback_block = (
+            "\n\nRUP FILE CONTEXT (structured extraction was partial — "
+            "read this to infer duct linear footage by size, fitting "
+            "quantities by type, and register counts per room when the "
+            "structured arrays above are empty or sparse):\n"
+            "---\n"
+            f"{raw_ctx}\n"
+            "---\n"
+        )
+    else:
+        fallback_block = ""
+
+    rooms_block = ""
+    if rooms:
+        room_lines = "\n".join(
+            f"  - {r.get('name', '?')} (assigned to {r.get('ahu', '?')})"
+            for r in rooms[:60]
+        )
+        rooms_block = f"\n\nRooms ({len(rooms)} total):\n{room_lines}"
 
     prompt = """You are an expert HVAC materials estimator for ProCalcs LLC.
 Analyze this completed HVAC design and return a precise materials list.
@@ -107,7 +136,7 @@ Fittings: {fittings}
 
 Equipment: {equipment}
 
-Registers/Grilles: {registers}
+Registers/Grilles: {registers}{rooms_block}{fallback_block}
 
 CLIENT PREFERENCES:
 Preferred mastic brand: {mastic_brand}
@@ -148,6 +177,8 @@ For hanger straps: approximately 1 per 4-5 LF of horizontal duct run.
         fittings=json.dumps(fittings, indent=2),
         equipment=json.dumps(equipment, indent=2),
         registers=json.dumps(registers, indent=2),
+        rooms_block=rooms_block,
+        fallback_block=fallback_block,
         mastic_brand=profile.brands.mastic_brand or 'standard',
         tape_brand=profile.brands.tape_brand or 'standard',
         flex_brand=profile.brands.flex_duct_brand or 'standard',

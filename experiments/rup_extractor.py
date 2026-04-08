@@ -1,5 +1,18 @@
 """
-rup_extractor.py
+rup_extractor.py — SUPERSEDED by procalcs-bom/backend/utils/rup_parser.py
+
+Kept for history. The canonical parser used by the production BOM pipeline
+lives in the procalcs-bom package and produces a structured design_data
+dict matching the BOM engine's contract (duct_runs / fittings / equipment /
+registers / building / raw_rup_context). See:
+    - procalcs-bom/backend/utils/rup_parser.py
+    - procalcs-bom/backend/tests/test_rup_pipeline.py
+    - docs/GERALD_HANDOFF_RUP_UPLOAD.md  (the driving spec)
+
+This prototype returns narrative text rather than structured data. Its
+primitives (extract_utf16_strings, parse_sections with BEG/END handling,
+NON_ROOMS whitelist) were ported into the canonical parser.
+
 Extracts HVAC load data from Wrightsoft Right-Suite Universal .rup files
 and returns clean, LLM-ready text.
 
