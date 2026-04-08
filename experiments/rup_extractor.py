@@ -17,6 +17,19 @@ from pathlib import Path
 from collections import defaultdict
 
 
+# Force UTF-8 on stdout so the '→' in Room→AHU assignments doesn't crash on
+# Windows consoles (cp1252). No-op on Unix and on Windows consoles that are
+# already UTF-8. Falls back silently if the stream can't be reconfigured.
+def _ensure_utf8_stdout() -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
+_ensure_utf8_stdout()
+
+
 # ── Section types that contain HVAC load/design data worth keeping ──────────
 LOAD_SECTIONS = {
     "JOBINFOK", "JOBINFO",          # project + contractor info
@@ -65,9 +78,16 @@ def extract_utf16_strings(data: bytes, min_len: int = 4) -> list[str]:
 
 
 def parse_sections(text: str) -> dict[str, list[str]]:
-    """Parse !BEG=SECTION ... !END=SECTION blocks into a dict."""
+    """Parse !BEG=SECTION ... !END=SECTION blocks into a dict.
+
+    Balances the BEG/END pair by name so the body of one section can't bleed
+    into the next when the lazy match otherwise over-reaches. Example of the
+    previous bug: FLCLTY[1] captured '!BEG=RHPANEL\\nFS-STAPLE\\nBENDSUP'
+    because !END=\\S+ accepted any END marker.
+    """
     sections = defaultdict(list)
-    pattern = re.compile(r"!BEG=(\S+)\s*(.*?)\s*!END=\S+", re.DOTALL)
+    # Backreference \1 forces !END= to match the same name as its !BEG=.
+    pattern = re.compile(r"!BEG=(\S+)\s*(.*?)\s*!END=\1", re.DOTALL)
     for match in pattern.finditer(text):
         name = match.group(1)
         body = match.group(2).strip()
@@ -126,13 +146,35 @@ def extract_equipment(text: str) -> str:
     # Room-to-AHU assignments
     room_ahu = re.findall(r"([A-Z][A-Z0-9 \-]+?)\n(AHU - \d+)", text)
     if room_ahu:
-        lines.append("\nRoom → AHU assignments:")
+        # Drop false positives — the regex catches section markers and stray
+        # AHU labels that live adjacent to real room names in the binary.
+        NON_ROOMS = {
+            "ECDUCTSYS", "TDUCTSYS", "DUCTRUN", "DUCTLOC", "SJD",
+            "SURFACE", "WALLSURF", "CEILSURF", "GLAZSURF", "DOORSURF",
+            "DLINFO", "REDI", "REDIST", "RGAREA", "RptInfo", "COMPONTY",
+            "CConstruction", "CConsMat", "CConsLayer", "CFSProp",
+            "RHPANEL", "WALLINFO", "WALLTYINFO", "RB", "TDINFO", "ZIGI",
+            "PartLinkInfo", "DetailMethod", "INFVENT", "VNTREQ", "VENTEQ",
+            "FLCLTY", "CEILTY", "WALLTY", "GLAZTY", "JOBINFO", "JOBINFOK",
+        }
+        assignments = []
         seen = set()
         for room, ahu in room_ahu:
-            key = (room.strip(), ahu.strip())
-            if key not in seen:
-                seen.add(key)
-                lines.append(f"  {room.strip()} → {ahu.strip()}")
+            name = room.strip()
+            # Drop known section markers and anything that looks like another
+            # AHU label ("AHU - 1" → "AHU - 1" is meaningless).
+            if name in NON_ROOMS or name.startswith("AHU"):
+                continue
+            key = (name, ahu.strip())
+            if key in seen:
+                continue
+            seen.add(key)
+            assignments.append((name, ahu.strip()))
+
+        if assignments:
+            lines.append("\nRoom → AHU assignments:")
+            for room, ahu in assignments:
+                lines.append(f"  {room} → {ahu}")
 
     return "\n".join(lines)
 
