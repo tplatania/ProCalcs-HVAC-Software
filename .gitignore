@@ -18,3 +18,9 @@ desktop.ini
 *.tmp
 *.bak
 ~$*
+
+# mockups/ is its own git repository (Designer Desktop staging code).
+# The parent repo used to track it as a broken submodule gitlink; it's now
+# a stand-alone nested repo and should not appear in `git status`.
+mockups/
+
