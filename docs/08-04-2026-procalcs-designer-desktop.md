@@ -71,3 +71,28 @@ Compared bundled-SPA vs standalone-static-container vs GCS+LB for serving the Re
 - Add a `favicon.svg` to `artifacts/bom-dashboard/public/` — currently 404s in the browser console (cosmetic, 10 minutes)
 
 ⚠️ Blockers: None
+
+---
+
+## ⚰️ Retired — 08-04-2026 (later same day)
+
+The `mockups/` monorepo was retired from the `ProCalcs-HVAC-Software` parent repo. It had grown beyond its "bucket for UI mockups" scope into a fully wired Node/Express adapter + React/Vite dashboard, and we decided to keep the actual apps (`procalcs-bom`, `procalcs-pdf-cleaner`) standalone instead.
+
+**What was removed:**
+1. `mockups/` directory contents — 125 files deleted locally. The user has a local backup snapshot; no GitHub archive was needed.
+2. `procalcs-hvac-api` Cloud Run service (us-east1) — torn down via `gcloud run services delete`.
+3. `procalcs-hvac-pg` Cloud SQL Postgres instance — torn down via `gcloud sql instances delete` (30-day soft-delete window in case of regret).
+4. `procalcs-hvac-database-url` + `procalcs-hvac-database-url-tcp` Secret Manager entries — torn down.
+
+**What stayed live and healthy:**
+- `procalcs-hvac-bom` Cloud Run service — still serving `GET /health` 200 from `https://procalcs-hvac-bom-69864992834.us-east1.run.app`
+- `procalcs-hvac-cleaner` Cloud Run service — still serving `GET /health` 200 from `https://procalcs-hvac-cleaner-69864992834.us-east1.run.app`
+- `procalcs-hvac-anthropic-key` secret (consumed by procalcs-hvac-bom)
+- `procalcs-hvac-flask-secret` secret (consumed by procalcs-hvac-cleaner)
+
+**Dependency audit before deletion:** exhaustive grep across the parent repo confirmed that `procalcs-bom`, `procalcs-pdf-cleaner`, `experiments/`, `shared/`, `phase1_validator/`, `changelog/`, `HANDOFF.md`, `README.md`, and `PROJECT_RULES.md` had **zero code references** to anything inside `mockups/`. The only non-code hits were this doc (narrative history) and the `.gitignore` rule keeping git quiet about the nested repo. Nothing broke.
+
+**Next steps (superseding the list above):**
+- Initial user testing on the Flask frontends directly at `procalcs-hvac-bom` / `procalcs-hvac-cleaner` URLs, rather than via the (now retired) Designer Desktop shell
+- `.rup` parsing experiments on the new `experiments/rup-parsing` branch — Wrightsoft Right-Suite Universal load data extraction
+
