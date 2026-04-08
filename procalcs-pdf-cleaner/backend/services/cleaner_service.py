@@ -12,6 +12,7 @@ Entity filtering rules:
 """
 
 import os
+import uuid
 import logging
 import ezdxf
 
@@ -135,7 +136,7 @@ def clean_dxf(input_path, output_path):
     }
 
 
-def clean_dwg_file(upload_path):
+def clean_dwg_file(upload_path, job_id=None):
     """
     Main entry point called by the route.
     Handles the full pipeline: DWG→DXF→clean→DXF→DWG
@@ -146,16 +147,23 @@ def clean_dwg_file(upload_path):
 
     Args:
         upload_path: Path to the uploaded DWG or DXF file
+        job_id: Optional job identifier. The cleaned output is stored at
+            ``temp/<job_id>.dxf`` so it can be downloaded later by id.
+            A new UUID is generated if not supplied.
 
     Returns:
-        dict with success, output_path, output_filename, and stats
+        dict with success, output_path, output_filename, job_id, and stats
     """
     filename = os.path.basename(upload_path)
     name, ext = os.path.splitext(filename)
     ext_lower = ext.lower()
 
+    if not job_id:
+        job_id = uuid.uuid4().hex
+
     clean_name = f"{name}_clean.dxf"
-    output_path = os.path.join(Config.TEMP_FOLDER, clean_name)
+    # Persist by job id so the api-server can stream it back later.
+    output_path = os.path.join(Config.TEMP_FOLDER, f"{job_id}.dxf")
 
     if ext_lower == '.dxf':
         # Direct DXF processing
@@ -183,5 +191,6 @@ def clean_dwg_file(upload_path):
 
     if result.get('success'):
         result['output_filename'] = clean_name
+        result['job_id'] = job_id
 
     return result

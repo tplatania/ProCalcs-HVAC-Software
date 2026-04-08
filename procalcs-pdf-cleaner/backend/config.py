@@ -57,8 +57,13 @@ class Config:
         if cls.is_production() and cls.SECRET_KEY == 'dev-fallback-change-me':
             errors.append('SECRET_KEY must be set in production')
 
+        # ODA is only required for DWG input. DXF processing works without it.
+        # Phase 1 of the staging deployment runs DXF-only, so ODA is a warning,
+        # not an error. Set ODA_CONVERTER_PATH later when DWG roundtrip is wired.
         if cls.is_production() and not cls.ODA_CONVERTER_PATH:
-            errors.append('ODA_CONVERTER_PATH required in production')
+            logger.warning(
+                'ODA_CONVERTER_PATH not set — DWG input disabled, DXF still works'
+            )
 
         if cls.ODA_CONVERTER_PATH and not os.path.exists(cls.ODA_CONVERTER_PATH):
             logger.warning(
