@@ -25,9 +25,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// JSON body parser — skipped for /api/pdf-cleanup so multipart passes through.
+// JSON body parser — skipped for /api/pdf-cleanup and /api/bom/parse-rup
+// so multipart / raw-binary uploads pass through to the backend untouched.
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/pdf-cleanup")) return next();
+  if (req.path === "/api/bom/parse-rup") return next();
   express.json({ limit: "10mb" })(req, res, next);
 });
 
