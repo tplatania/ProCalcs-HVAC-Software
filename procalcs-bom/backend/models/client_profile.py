@@ -19,6 +19,8 @@ class SupplierInfo:
     """The distributor a client buys from and their pricing."""
     supplier_name: str = ""          # e.g. "Ferguson", "Winsupply"
     account_number: str = ""         # client's account number (optional)
+    contact_name: str = ""           # optional rep / point-of-contact
+    contact_email: str = ""          # optional contact email
     mastic_cost_per_gallon: float = 0.0
     tape_cost_per_roll: float = 0.0
     strapping_cost_per_roll: float = 0.0
@@ -26,6 +28,19 @@ class SupplierInfo:
     brush_cost_each: float = 0.0
     flex_duct_cost_per_foot: float = 0.0
     rect_duct_cost_per_sqft: float = 0.0
+
+
+@dataclass
+class MarkupTier:
+    """A tiered markup rule applied above the default markup.
+
+    Example: a "High Value" tier that applies 10% markup to line items
+    between $5,000 and $20,000, overriding the flat default.
+    """
+    label: str = ""
+    min_amount: float = 0.0
+    max_amount: Optional[float] = None   # None = unbounded (Infinity)
+    markup_percent: float = 0.0
 
 
 @dataclass
@@ -73,11 +88,16 @@ class ClientProfile:
     client_name: str = ""            # Display name e.g. "Beazer Homes"
     is_active: bool = True
 
+    # Branding (UI-only — consumed by Designer Desktop, never by bom_service)
+    brand_color: str = ""            # Hex color e.g. "#1e293b" for UI accent
+    logo_url: str = ""               # URL to the client's logo image
+
     # Profile components
     supplier: SupplierInfo = field(default_factory=SupplierInfo)
     markup: MarkupTiers = field(default_factory=MarkupTiers)
     brands: BrandPreferences = field(default_factory=BrandPreferences)
     part_name_overrides: list = field(default_factory=list)  # list of PartNameOverride
+    markup_tiers: list = field(default_factory=list)          # list of MarkupTier
 
     # Output preferences
     default_output_mode: str = "full"   # "full" | "materials_only" | "client_proposal" | "cost_estimate"
@@ -100,9 +120,13 @@ class ClientProfile:
             "client_id":           self.client_id,
             "client_name":         self.client_name,
             "is_active":           self.is_active,
+            "brand_color":         self.brand_color,
+            "logo_url":            self.logo_url,
             "supplier": {
                 "supplier_name":           self.supplier.supplier_name,
                 "account_number":          self.supplier.account_number,
+                "contact_name":            self.supplier.contact_name,
+                "contact_email":           self.supplier.contact_email,
                 "mastic_cost_per_gallon":  self.supplier.mastic_cost_per_gallon,
                 "tape_cost_per_roll":      self.supplier.tape_cost_per_roll,
                 "strapping_cost_per_roll": self.supplier.strapping_cost_per_roll,
@@ -117,6 +141,13 @@ class ClientProfile:
                 "consumables_pct": self.markup.consumables_pct,
                 "labor_pct":       self.markup.labor_pct,
             },
+            "markup_tiers": [
+                {"label":          t.label,
+                 "min_amount":     t.min_amount,
+                 "max_amount":     t.max_amount,
+                 "markup_percent": t.markup_percent}
+                for t in self.markup_tiers
+            ],
             "brands": {
                 "ac_brand":          self.brands.ac_brand,
                 "furnace_brand":     self.brands.furnace_brand,
@@ -146,6 +177,7 @@ class ClientProfile:
         markup_data   = data.get('markup', {})
         brands_data   = data.get('brands', {})
         overrides_raw = data.get('part_name_overrides', [])
+        tiers_raw     = data.get('markup_tiers', [])
 
         overrides = [
             PartNameOverride(
@@ -156,13 +188,27 @@ class ClientProfile:
             for o in overrides_raw
         ]
 
+        tiers = []
+        for t in tiers_raw:
+            max_val = t.get('max_amount')
+            tiers.append(MarkupTier(
+                label=t.get('label', ''),
+                min_amount=float(t.get('min_amount', 0.0) or 0.0),
+                max_amount=(float(max_val) if max_val is not None else None),
+                markup_percent=float(t.get('markup_percent', 0.0) or 0.0),
+            ))
+
         return ClientProfile(
             client_id=data.get('client_id', ''),
             client_name=data.get('client_name', ''),
             is_active=data.get('is_active', True),
+            brand_color=data.get('brand_color', ''),
+            logo_url=data.get('logo_url', ''),
             supplier=SupplierInfo(
                 supplier_name=supplier_data.get('supplier_name', ''),
                 account_number=supplier_data.get('account_number', ''),
+                contact_name=supplier_data.get('contact_name', ''),
+                contact_email=supplier_data.get('contact_email', ''),
                 mastic_cost_per_gallon=float(supplier_data.get('mastic_cost_per_gallon', 0.0)),
                 tape_cost_per_roll=float(supplier_data.get('tape_cost_per_roll', 0.0)),
                 strapping_cost_per_roll=float(supplier_data.get('strapping_cost_per_roll', 0.0)),
@@ -177,6 +223,7 @@ class ClientProfile:
                 consumables_pct=float(markup_data.get('consumables_pct', 0.0)),
                 labor_pct=float(markup_data.get('labor_pct', 0.0)),
             ),
+            markup_tiers=tiers,
             brands=BrandPreferences(
                 ac_brand=brands_data.get('ac_brand', ''),
                 furnace_brand=brands_data.get('furnace_brand', ''),

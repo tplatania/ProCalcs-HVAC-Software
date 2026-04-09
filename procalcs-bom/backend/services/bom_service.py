@@ -293,9 +293,17 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
 
         unit_cost   = _get_unit_cost(description, category, profile)
         markup_pct  = _get_markup_pct(category, profile)
+        # Compute totals from the unrounded arithmetic to avoid a
+        # compounding banker's-rounding error. Example:
+        #   2.0 * 18.50 * 1.25 = 46.25 exactly, but
+        #   round(18.50 * 1.25, 2) = 23.12 (banker's rounding to even),
+        #   and then round(2.0 * 23.12, 2) = 46.24 — one penny short.
+        # Display values get rounded for presentation; the total is
+        # rounded last from the full-precision product.
+        raw_unit_price = unit_cost * (1 + markup_pct / 100)
         total_cost  = round(quantity * unit_cost, 2)
-        unit_price  = round(unit_cost * (1 + markup_pct / 100), 2)
-        total_price = round(quantity * unit_price, 2)
+        unit_price  = round(raw_unit_price, 2)
+        total_price = round(quantity * raw_unit_price, 2)
 
         # Apply client part name override if one exists
         display_name = description

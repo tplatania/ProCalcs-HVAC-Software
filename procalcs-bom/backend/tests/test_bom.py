@@ -268,6 +268,51 @@ class TestClientProfileModel:
         assert profile.markup.equipment_pct == 0.0
         assert profile.part_name_overrides == []
         assert profile.is_active is True
+        # Extended fields default to empty/falsy
+        assert profile.brand_color == ''
+        assert profile.logo_url == ''
+        assert profile.supplier.contact_name == ''
+        assert profile.supplier.contact_email == ''
+        assert profile.markup_tiers == []
+
+    def test_extended_fields_round_trip(self):
+        """brand_color / logo_url / supplier.contact_* / markup_tiers
+        must survive a to_dict -> from_dict cycle. This is the invariant
+        the Designer Desktop SPA depends on to stop losing user input."""
+        from models.client_profile import MarkupTier
+
+        original = ClientProfile(
+            client_id="roundtrip-test",
+            client_name="Round Trip Test",
+            brand_color="#f97316",
+            logo_url="https://example.com/logo.png",
+            supplier=SupplierInfo(
+                supplier_name="Ferguson",
+                contact_name="Jane Doe",
+                contact_email="jane@ferguson.com",
+                mastic_cost_per_gallon=18.50,
+            ),
+            markup=MarkupTiers(equipment_pct=15.0, materials_pct=20.0),
+            markup_tiers=[
+                MarkupTier(label="High Value", min_amount=5000.0,
+                           max_amount=20000.0, markup_percent=10.0),
+                MarkupTier(label="Premium", min_amount=20000.0,
+                           max_amount=None, markup_percent=8.0),
+            ],
+        )
+        restored = ClientProfile.from_dict(original.to_dict())
+
+        assert restored.brand_color == "#f97316"
+        assert restored.logo_url == "https://example.com/logo.png"
+        assert restored.supplier.contact_name == "Jane Doe"
+        assert restored.supplier.contact_email == "jane@ferguson.com"
+        assert len(restored.markup_tiers) == 2
+        assert restored.markup_tiers[0].label == "High Value"
+        assert restored.markup_tiers[0].min_amount == 5000.0
+        assert restored.markup_tiers[0].max_amount == 20000.0
+        assert restored.markup_tiers[0].markup_percent == 10.0
+        # Unbounded upper tier
+        assert restored.markup_tiers[1].max_amount is None
 
 
 # ===============================
