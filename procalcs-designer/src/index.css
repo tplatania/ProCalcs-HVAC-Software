@@ -317,3 +317,51 @@
     inset: -1px;
   }
 }
+
+/* ============================================================================
+ * Print styles — hide app chrome so the BOM is the only thing on the page.
+ * Triggered by the browser's Print dialog from the BOM Output page "Print"
+ * button. Any element with the `no-print` class is also hidden.
+ * ============================================================================ */
+@media print {
+  /* Hide sidebar, header, footer, and anything explicitly marked no-print */
+  aside,
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Remove the scrollable main wrapper so the BOM flows naturally onto
+     multiple pages instead of being clipped to the viewport */
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body,
+  #root {
+    overflow: visible !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Tighten table rows and remove hover styles during print */
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  /* Cards should look like simple bordered boxes in print */
+  .border {
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+}
