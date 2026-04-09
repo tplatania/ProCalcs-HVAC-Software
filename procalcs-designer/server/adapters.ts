@@ -15,9 +15,13 @@ export interface PythonClientProfile {
   client_id?: string;
   client_name?: string;
   is_active?: boolean;
+  brand_color?: string;
+  logo_url?: string;
   supplier?: {
     supplier_name?: string;
     account_number?: string;
+    contact_name?: string;
+    contact_email?: string;
     mastic_cost_per_gallon?: number;
     tape_cost_per_roll?: number;
     strapping_cost_per_roll?: number;
@@ -32,6 +36,12 @@ export interface PythonClientProfile {
     consumables_pct?: number;
     labor_pct?: number;
   };
+  markup_tiers?: Array<{
+    label?: string;
+    min_amount?: number;
+    max_amount?: number | null;
+    markup_percent?: number;
+  }>;
   brands?: Record<string, string>;
   part_name_overrides?: Array<{
     standard_name?: string;
@@ -80,12 +90,17 @@ export function flattenProfile(py: PythonClientProfile): SpaClientProfile {
     name: py.client_name ?? "",
     isActive: py.is_active ?? true,
     supplierName: py.supplier?.supplier_name ?? "",
-    supplierContact: "",
-    supplierEmail: "",
-    brandColor: "#1e293b",
-    logoUrl: "",
+    supplierContact: py.supplier?.contact_name ?? "",
+    supplierEmail: py.supplier?.contact_email ?? "",
+    brandColor: py.brand_color || "#1e293b",
+    logoUrl: py.logo_url ?? "",
     defaultMarkupPercent: py.markup?.equipment_pct ?? 0,
-    markupTiers: [],
+    markupTiers: (py.markup_tiers ?? []).map((t) => ({
+      label: t.label ?? "",
+      minAmount: t.min_amount ?? 0,
+      maxAmount: t.max_amount ?? null,
+      markupPercent: t.markup_percent ?? 0,
+    })),
     partOverrides: (py.part_name_overrides ?? []).map((p) => ({
       standardName: p.standard_name ?? "",
       clientName: p.client_name ?? "",
@@ -99,7 +114,11 @@ export function flattenProfile(py: PythonClientProfile): SpaClientProfile {
 }
 
 // SPA → Python
-// Extra SPA-only fields (markupTiers, brandColor, etc.) are intentionally dropped.
+// Threads all SPA-side fields through to the Python model. Previously
+// dropped fields (brandColor, logoUrl, supplierContact, supplierEmail,
+// markupTiers) are now persisted thanks to the extended Python model in
+// procalcs-bom/backend/models/client_profile.py. Fields the SPA doesn't
+// touch are preserved from the `existing` record on update.
 // client_id is either provided explicitly (update) or derived from name (create).
 export function unflattenProfile(
   spa: Partial<SpaClientProfile>,
@@ -113,9 +132,13 @@ export function unflattenProfile(
     client_id: clientId,
     client_name: spa.name ?? existing?.client_name ?? "",
     is_active: spa.isActive ?? existing?.is_active ?? true,
+    brand_color: spa.brandColor ?? existing?.brand_color ?? "",
+    logo_url: spa.logoUrl ?? existing?.logo_url ?? "",
     supplier: {
       ...(existing?.supplier ?? {}),
       supplier_name: spa.supplierName ?? existing?.supplier?.supplier_name ?? "",
+      contact_name: spa.supplierContact ?? existing?.supplier?.contact_name ?? "",
+      contact_email: spa.supplierEmail ?? existing?.supplier?.contact_email ?? "",
     },
     markup: {
       equipment_pct: spa.defaultMarkupPercent ?? existing?.markup?.equipment_pct ?? 0,
@@ -123,6 +146,17 @@ export function unflattenProfile(
       consumables_pct: existing?.markup?.consumables_pct ?? 0,
       labor_pct: existing?.markup?.labor_pct ?? 0,
     },
+    markup_tiers: (spa.markupTiers ?? existing?.markup_tiers?.map((t) => ({
+      label: t.label ?? "",
+      minAmount: t.min_amount ?? 0,
+      maxAmount: t.max_amount ?? null,
+      markupPercent: t.markup_percent ?? 0,
+    })) ?? []).map((t) => ({
+      label: t.label ?? "",
+      min_amount: t.minAmount ?? 0,
+      max_amount: t.maxAmount ?? null,
+      markup_percent: t.markupPercent ?? 0,
+    })),
     brands: existing?.brands ?? {},
     part_name_overrides: (spa.partOverrides ?? []).map((p) => ({
       standard_name: p.standardName,
