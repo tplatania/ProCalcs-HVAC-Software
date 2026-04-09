@@ -269,39 +269,180 @@ collars mapped to Ferguson SKUs) to prove the override flow works.
 Full round-trip verified through the Designer Desktop adapter — the
 SPA-shape translation is clean.
 
+Project: Designer Desktop SPA — Phase C Wiring
+
+13. BOM Engine Page Becomes Real (`procalcs-designer/src/pages/bom-engine.tsx`)
+
+Problem: The BOM Engine page was a copy-assembled mock from the
+deleted `mockups/` directory. It had a hardcoded `MOCK_RESULT` constant
+pretending to walk a DWG→DXF→INSERT-Filter pipeline that never matched
+the actual backend. Zero real behavior.
+
+Solution: Rewrote the page as a real `.rup` upload + preview state
+machine — idle → parsing → parsed → error. The dropzone now accepts
+`.rup` files only, routes each drop through a new `useParseRup` React
+Query hook that POSTs multipart to `/api/bom/parse-rup`, and renders a
+green "Parse Complete" card with:
+- Equipment count, room count, total CFM, building type (4-column
+  stat grid)
+- Address + contractor + duct location + date metadata row
+- Scrollable right panel showing all extracted rooms with their
+  assigned AHUs
+- A prominent "Continue to BOM Output →" button that stashes the
+  parsed data in sessionStorage and navigates to `/bom-output`
+
+Kept the 4-step pipeline visual at the top of the page but relabeled
+the steps to match reality: Upload → Parse → Preview → Generate. The
+active/done highlighting is now driven by the real hook lifecycle
+instead of a fake setTimeout chain. Swapped the DWG/ODA info callout
+for copy explaining the hybrid extraction strategy (structured binary
+parse + AI fallback via `raw_rup_context`).
+
+Error handling: if the parser rejects the file (not Wrightsoft, bad
+version, corrupt), the page flips to an "error" state with the
+server-provided message and a "Try Another File" button.
+
+14. Adapter Proxy + Hooks for the BOM Pipeline
+
+Problem: The existing `bom.ts` proxy was a one-branch catch-all that
+forced `Content-Type: application/json` and JSON-stringified the body.
+Multipart `.rup` uploads would break at the `JSON.stringify(Buffer)`
+line. Also the SPA had no React Query hooks for the BOM endpoints — the
+page needed `useParseRup` and `useGenerateBom` to be written.
+
+Solution (three files, single focused commit):
+
+- `procalcs-designer/server/index.ts` — extended the JSON parser
+  bypass from `/api/pdf-cleanup` alone to also cover
+  `/api/bom/parse-rup`, so multipart bodies flow through untouched.
+- `procalcs-designer/server/routes/bom.ts` — split the catch-all into
+  two branches. `/parse-rup` now streams the raw multipart body + the
+  original Content-Type header to the Flask backend, mirroring the
+  undici `duplex: "half"` pattern from `server/routes/pdfCleanup.ts`.
+  Everything else (`/generate`, etc.) keeps the existing JSON
+  forwarding. Both branches forward the Flask envelope verbatim.
+- `procalcs-designer/src/lib/api-hooks.ts` — added TypeScript types
+  (`RupDesignData`, `BomLineItem`, `BomResponse`) and three new hooks:
+    - `useParseRup()` — POST FormData → `/api/bom/parse-rup`, returns
+      unwrapped design_data
+    - `useGenerateBom()` — POST JSON → `/api/bom/generate`, returns
+      unwrapped BomResponse
+    - `storeParsedRup` / `loadParsedRup` / `clearParsedRup` —
+      sessionStorage helpers for threading parsed data between the
+      BOM Engine and BOM Output pages (wouter has no built-in route
+      state, and sessionStorage has zero new deps + survives tab
+      reload + debuggable via DevTools)
+
+15. BOM Output Page Becomes Real (`procalcs-designer/src/pages/bom-output.tsx`)
+
+Problem: The BOM Output page was another copy-assembled mock. It had
+a 15-row `MOCK_BOM` array hardcoded with Beazer Homes fake data and a
+"Beazer Homes — Lot A7" metadata banner. Zero real backend calls.
+
+Solution: Rewrote the page as a four-state machine driven by
+sessionStorage + `useGenerateBom`:
+
+- **needs-input** — no parsed data in sessionStorage. Shows a card
+  directing the user to BOM Engine first.
+- **ready-to-generate** — parsed data present. Shows the parsed
+  summary banner (project, building, equipment count, room count), a
+  client profile picker (`useListClientProfiles`, defaults to
+  "procalcs-direct"), an output-mode picker (full / materials_only /
+  client_proposal / cost_estimate), and a big "Generate BOM" button.
+- **generating** — animated Sparkles icon + friendly copy explaining
+  the expected 10–20 second AI round trip (and up to 45 s on cold
+  start). The button disables while the mutation is pending.
+- **done** — the existing category-grouped table UI renders with real
+  `line_items` mapped from the Flask response. `BomResultView` is a
+  dedicated sub-component for clarity.
+
+Kept the existing visual skeleton intact (category summary cards,
+search + filter controls, expandable category tables, grand total
+card) — only the data source changed. A `mapLineItem` helper
+normalizes the Flask shape into the existing `BomLine` display type;
+unknown categories fall back to "consumable" so the 4-bucket UI
+doesn't break. Prices come from `unit_price`/`total_price` when
+available, `unit_cost`/`total_cost` for cost_estimate mode.
+
+Wired the previously-fake Print button to `window.print()` and the
+Export CSV button to a client-side blob + download trigger using the
+`job_id` as filename. Added a "Back to BOM Engine" button that clears
+sessionStorage and returns the user to step 1.
+
+Also added `@media print` rules to `src/index.css` — hides sidebar,
+header, footer, and any `.no-print` element; tightens tables with
+page-break hints; neutralizes hover shadows — so the print dialog
+produces a clean printable BOM instead of a clipped viewport.
+
+16. Live End-to-End Smoke Test — Real .rup → Real Priced BOM
+
+Deployed `procalcs-designer` to Cloud Run as revision
+`procalcs-hvac-api-00002-zx6`. Probed the full flow via curl:
+
+```
+$ curl -F file=@experiments/Enos\ Residence\ Load\ Calcs.rup \
+    https://procalcs-hvac-api-69864992834.us-east1.run.app/api/bom/parse-rup
+success: true
+project: Enos Residence          equipment: 8 AHUs
+building: single_level / attic   rooms: 32
+raw_rup_context: 1536 chars      sections: 43
+
+$ curl -X POST -H "Content-Type: application/json" \
+    -d @gen_body.json \
+    https://procalcs-hvac-api-69864992834.us-east1.run.app/api/bom/generate
+job_id:      enos-smoke-test
+client_name: ProCalcs Direct
+supplier:    Ferguson
+item_count:  47
+totals:      { total_cost: 14557.00, total_price: 18348.44 }
+
+first 3 line_items:
+  duct  Flex duct 6" (Atco)    qty=180 unit=LF  total=$615.60
+  duct  Flex duct 8" (Atco)    qty=220 unit=LF  total=$752.40
+  duct  Flex duct 10" (Atco)   qty=160 unit=LF  total=$547.20
+```
+
+Both the parse and generate calls flowed cleanly through the
+Designer Desktop adapter. The "Flex duct 6\" (Atco)" line shows the
+full hybrid pipeline working end-to-end: Claude inferred the quantity
+from `raw_rup_context`, Python applied the Ferguson supplier's
+per-foot cost, and the Atco brand name came from the "ProCalcs
+Direct" profile's `brands.flex_duct_brand` field.
+
 Latest branches:
-main, experiments/rup-parsing
+main, dev/rup-parsing
+
+Commits landed today:
+- `485df30` Phase C-1: wire Designer Desktop adapter to
+  /api/bom/parse-rup + /generate
+- `7bed2c0` Phase C-2: real .rup upload + BOM generate UX in
+  Designer Desktop
 
 Cloud Run state after today:
-- `procalcs-hvac-api`       revision recreated (Designer Desktop)
-- `procalcs-hvac-bom`       revision `00002-8zr` (new `/parse-rup` endpoint)
+- `procalcs-hvac-api`       revision `00002-zx6` (Phase C SPA wiring)
+- `procalcs-hvac-bom`       revision `00002-8zr` (Phase B parse-rup
+                                                  endpoint, unchanged)
 - `procalcs-hvac-cleaner`   unchanged — still healthy
-- `procalcs-hvac-pg`        still deleted (soft-delete window closing)
-- `procalcs-hvac-database-url*` still deleted (not needed in new architecture)
 
 📅 ETA / Next Steps:
-- **Phase C — SPA wiring for two-step UX** — rewrite
-  `procalcs-designer/src/pages/bom-engine.tsx` to drop its `MOCK_RESULT`
-  placeholder, add a real `.rup` dropzone → POST to `/api/bom/parse-rup`
-  → render extracted preview (project, building, 8 AHUs, 32 rooms) →
-  client profile picker → "Generate BOM" → POST to existing
-  `/api/bom/generate` → navigate to `bom-output.tsx`. Add
-  `useParseRup` and `useGenerateBom` hooks. New `/api/bom/*` proxy
-  route in `server/routes/bom.ts`. Advanced toggle for JSON textarea
-  per spec acceptance criterion #5. (3–4 hours)
-- **Phase C — BOM output page rewrite** — replace the mockups
-  placeholder in `bom-output.tsx` with real rendering of `line_items`,
-  `totals`, `supplier`, and `output_mode` from the BOM engine response.
-  (1 hour)
-- **Phase D — Polish** — PDF/print export for the BOM output page,
-  second demo profile ("Beazer Homes - Arizona") via
-  `seed_demo_profile.py --also-beazer`, one-page demo script at
-  `docs/MVP_DEMO_SCRIPT.md`. (2 hours)
+- **Phase D — Polish** — seed a second demo profile ("Beazer Homes -
+  Arizona") via `seed_demo_profile.py --also-beazer` so the dropdown
+  has >1 option, write a one-page `docs/MVP_DEMO_SCRIPT.md` for the
+  Richard/Tom walkthrough. (1–2 hours)
+- **Browser walkthrough by Tom** — click through the live staging URL
+  end-to-end with the Enos sample to spot any UX issues the curl
+  tests can't catch (browser print dialog, CSV column widths,
+  tooltip copy, etc.).
+- **Advanced: JSON textarea toggle** — spec acceptance criterion #5
+  wants a hidden "Advanced" mode that reveals a JSON textarea for
+  direct design_data input. Cut from Phase C to save time; revisit
+  if Tom wants it before the demo.
 - **Backlog — post-MVP:** Extend Python `ClientProfile` to add
   `brand_color` / `logo_url` / `markup_tiers` so the adapter stops
-  dropping those fields on save. Revisit the `_apply_pricing` rounding
-  bug. Consider moving the .rup parser from hybrid to pure Approach A
-  for duct footage + fitting counts once we see how Claude performs on
-  the rich-text fallback in real demos.
+  dropping those fields on save. Revisit the `_apply_pricing`
+  rounding bug in `test_bom.py` (46.24 vs 46.25). Consider moving
+  the .rup parser from hybrid to pure Approach A for duct footage +
+  fitting counts once we see how Claude performs on the rich-text
+  fallback in more real demos.
 
 ⚠️ Blockers: None
