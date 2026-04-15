@@ -22,9 +22,21 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCurrentUser, useLogout } from "@/lib/auth-hooks";
 
 interface LayoutProps {
   children: React.ReactNode;
+}
+
+// First letter of first word + first letter of last word, or the
+// first two chars of the email local-part if the name is absent.
+function userInitials(name: string | undefined, email: string | undefined): string {
+  const source = name?.trim() || email?.split("@")[0] || "";
+  const words = source.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase() || "??";
 }
 
 const navigation = [
@@ -41,6 +53,9 @@ export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
+
+  const { data: currentUser } = useCurrentUser();
+  const logout = useLogout();
 
   const activeItem = navigation.find(
     (item) => location === item.href || (item.href !== "/" && location.startsWith(item.href))
@@ -139,9 +154,13 @@ export function Layout({ children }: LayoutProps) {
           "border-t border-sidebar-border py-3 px-2 space-y-0.5 shrink-0",
         )}>
           {[
-            { icon: Settings, label: "Settings" },
-            { icon: LogOut, label: "Logout" },
-          ].map(({ icon: Icon, label }) =>
+            { icon: Settings, label: "Settings", onClick: () => {} },
+            {
+              icon: LogOut,
+              label: "Logout",
+              onClick: () => logout.mutate(),
+            },
+          ].map(({ icon: Icon, label, onClick }) =>
             collapsed ? (
               <Tooltip key={label} delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -149,6 +168,7 @@ export function Layout({ children }: LayoutProps) {
                     variant="ghost"
                     size="icon"
                     className="w-full h-9 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                    onClick={onClick}
                   >
                     <Icon className="w-4 h-4" />
                   </Button>
@@ -160,6 +180,7 @@ export function Layout({ children }: LayoutProps) {
                 key={label}
                 variant="ghost"
                 className="w-full justify-start text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                onClick={onClick}
               >
                 <Icon className="w-4 h-4 mr-2" />
                 {label}
@@ -218,9 +239,28 @@ export function Layout({ children }: LayoutProps) {
             </Tooltip>
 
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center text-primary font-semibold text-xs">
-              RM
-            </div>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                {currentUser?.picture ? (
+                  <img
+                    src={currentUser.picture}
+                    alt={currentUser.name}
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 rounded-full border border-primary/20 object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center text-primary font-semibold text-xs">
+                    {userInitials(currentUser?.name, currentUser?.email)}
+                  </div>
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                <div>{currentUser?.name ?? "Signed in"}</div>
+                {currentUser?.email && (
+                  <div className="text-muted-foreground">{currentUser.email}</div>
+                )}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </header>
 
