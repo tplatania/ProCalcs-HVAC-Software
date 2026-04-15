@@ -38,7 +38,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   try {
     const payload = verifyToken(raw, authConfig.sessionSigningKey);
-    if (payload.hd !== authConfig.allowedDomain) {
+    // Re-check the domain on every request. The email was already
+    // verified-by-Google at callback time; here we just confirm the
+    // cookie's email still matches the configured allowed domain (in
+    // case ALLOWED_DOMAIN changed server-side, old cookies get
+    // invalidated on the next request).
+    const suffix = "@" + authConfig.allowedDomain.toLowerCase();
+    if (!payload.email.toLowerCase().endsWith(suffix)) {
       res.status(403).json({ error: `Restricted to @${authConfig.allowedDomain}` });
       return;
     }

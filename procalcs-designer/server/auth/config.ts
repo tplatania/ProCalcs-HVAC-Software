@@ -56,3 +56,16 @@ export type AuthConfig = typeof authConfig;
 export const GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GOOGLE_JWKS_URL  = "https://www.googleapis.com/oauth2/v3/certs";
+
+// Domain gate used by BOTH the callback (on fresh login) and the
+// middleware (on every request). For Google Workspace orgs the `hd`
+// claim would be the strongest check, but we're on an External
+// consent screen with a non-Workspace domain — so we rely on the
+// verified email suffix. Google requires ownership-proof before
+// flipping `email_verified` to true, so this is equivalent security
+// for our use case.
+export function isEmailAllowed(email: string | undefined, emailVerified: boolean | undefined): boolean {
+  if (!email || !emailVerified) return false;
+  const suffix = "@" + authConfig.allowedDomain.toLowerCase();
+  return email.toLowerCase().endsWith(suffix);
+}

@@ -15,6 +15,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import {
   authConfig,
+  isEmailAllowed,
   GOOGLE_AUTH_URL,
   GOOGLE_TOKEN_URL,
   GOOGLE_JWKS_URL,
@@ -97,6 +98,10 @@ router.get("/login", (req: Request, res: Response) => {
   const state = signState(returnTo);
   const nonce = randomBytes(16).toString("base64url");
 
+  // Note: we deliberately don't pass `hd=<domain>` here. The `hd`
+  // hint only narrows the account picker for Google Workspace users;
+  // for non-Workspace domains it's silently ignored and showing it
+  // would imply an expectation we don't actually enforce that way.
   const params = new URLSearchParams({
     client_id: authConfig.googleClientId,
     redirect_uri: authConfig.redirectUri,
@@ -104,7 +109,6 @@ router.get("/login", (req: Request, res: Response) => {
     scope: "openid email profile",
     access_type: "online",
     prompt: "select_account",
-    hd: authConfig.allowedDomain,
     state,
     nonce,
   });
@@ -187,20 +191,20 @@ router.get("/callback", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Invalid ID token", detail: err?.message });
   }
 
-  // Domain restriction — belt and braces with the OAuth consent
-  // screen's "Internal" user type restriction. Reject anything
-  // without a matching hd claim.
-  if (claims.hd !== authConfig.allowedDomain) {
-    return res.status(403).json({
-      error: `Access restricted to @${authConfig.allowedDomain} accounts`,
-      detail: `got hd=${claims.hd ?? "(none)"}`,
-    });
-  }
-  if (!claims.email_verified) {
-    return res.status(403).json({ error: "Email not verified by Google" });
-  }
+  // Domain restriction. Our OAuth consent screen is External (the
+  // org isn't on Google Workspace), so the Workspace-only `hd` claim
+  // is absent for most users and can't be the gate. Instead we
+  // require a verified email ending in @<allowedDomain>. Google sets
+  // email_verified=true only after the user has proven ownership of
+  // the mailbox, which is the real gate.
   if (!claims.email) {
     return res.status(502).json({ error: "Google claims missing email" });
+  }
+  if (!isEmailAllowed(claims.email, claims.email_verified)) {
+    return res.status(403).json({
+      error: `Access restricted to verified @${authConfig.allowedDomain} accounts`,
+      detail: `got email=${claims.email}, verified=${claims.email_verified ?? false}`,
+    });
   }
 
   const sessionToken = signToken(
@@ -208,7 +212,7 @@ router.get("/callback", async (req: Request, res: Response) => {
       email:   claims.email,
       name:    claims.name ?? claims.email,
       picture: claims.picture ?? "",
-      hd:      claims.hd,
+      hd:      claims.hd ?? "",  // Empty for non-Workspace accounts; retained for observability.
     },
     authConfig.sessionSigningKey,
     authConfig.sessionTtlSeconds

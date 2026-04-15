@@ -71,9 +71,43 @@ describe("middleware — requireAuth", () => {
     assert.equal(req.user?.hd, "procalcs.net");
   });
 
-  it("returns 403 for a valid token with the wrong domain", () => {
+  it("returns 403 for a valid token with a non-procalcs email", () => {
     const token = signToken(
-      { email: "x@gmail.com", name: "Outsider", picture: "", hd: "gmail.com" },
+      { email: "x@gmail.com", name: "Outsider", picture: "", hd: "" },
+      "test-signing-key",
+      3600
+    );
+    const req = makeReq({ procalcs_session: token });
+    const res = makeRes();
+    let nextCalled = false;
+    requireAuth(req, res, () => { nextCalled = true; });
+    assert.equal(res.statusCode, 403);
+    assert.equal(nextCalled, false);
+  });
+
+  it("allows a procalcs.net email even when hd is empty (non-Workspace account)", () => {
+    // This is the case the org hits in real life — Google doesn't
+    // populate `hd` for accounts outside a Workspace org, but the
+    // verified email is still ours. The middleware must pass this
+    // through on the email-suffix check alone.
+    const token = signToken(
+      { email: "Gerald@PROCALCS.net", name: "Gerald", picture: "", hd: "" },
+      "test-signing-key",
+      3600
+    );
+    const req = makeReq({ procalcs_session: token });
+    const res = makeRes();
+    let nextCalled = false;
+    requireAuth(req, res, () => { nextCalled = true; });
+    assert.equal(nextCalled, true);
+    assert.equal(req.user?.email, "Gerald@PROCALCS.net");
+  });
+
+  it("returns 403 for an email ending in .procalcs.net.evil.com (suffix spoof)", () => {
+    // Defend against a literal endsWith attack — the suffix must be
+    // `@procalcs.net` exactly, not just `procalcs.net`.
+    const token = signToken(
+      { email: "attacker@procalcs.net.evil.com", name: "Evil", picture: "", hd: "" },
       "test-signing-key",
       3600
     );
