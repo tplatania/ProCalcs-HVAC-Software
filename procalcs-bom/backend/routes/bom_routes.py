@@ -6,8 +6,9 @@ Follows ProCalcs Design Standards v2.0
 """
 
 import logging
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 from services.bom_service import generate
+from services.pdf_service import render_bom_pdf
 from utils.validators import validate_bom_request
 from utils.rup_parser import parse_rup_bytes
 
@@ -180,4 +181,49 @@ def parse_rup():
             "success": False,
             "data": None,
             "error": "Failed to parse the .rup file. The file may be corrupt or an unsupported Wrightsoft version."
+        }), 500
+
+
+# ===============================
+# POST — Render BOM → PDF
+# ===============================
+
+@bom_bp.route('/render-pdf', methods=['POST'])
+def render_pdf():
+    """
+    Render an already-generated BOM dict into a branded PDF.
+
+    Input: the BOM response object from /generate wrapped in {"bom": ...}.
+    Output: application/pdf bytes with a suggested filename.
+
+    Deliberately separate from /generate so clicking Download PDF
+    doesn't trigger a new AI call. The SPA caches the BOM response
+    after generating and posts it here for rendering — that's ~200ms
+    versus the ~15s Claude round trip.
+    """
+    try:
+        body = request.get_json(silent=True) or {}
+        bom = body.get('bom')
+        if not isinstance(bom, dict) or not bom.get('line_items'):
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": "Request body must be {\"bom\": <BomResponse with line_items>}.",
+            }), 400
+
+        pdf_bytes = render_bom_pdf(bom)
+        filename = f"{(bom.get('job_id') or 'bom').replace('/', '-')}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+
+    except Exception as e:
+        logger.error("render_pdf failed: %s", e, exc_info=True)
+        return jsonify({
+            "success": False,
+            "data": None,
+            "error": "PDF render failed. Please try again.",
         }), 500

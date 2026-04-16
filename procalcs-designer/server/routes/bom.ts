@@ -1,13 +1,16 @@
 // /api/bom/* — proxy to procalcs-hvac-bom /api/v1/bom/*.
 //
-// Two branches:
-//   - /parse-rup                  → stream the raw multipart body through
-//                                    (mirrors server/routes/pdfCleanup.ts)
-//   - everything else (/generate) → forward as JSON
+// Three branches:
+//   - /parse-rup   → stream the raw multipart body through (binary in,
+//                    JSON out) — mirrors server/routes/pdfCleanup.ts
+//   - /render-pdf  → forward JSON body, stream the binary PDF response
+//                    back to the client unchanged
+//   - everything else (/generate) → plain JSON in, JSON out
 //
-// Both forward the Flask {success, data, error} envelope verbatim so the
-// SPA hooks can unwrap .data themselves. The bypass for express.json() on
-// /api/bom/parse-rup is wired in server/index.ts.
+// The JSON-body routes forward the Flask {success, data, error}
+// envelope verbatim so the SPA hooks can unwrap .data themselves.
+// The bypass for express.json() on /api/bom/parse-rup is wired in
+// server/index.ts.
 
 import { Router, type Request, type Response } from "express";
 import { config } from "../config.js";
@@ -51,6 +54,40 @@ router.all("/*splat", async (req: Request, res: Response) => {
       }
     } catch (err: any) {
       res.status(502).json({ error: err?.message ?? "parse-rup upstream failed" });
+    }
+    return;
+  }
+
+  // ─── JSON in, binary out: /render-pdf ───────────────────────────────
+  if (req.path === "/render-pdf") {
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body ?? {}),
+      });
+
+      res.status(upstream.status);
+      // Forward the PDF-relevant response headers (Content-Type,
+      // Content-Disposition). Drop Content-Length since we're streaming.
+      upstream.headers.forEach((v, k) => {
+        if (k.toLowerCase() === "content-length") return;
+        res.setHeader(k, v);
+      });
+
+      if (upstream.body) {
+        const reader = upstream.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+        res.end();
+      } else {
+        res.end();
+      }
+    } catch (err: any) {
+      res.status(502).json({ error: err?.message ?? "render-pdf upstream failed" });
     }
     return;
   }

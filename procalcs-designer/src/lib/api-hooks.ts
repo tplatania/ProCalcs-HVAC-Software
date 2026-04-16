@@ -198,6 +198,53 @@ export function useParseRup() {
   });
 }
 
+// POST an already-generated BOM dict to /api/bom/render-pdf and trigger
+// a browser download of the returned PDF. No new AI call — this is pure
+// server-side rendering via Jinja2 + WeasyPrint. Expected latency ~200ms.
+export function useRenderBomPdf() {
+  return useMutation<
+    void,
+    { error: string; status?: number },
+    { bom: BomResponse }
+  >({
+    mutationFn: async ({ bom }) => {
+      const res = await fetch("/api/bom/render-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bom }),
+      });
+
+      if (!res.ok) {
+        // Error responses come back as JSON, not PDF.
+        let message = res.statusText;
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          /* ignore */
+        }
+        throw { error: message, status: res.status };
+      }
+
+      // Pull filename out of the Content-Disposition header, or fall
+      // back to the job_id.
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? `${bom.job_id || "bom"}.pdf`;
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+  });
+}
+
 // POST structured design_data + client_id to /api/bom/generate.
 // The backend calls Claude, applies pricing, and returns the formatted
 // BOM. Expected latency is 10–20s on a warm container, longer on cold.

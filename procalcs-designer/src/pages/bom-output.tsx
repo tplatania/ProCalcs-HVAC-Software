@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import {
   useListClientProfiles,
   useGenerateBom,
+  useRenderBomPdf,
   loadParsedRup,
   clearParsedRup,
   type BomResponse,
@@ -420,6 +421,7 @@ function BomResultView({
   const [expandedCategories, setExpandedCategories] = useState<Set<Category>>(
     new Set(["equipment", "duct", "fitting", "consumable"])
   );
+  const renderPdf = useRenderBomPdf();
 
   const lines: BomLine[] = useMemo(
     () => (bom.line_items ?? []).map((item, i) => mapLineItem(item, i)),
@@ -488,9 +490,17 @@ function BomResultView({
             <Printer className="w-3.5 h-3.5 mr-1.5" />
             Print
           </Button>
-          <Button size="sm" onClick={() => downloadCsv(bom)}>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv(bom)}>
             <Download className="w-3.5 h-3.5 mr-1.5" />
             Export CSV
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => renderPdf.mutate({ bom })}
+            disabled={renderPdf.isPending}
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            {renderPdf.isPending ? "Rendering..." : "Download PDF"}
           </Button>
         </div>
       </div>

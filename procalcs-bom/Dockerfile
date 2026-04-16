@@ -5,6 +5,19 @@
 
 FROM python:3.12-slim
 
+# WeasyPrint (used by the branded BOM PDF renderer) needs Cairo,
+# Pango, GDK-Pixbuf, and the MIME / font tables at runtime. Install
+# them once before pip so the layer stays cached across rebuilds.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libpango-1.0-0 \
+      libpangoft2-1.0-0 \
+      libcairo2 \
+      libgdk-pixbuf-2.0-0 \
+      shared-mime-info \
+      fonts-dejavu \
+ && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first (layer caching)
 WORKDIR /install
 COPY backend/requirements.txt .

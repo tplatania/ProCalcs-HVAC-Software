@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ job_id or "Bill of Materials" }}</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 0.75in 0.75in 1in 0.75in;
+    @bottom-left {
+      content: "Generated via ProCalcs Designer Desktop";
+      font-family: "DejaVu Sans", sans-serif;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: "DejaVu Sans", sans-serif;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+  }
+
+  body {
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 10pt;
+    color: #1e293b;
+    margin: 0;
+  }
+
+  /* ===== Header ===== */
+  .brand-header {
+    margin-bottom: 18pt;
+  }
+  .brand-name {
+    font-size: 24pt;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: -0.5pt;
+    margin: 0;
+  }
+  .brand-bar {
+    height: 4pt;
+    background: #f97316;
+    width: 60pt;
+    margin-top: 4pt;
+  }
+  .brand-sub {
+    font-size: 11pt;
+    color: #64748b;
+    margin-top: 8pt;
+  }
+
+  /* ===== Job metadata banner ===== */
+  .job-meta {
+    border: 1pt solid #e2e8f0;
+    border-radius: 6pt;
+    padding: 10pt 14pt;
+    margin-bottom: 16pt;
+    background: #f8fafc;
+  }
+  .job-meta table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .job-meta td {
+    padding: 4pt 8pt 4pt 0;
+    vertical-align: top;
+  }
+  .job-meta .label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: #64748b;
+    font-weight: 600;
+  }
+  .job-meta .value {
+    font-size: 10pt;
+    font-weight: 500;
+    color: #1e293b;
+  }
+  .job-meta .total .value {
+    font-weight: 700;
+    color: #f97316;
+  }
+
+  /* ===== Category tables ===== */
+  .category {
+    margin-bottom: 14pt;
+    page-break-inside: auto;
+  }
+  .category-header {
+    display: flex;
+    align-items: center;
+    padding: 6pt 10pt;
+    border-radius: 4pt 4pt 0 0;
+    color: #1e293b;
+    font-weight: 600;
+    font-size: 11pt;
+  }
+  .category-header .chip {
+    display: inline-block;
+    width: 10pt;
+    height: 10pt;
+    border-radius: 2pt;
+    margin-right: 6pt;
+    vertical-align: middle;
+  }
+  .category-count {
+    font-size: 9pt;
+    color: #64748b;
+    font-weight: 400;
+    margin-left: 8pt;
+  }
+
+  table.items {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #e2e8f0;
+  }
+  table.items thead {
+    background: #f1f5f9;
+  }
+  table.items th {
+    text-align: left;
+    font-size: 8pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    color: #64748b;
+    padding: 5pt 8pt;
+    border-bottom: 1pt solid #e2e8f0;
+  }
+  table.items th.num,
+  table.items td.num {
+    text-align: right;
+  }
+  table.items tbody tr {
+    page-break-inside: avoid;
+  }
+  table.items td {
+    padding: 5pt 8pt;
+    border-bottom: 1pt solid #f1f5f9;
+    font-size: 9pt;
+  }
+  table.items tbody tr:last-child td {
+    border-bottom: none;
+  }
+  table.items tfoot td {
+    background: #f8fafc;
+    border-top: 1pt solid #e2e8f0;
+    font-weight: 600;
+    padding: 6pt 8pt;
+  }
+
+  /* ===== Grand total ===== */
+  .grand-total {
+    margin-top: 20pt;
+    padding: 12pt 16pt;
+    border: 1pt solid #f97316;
+    border-radius: 6pt;
+    background: #fff7ed;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .grand-total .label {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .grand-total .amount {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #f97316;
+  }
+
+  /* ===== Output mode note ===== */
+  .mode-note {
+    font-size: 8pt;
+    color: #94a3b8;
+    margin-top: 4pt;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Brand header ===== -->
+<div class="brand-header">
+  <h1 class="brand-name">ProCalcs</h1>
+  <div class="brand-bar"></div>
+  <p class="brand-sub">HVAC Bill of Materials</p>
+</div>
+
+<!-- ===== Job metadata banner ===== -->
+<div class="job-meta">
+  <table>
+    <tr>
+      <td>
+        <div class="label">Project</div>
+        <div class="value">{{ job_id or "—" }}</div>
+      </td>
+      <td>
+        <div class="label">Client</div>
+        <div class="value">{{ client_name or "—" }}{% if supplier %} <span style="color:#94a3b8">({{ supplier }})</span>{% endif %}</div>
+      </td>
+      <td>
+        <div class="label">Generated</div>
+        <div class="value">{{ generated_at or "—" }}</div>
+      </td>
+      <td class="total">
+        <div class="label">Grand Total</div>
+        <div class="value">{{ grand_total | currency }}</div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- ===== Category tables ===== -->
+{% for group in groups %}
+<div class="category">
+  <div class="category-header" style="background: {{ group.meta.bg }};">
+    <span class="chip" style="background: {{ group.meta.color }};"></span>
+    {{ group.meta.label }}
+    <span class="category-count">{{ group.lines | length }} items · {{ group.subtotal | currency }}</span>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="num">Qty</th>
+        <th>Unit</th>
+        <th class="num">Unit Price</th>
+        <th class="num">Markup</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in group.lines %}
+      <tr>
+        <td>{{ item.description or "(unnamed)" }}</td>
+        <td class="num">{{ item.quantity | qty }}</td>
+        <td>{{ item.unit or "EA" }}</td>
+        <td class="num">{{ (item.unit_price if item.unit_price is not none else item.unit_cost) | currency }}</td>
+        <td class="num">{% if item.markup_pct is not none %}{{ '%.0f' | format(item.markup_pct) }}%{% else %}—{% endif %}</td>
+        <td class="num">{{ (item.total_price if item.total_price is not none else item.total_cost) | currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5" class="num">{{ group.meta.label }} Subtotal</td>
+        <td class="num">{{ group.subtotal | currency }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endfor %}
+
+<!-- ===== Grand total ===== -->
+<div class="grand-total">
+  <span class="label">Grand Total — {{ output_mode.replace('_', ' ').title() }}</span>
+  <span class="amount">{{ grand_total | currency }}</span>
+</div>
+<div class="mode-note">{{ item_count }} line items · output mode: {{ output_mode }}</div>
+
+</body>
+</html>
