@@ -22,8 +22,16 @@ async function callFlask<T>(
   path: string,
   init?: RequestInit
 ): Promise<FlaskEnvelope<T>> {
+  const authHeaders: Record<string, string> = { "X-Client-Id": config.clientId };
+  if (config.serviceSharedSecret) {
+    authHeaders["X-Procalcs-Service-Token"] = config.serviceSharedSecret;
+  }
   const res = await fetch(`${config.flaskBomBaseUrl}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders,
+      ...(init?.headers || {}),
+    },
     ...init,
   });
   const body = (await res.json().catch(() => ({}))) as FlaskEnvelope<T>;

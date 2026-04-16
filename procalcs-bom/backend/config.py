@@ -37,17 +37,32 @@ class Config:
     FIRESTORE_PROJECT_ID   = os.environ.get('FIRESTORE_PROJECT_ID', '')
     GOOGLE_APPLICATION_CREDENTIALS = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
 
-    # CORS — Designer Desktop origin
-    ALLOWED_ORIGINS = os.environ.get(
-        'ALLOWED_ORIGINS',
-        'http://localhost:3000,http://localhost:5173'
-    ).split(',')
+    # CORS — Designer Desktop + Dashboard origins (comma-separated env).
+    # Whitespace-tolerant: "a, b,, c " -> ["a", "b", "c"].
+    ALLOWED_ORIGINS = [
+        o.strip()
+        for o in os.environ.get(
+            'ALLOWED_ORIGINS',
+            'http://localhost:3000,http://localhost:5173'
+        ).split(',')
+        if o.strip()
+    ]
 
     # Logging
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
     # Admin access
-    ADMIN_EMAILS = os.environ.get('ADMIN_EMAILS', '').split(',')
+    ADMIN_EMAILS = [
+        e.strip()
+        for e in os.environ.get('ADMIN_EMAILS', '').split(',')
+        if e.strip()
+    ]
+
+    # Shared-secret auth — every non-health request must present the same
+    # token via X-Procalcs-Service-Token. BFFs (Designer Desktop, Designer
+    # Dashboard) keep this in their own env and forward it per request.
+    # Leaving this blank disables the check (dev only).
+    SERVICE_SHARED_SECRET = os.environ.get('SERVICE_SHARED_SECRET', '')
 
 
 class DevelopmentConfig(Config):
@@ -99,5 +114,20 @@ def validate_config(app):
         raise RuntimeError(
             "Missing required config: %s. Check .env file." % ', '.join(missing)
         )
+
+    # SERVICE_SHARED_SECRET is a soft-required — warn loudly in non-dev
+    # environments but don't refuse to boot (keeps dev workflow frictionless).
+    if not app.config.get('SERVICE_SHARED_SECRET'):
+        if os.environ.get('FLASK_ENV') == 'production':
+            logger.warning(
+                "[WARNING] SERVICE_SHARED_SECRET is empty — shared-secret auth "
+                "is DISABLED. Any caller can hit the BOM endpoints."
+            )
+        else:
+            logger.info(
+                "SERVICE_SHARED_SECRET not set — auth middleware is disabled "
+                "(dev mode). Set it to enable shared-secret auth."
+            )
+
     logger.info("Config validated successfully for environment: %s",
                 os.environ.get('FLASK_ENV', 'development'))

@@ -21,9 +21,16 @@ interface FlaskEnvelope<T> {
 
 router.get("/summary", async (_req: Request, res: Response) => {
   try {
+    const authHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Client-Id": config.clientId,
+    };
+    if (config.serviceSharedSecret) {
+      authHeaders["X-Procalcs-Service-Token"] = config.serviceSharedSecret;
+    }
     const upstream = await fetch(
       `${config.flaskBomBaseUrl}/api/v1/profiles/`,
-      { headers: { "Content-Type": "application/json" } }
+      { headers: authHeaders }
     );
     const body = (await upstream.json().catch(() => ({}))) as FlaskEnvelope<
       PythonClientProfile[]
