@@ -12,6 +12,7 @@ import {
   ChevronRight,
   FileStack,
   Cpu,
+  PackageSearch,
   Bell,
   Wifi,
   Database,
@@ -43,6 +44,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "Overview" },
   { name: "All Profiles", href: "/profiles", icon: Users, section: "BOM Management" },
   { name: "New Profile", href: "/profiles/new", icon: PlusCircle, section: "BOM Management" },
+  { name: "SKU Catalog", href: "/sku-catalog", icon: PackageSearch, section: "BOM Management" },
   { name: "BOM Engine", href: "/bom-engine", icon: Cpu, section: "Processing" },
   { name: "BOM Output", href: "/bom-output", icon: FileStack, section: "Processing" },
 ];

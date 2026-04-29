@@ -78,6 +78,13 @@ export const getGetClientProfileQueryKey = (id: string) =>
   ["client-profiles", id] as const;
 export const getGetDashboardSummaryQueryKey = () => ["dashboard", "summary"] as const;
 
+// SKU catalog
+export const getListSkuCatalogQueryKey = (
+  filter?: { section?: string; supplier?: string; include_disabled?: boolean }
+) => ["sku-catalog", filter ?? {}] as const;
+export const getGetSkuQueryKey = (sku: string) => ["sku-catalog", sku] as const;
+export const getSkuCatalogMetaQueryKey = () => ["sku-catalog", "_meta"] as const;
+
 // ─── Fetch helpers ───────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -331,3 +338,129 @@ export function clearParsedRup(): void {
     /* ignore */
   }
 }
+
+
+// ─── SKU Catalog (list / get / create / update / disable / delete) ──────
+
+export interface SKUItem {
+  sku: string;
+  supplier: string;
+  section: string;
+  phase: string | null;
+  description: string;
+  trigger: string;
+  quantity: { mode: string; [k: string]: unknown };
+  default_unit_price: number;
+  notes: string;
+  disabled: boolean;
+}
+
+export interface SKUCatalogMeta {
+  sections: string[];
+  triggers: string[];
+  quantity_modes: string[];
+  phases: string[];
+  suppliers_seen: string[];
+}
+
+interface FlaskEnvelope<T> {
+  success: boolean;
+  data: T | null;
+  error: string | null;
+  meta?: Record<string, unknown>;
+}
+
+async function apiFetchEnvelope<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    ...init,
+  });
+  if (res.status === 204) return undefined as T;
+  let body: FlaskEnvelope<T> | null = null;
+  try {
+    body = (await res.json()) as FlaskEnvelope<T>;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok || !body?.success) {
+    throw { error: body?.error ?? res.statusText, status: res.status };
+  }
+  return body.data as T;
+}
+
+export function useListSkuCatalog(
+  filter?: { section?: string; supplier?: string; include_disabled?: boolean }
+) {
+  return useQuery({
+    queryKey: getListSkuCatalogQueryKey(filter),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (filter?.section) qs.set("section", filter.section);
+      if (filter?.supplier) qs.set("supplier", filter.supplier);
+      if (filter?.include_disabled !== undefined) {
+        qs.set("include_disabled", String(filter.include_disabled));
+      }
+      const url = qs.toString() ? `/api/sku-catalog?${qs.toString()}` : "/api/sku-catalog";
+      return apiFetchEnvelope<SKUItem[]>(url);
+    },
+  });
+}
+
+export function useGetSku(sku: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: getGetSkuQueryKey(sku),
+    queryFn: () => apiFetchEnvelope<SKUItem>(`/api/sku-catalog/${encodeURIComponent(sku)}`),
+    enabled: opts?.enabled !== false && !!sku,
+  });
+}
+
+export function useGetSkuCatalogMeta() {
+  return useQuery({
+    queryKey: getSkuCatalogMetaQueryKey(),
+    queryFn: () => apiFetchEnvelope<SKUCatalogMeta>("/api/sku-catalog/_meta"),
+    staleTime: 5 * 60 * 1000, // 5 min — enums dont change often
+  });
+}
+
+export function useCreateSku() {
+  return useMutation({
+    mutationFn: (data: Partial<SKUItem>) =>
+      apiFetchEnvelope<SKUItem>("/api/sku-catalog", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
+export function useUpdateSku() {
+  return useMutation({
+    mutationFn: ({ sku, data }: { sku: string; data: Partial<SKUItem> }) =>
+      apiFetchEnvelope<SKUItem>(`/api/sku-catalog/${encodeURIComponent(sku)}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
+export function useDisableSku() {
+  return useMutation({
+    mutationFn: ({ sku, disabled }: { sku: string; disabled: boolean }) =>
+      apiFetchEnvelope<SKUItem>(
+        `/api/sku-catalog/${encodeURIComponent(sku)}/${disabled ? "disable" : "enable"}`,
+        { method: "POST" }
+      ),
+  });
+}
+
+export function useDeleteSku() {
+  return useMutation({
+    mutationFn: ({ sku }: { sku: string }) =>
+      apiFetch<void>(`/api/sku-catalog/${encodeURIComponent(sku)}`, {
+        method: "DELETE",
+      }),
+  });
+}
+

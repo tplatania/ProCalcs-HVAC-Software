@@ -19,6 +19,7 @@ import { config } from "./config.js";
 import clientProfilesRouter from "./routes/clientProfiles.js";
 import dashboardRouter from "./routes/dashboard.js";
 import bomRouter from "./routes/bom.js";
+import skuCatalogRouter from "./routes/skuCatalog.js";
 import pdfCleanupRouter from "./routes/pdfCleanup.js";
 import authRouter from "./auth/routes.js";
 import { requireAuth } from "./auth/middleware.js";
@@ -65,6 +66,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/client-profiles", requireAuth, clientProfilesRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/bom", requireAuth, bomRouter);
+app.use("/api/sku-catalog", requireAuth, skuCatalogRouter);
 app.use("/api/pdf-cleanup", requireAuth, pdfCleanupRouter);
 
 // Unmatched /api/* → JSON 404 (do NOT fall through to the SPA shell)

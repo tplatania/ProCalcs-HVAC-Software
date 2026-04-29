@@ -82,13 +82,15 @@ def register_blueprints(app):
     from routes.health_routes import health_bp, versioned_health_bp
     from routes.profile_routes import profile_bp
     from routes.bom_routes import bom_bp
+    from routes.sku_catalog_routes import sku_catalog_bp
 
     # Keep /health for Cloud Run probes AND expose /api/v1/health so a
     # second API consumer can hit the versioned namespace consistently.
     app.register_blueprint(health_bp)
     app.register_blueprint(versioned_health_bp, url_prefix='/api/v1')
-    app.register_blueprint(profile_bp, url_prefix='/api/v1/profiles')
-    app.register_blueprint(bom_bp,     url_prefix='/api/v1/bom')
+    app.register_blueprint(profile_bp,     url_prefix='/api/v1/profiles')
+    app.register_blueprint(bom_bp,         url_prefix='/api/v1/bom')
+    app.register_blueprint(sku_catalog_bp, url_prefix='/api/v1/sku-catalog')
 
 
 # ===============================

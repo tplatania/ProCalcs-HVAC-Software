@@ -12,6 +12,7 @@ import NewProfile from "@/pages/profiles/new";
 import EditProfile from "@/pages/profiles/detail";
 import BomEngine from "@/pages/bom-engine";
 import BomOutput from "@/pages/bom-output";
+import SkuCatalogPage from "@/pages/sku-catalog";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ function Router() {
         <Route path="/profiles" component={ProfilesList} />
         <Route path="/profiles/new" component={NewProfile} />
         <Route path="/profiles/:id" component={EditProfile} />
+        <Route path="/sku-catalog" component={SkuCatalogPage} />
         <Route path="/bom-engine" component={BomEngine} />
         <Route path="/bom-output" component={BomOutput} />
         <Route component={NotFound} />

@@ -1,0 +1,274 @@
+{
+  "_meta": {
+    "version": "0.1",
+    "generated": "2026-04-29",
+    "source": "Bootstrapped from contractor sample BOM 'Lot 1 T075 Elm ACL BOM.xls' (22 line items). Industry-standard quantity rules per Richard's note that ProCalcs follows standard practice — refine as real projects expose edge cases.",
+    "fields": {
+      "sku":         "supplier-specific part number, used as the primary key",
+      "supplier":    "GOODMAN | PRJ | PGM | WSF | RHEA — 'src' column on the contractor sheet",
+      "section":     "Equipment | Duct System Equipment | Rheia Duct System Equipment | Labor — output grouping",
+      "phase":       "Rough | Finish | null — only Rheia uses this today",
+      "description": "human-readable line shown in the BOM",
+      "trigger":     "structured rule the engine evaluates against design_data; see _trigger_keys below",
+      "quantity":    "rule object — see _quantity_modes below",
+      "default_unit_price": "USD per unit; 0 means 'price not set, must come from contractor profile or supplier API'",
+      "notes":       "free-form for the engineer maintaining this catalog"
+    },
+    "_trigger_keys": {
+      "always":             "always emit (no condition)",
+      "ahu_present":        "design_data.equipment contains an AHU",
+      "condenser_present":  "design_data.equipment contains a condenser",
+      "erv_present":        "design_data.equipment contains an ERV",
+      "heat_kit_present":   "AHU is electric and a strip-heat kit is required",
+      "rheia_in_scope":     "small-diameter flexible duct (≤4\") detected anywhere in duct_runs OR raw_rup_context — Rheia is universal across ProCalcs projects per Tom 2026-04-29",
+      "rectangular_duct":   "any duct_run with rectangular cross-section",
+      "round_vinyl_duct":   "any round vinyl duct in scope (typically transitions / short runs)",
+      "register_count":     "number of registers/diffusers in design_data"
+    },
+    "_quantity_modes": {
+      "fixed":           "{ mode: 'fixed', value: N }                        — emit N every time the trigger fires",
+      "per_unit":        "{ mode: 'per_unit', source: 'equipment.ahu' }      — N per matching item",
+      "per_lf":          "{ mode: 'per_lf', source: 'duct_runs.rectangular' } — sum LF of matching duct runs",
+      "per_register":    "{ mode: 'per_register', source: 'registers' }       — count registers",
+      "rheia_per_lf":    "{ mode: 'rheia_per_lf', divisor: N }                — Rheia 3-in duct LF total, optionally divided",
+      "rheia_per_takeoff":"{ mode: 'rheia_per_takeoff' }                     — count of trunk-to-branch take-offs",
+      "rheia_per_endpoint":"{ mode: 'rheia_per_endpoint', endpoint: 'high_sidewall|ceiling' }"
+    }
+  },
+
+  "items": [
+    {
+      "sku": "AHVE24BP1300A",
+      "supplier": "GOODMAN",
+      "section": "Equipment",
+      "phase": null,
+      "description": "AHU",
+      "trigger": "ahu_present",
+      "quantity": { "mode": "per_unit", "source": "equipment.ahu" },
+      "default_unit_price": 0,
+      "notes": "Sample BOM shipped 1 unit. Real selection should depend on AHU tonnage from RUP equipment table — this SKU is for one specific tonnage; need a tonnage→SKU map."
+    },
+    {
+      "sku": "GZV6SA1810A",
+      "supplier": "GOODMAN",
+      "section": "Equipment",
+      "phase": null,
+      "description": "Condenser",
+      "trigger": "condenser_present",
+      "quantity": { "mode": "per_unit", "source": "equipment.condenser" },
+      "default_unit_price": 0,
+      "notes": "Same tonnage-mapping caveat as AHU. Sample shipped 1 unit."
+    },
+    {
+      "sku": "B150E75NT",
+      "supplier": "PRJ",
+      "section": "Equipment",
+      "phase": null,
+      "description": "ERV",
+      "trigger": "erv_present",
+      "quantity": { "mode": "per_unit", "source": "equipment.erv" },
+      "default_unit_price": 0,
+      "notes": "1 ERV per residence is typical for ADUs / small-residential. Larger jobs may have multiple."
+    },
+    {
+      "sku": "HKTSD05X1",
+      "supplier": "GOODMAN",
+      "section": "Equipment",
+      "phase": null,
+      "description": "ELECTRIC HEAT KIT, 5 KW",
+      "trigger": "heat_kit_present",
+      "quantity": { "mode": "per_unit", "source": "equipment.ahu" },
+      "default_unit_price": 0,
+      "notes": "Sized to AHU; 5 kW is the most common size for ADU-scale ATUs. Larger AHUs need bigger kits — needs SKU variants."
+    },
+
+    {
+      "sku": "DRFg1712MI",
+      "supplier": "PGM",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Rectangular fiberglass duct, 17\" x 12\", medium",
+      "trigger": "rectangular_duct",
+      "quantity": { "mode": "per_lf", "source": "duct_runs.rectangular" },
+      "default_unit_price": 6.5,
+      "notes": "Sample BOM had 4.12 LF for one trunk. Quantity is total LF across all rectangular runs. Size (17x12) varies by tonnage; needs a size→SKU map."
+    },
+    {
+      "sku": "FPLJ-1712",
+      "supplier": "PGM",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Plenum round take off with trans, size 17\" x 12\"",
+      "trigger": "ahu_present",
+      "quantity": { "mode": "per_unit", "source": "equipment.ahu" },
+      "default_unit_price": 22.6,
+      "notes": "1 plenum take-off per AHU. Size matched to AHU plenum dimensions."
+    },
+    {
+      "sku": "DDVn10",
+      "supplier": "WSF",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Round vinyl duct, D = 10\"",
+      "trigger": "round_vinyl_duct",
+      "quantity": { "mode": "fixed", "value": 3 },
+      "default_unit_price": 2.0,
+      "notes": "Sample shipped 3 units. Used for short transitions; default 3 is a guess — refine when more samples available."
+    },
+    {
+      "sku": "FBTI-1212-10",
+      "supplier": "PGM",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Ceiling round boot, size 12\" x 12\"-10\"",
+      "trigger": "always",
+      "quantity": { "mode": "per_register", "source": "registers.ceiling_round" },
+      "default_unit_price": 43.6,
+      "notes": "Sample shipped 2 units. Maps to ceiling round registers. Size pair (12x12-10) varies by register face / duct diameter."
+    },
+    {
+      "sku": "FRGRMWR-2404",
+      "supplier": "PGM",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Rectangular metal high wall register, 24\" x 4\"",
+      "trigger": "always",
+      "quantity": { "mode": "per_register", "source": "registers.high_wall_rect" },
+      "default_unit_price": 0,
+      "notes": "Sample shipped 6 units. High-wall rectangular face. Pricing zero in sample → use contractor profile."
+    },
+    {
+      "sku": "FRGRMCG-1212",
+      "supplier": "WSF",
+      "section": "Duct System Equipment",
+      "phase": null,
+      "description": "Rectangular metal ceiling grill, 12\"x12\"",
+      "trigger": "always",
+      "quantity": { "mode": "per_register", "source": "registers.ceiling_grill" },
+      "default_unit_price": 0,
+      "notes": "Sample shipped 2 units. Used for return-air grills. Pricing zero in sample."
+    },
+
+    {
+      "sku": "10-00-190",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "3-in Duct Uninsulated",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_lf" },
+      "default_unit_price": 0,
+      "notes": "Total LF of 3-in flexible duct in scope. Sample shipped 856 LF — anchor expectation. Quantity comes from RUP duct_runs filtered to ≤3\" diameter."
+    },
+    {
+      "sku": "10-01-010",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "3-in ferrule",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_lf", "divisor": 10 },
+      "default_unit_price": 0,
+      "notes": "Sample 84 ferrules / 856 LF ≈ 1 per ~10 LF. Used to join sections; rule may also be 'per coupler + per take-off'. Refine after seeing 2–3 more samples."
+    },
+    {
+      "sku": "10-01-041",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Duct board Take Off Inside",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_takeoff", "side": "inside" },
+      "default_unit_price": 0,
+      "notes": "Sample 27. Take-offs from main trunk into branches; one inside + one outside per branch (sample has 27/27 matched pairs)."
+    },
+    {
+      "sku": "10-01-051",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Duct board Take Off Outside",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_takeoff", "side": "outside" },
+      "default_unit_price": 0,
+      "notes": "Paired 1:1 with inside take-off above. Sample 27."
+    },
+    {
+      "sku": "10-01-030",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Coupler",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_lf", "divisor": 60 },
+      "default_unit_price": 0,
+      "notes": "Sample 15 / 856 LF ≈ 1 per 57 LF. Joins duct sections at long-run splice points."
+    },
+    {
+      "sku": "10-01-020",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Elbow Extension",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "fitting_count", "source": "fittings.elbow" },
+      "default_unit_price": 0,
+      "notes": "Sample 42. Should map directly to count of elbows in fittings array — but sample fittings array isn't populated by parser today. Could fall back to a heuristic (e.g. 1.5 per branch run) until parser fills it in."
+    },
+    {
+      "sku": "10-01-200",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "High Sidewall Boot Assembly",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_endpoint", "endpoint": "high_sidewall" },
+      "default_unit_price": 0,
+      "notes": "Sample 17. Count of registers terminating in high-sidewall locations. Pairs 1:1 with slotted-diffuser SKU below."
+    },
+    {
+      "sku": "10-04-091",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Finish",
+      "description": "Slotted Diffuser",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_endpoint", "endpoint": "high_sidewall" },
+      "default_unit_price": 0,
+      "notes": "Sample 17 — pairs with High Sidewall Boot Assembly above."
+    },
+    {
+      "sku": "00-00-240",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Hanger Bar Assembly",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_lf", "divisor": 23 },
+      "default_unit_price": 0,
+      "notes": "Sample 37 / 856 LF ≈ 1 per 23 LF. Likely placed only on trunk runs, not every branch. Refine after more samples — Rheia spec for flex is closer to 1 per 4–6 ft, so this may be trunk-only."
+    },
+    {
+      "sku": "10-01-220",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Rough",
+      "description": "Ceiling Boot Assembly",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_endpoint", "endpoint": "ceiling" },
+      "default_unit_price": 0,
+      "notes": "Sample 10. Pairs 1:1 with Ceiling Diffuser Assembly below."
+    },
+    {
+      "sku": "10-04-230",
+      "supplier": "RHEA",
+      "section": "Rheia Duct System Equipment",
+      "phase": "Finish",
+      "description": "Ceiling Diffuser Assembly",
+      "trigger": "rheia_in_scope",
+      "quantity": { "mode": "rheia_per_endpoint", "endpoint": "ceiling" },
+      "default_unit_price": 0,
+      "notes": "Sample 10 — pairs with Ceiling Boot Assembly above. Total endpoints (high_sidewall 17 + ceiling 10 = 27) matches the take-off count, which is a useful internal consistency check."
+    }
+  ]
+}
