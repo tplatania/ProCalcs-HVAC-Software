@@ -9,6 +9,7 @@ import logging
 from flask import Blueprint, jsonify, request, Response
 from services.bom_service import generate
 from services.pdf_service import render_bom_pdf
+from services.materials_rules import generate_rule_lines, compute_scope, summarize_scope
 from utils.validators import validate_bom_request
 from utils.rup_parser import parse_rup_bytes
 
@@ -226,4 +227,73 @@ def render_pdf():
             "success": False,
             "data": None,
             "error": "PDF render failed. Please try again.",
+        }), 500
+
+
+# ===============================
+# POST — Rules-only preview (no AI, no profile pricing)
+# ===============================
+
+@bom_bp.route('/rules-preview', methods=['POST'])
+def rules_preview():
+    """
+    Run the deterministic materials_rules engine against a parsed
+    design_data and return only the line items the rules engine would
+    emit. No Anthropic call, no contractor profile, no totals — this
+    is the catalog-driven baseline that every BOM /generate response
+    will eventually layer on top of.
+
+    Request body:
+        { "design_data": <parsed RUP envelope>,
+          "output_mode": "full"  (optional, default "full") }
+
+    Response:
+        {
+          "success": true,
+          "data": {
+            "scope":   {<scope flags>},      # diagnostic
+            "line_items": [...],
+            "item_count": N,
+            "totals": {"total_cost": <float>}
+          }
+        }
+
+    Designed for designers + Richard's team to inspect what the rules
+    layer alone produces against any RUP — see docs/eval-2026-04-29
+    for the gap analysis this endpoint is meant to close.
+    """
+    try:
+        body = request.get_json(silent=True) or {}
+        design_data = body.get('design_data')
+        if not isinstance(design_data, dict):
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": "Request body must include 'design_data' as an object.",
+            }), 400
+
+        output_mode = body.get('output_mode') or 'full'
+
+        scope = compute_scope(design_data)
+        lines = generate_rule_lines(design_data, output_mode=output_mode)
+        total_cost = round(sum(float(l.get("total_cost") or 0) for l in lines), 2)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "scope": summarize_scope(scope),
+                "line_items": lines,
+                "item_count": len(lines),
+                "totals": {"total_cost": total_cost},
+                "output_mode": output_mode,
+            },
+            "error": None,
+        }), 200
+
+    except Exception as e:  # noqa: BLE001
+        logger.error("rules_preview failed: %s", e, exc_info=True)
+        return jsonify({
+            "success": False,
+            "data": None,
+            "error": "Rules-preview failed. Please try again.",
         }), 500

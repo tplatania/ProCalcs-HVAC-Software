@@ -15,6 +15,7 @@ import json
 import anthropic
 from flask import current_app
 from services.profile_service import get_profile_by_id
+from services.materials_rules import generate_rule_lines
 from models.client_profile import ClientProfile
 
 logger = logging.getLogger('procalcs_bom')
@@ -64,14 +65,35 @@ def generate(client_id: str, job_id: str, design_data: dict,
     profile = ClientProfile.from_dict(profile_data)
     effective_mode = output_mode or profile.default_output_mode
 
-    # Step 2 — Call AI for material quantities
+    # Step 2a — Deterministic rules engine first. Emits SKU-level lines
+    # for everything the catalog can express (AHU/condenser/heat-kit
+    # equipment, Rheia duct system, plenum take-offs, etc.). Catalog
+    # default_unit_price is the cost; Python applies profile markup.
+    rule_lines = generate_rule_lines(design_data, output_mode=effective_mode)
+    rules_priced = _format_rule_lines_for_bom(rule_lines, profile)
+
+    # Step 2b — AI fills the gaps the catalog doesn't cover yet
+    # (consumables, miscellaneous fittings, brand-specific items).
     raw_quantities = _call_ai_for_quantities(design_data, profile)
 
-    # Step 3 — Apply pricing (Python does all math)
-    priced_items = _apply_pricing(raw_quantities, profile, effective_mode)
+    # Step 3 — Apply pricing for AI-estimated items (Python does all math)
+    ai_priced = _apply_pricing(raw_quantities, profile, effective_mode)
+
+    # Rules win on SKU/description collisions: drop AI items whose
+    # description substring-matches a rules-engine line. Coarse but
+    # safe — rules-engine descriptions come from the curated catalog.
+    rules_descs = {(li.get("description") or "").lower() for li in rules_priced}
+    deduped_ai = [
+        li for li in ai_priced
+        if not any(rd and rd in (li.get("description") or "").lower() for rd in rules_descs)
+    ]
+
+    priced_items = rules_priced + deduped_ai
 
     # Step 4 — Format final BOM
     bom = _format_bom(priced_items, profile, job_id, effective_mode)
+    bom["rules_engine_item_count"] = len(rules_priced)
+    bom["ai_item_count"] = len(deduped_ai)
 
     logger.info("BOM generated successfully for job %s — %s line items",
                 job_id, len(bom.get('line_items', [])))
@@ -272,6 +294,56 @@ def _get_markup_pct(category: str, profile: ClientProfile) -> float:
     return float(markup_map.get(category, 0.0))
 
 
+def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list:
+    """
+    Shape rules-engine output (SKU-keyed dicts from materials_rules.
+    generate_rule_lines) into the same line-item dict shape that
+    ``_apply_pricing`` produces for AI quantities. Applies the profile's
+    per-category markup so the rules layer respects contractor pricing
+    knobs even though it sources unit costs from the SKU catalog.
+    """
+    out = []
+    for rl in rule_lines:
+        category    = rl.get("category", "consumable")
+        description = rl.get("description", "")
+        quantity    = float(rl.get("quantity") or 0.0)
+        unit        = rl.get("unit", "EA")
+        unit_cost   = float(rl.get("unit_cost") or 0.0)
+        markup_pct  = _get_markup_pct(category, profile)
+
+        raw_unit_price = unit_cost * (1 + markup_pct / 100)
+        total_cost  = round(quantity * unit_cost, 2)
+        unit_price  = round(raw_unit_price, 2)
+        total_price = round(quantity * raw_unit_price, 2)
+
+        # Apply client part-name override if one matches
+        display_name = description
+        for override in profile.part_name_overrides:
+            if override.standard_name.lower() in description.lower():
+                display_name = override.client_name or description
+                break
+
+        out.append({
+            "category":    category,
+            "description": display_name,
+            "quantity":    quantity,
+            "unit":        unit,
+            "unit_cost":   unit_cost,
+            "unit_price":  unit_price,
+            "total_cost":  total_cost,
+            "total_price": total_price,
+            "markup_pct":  markup_pct,
+            # Rules-engine provenance — preserved through _format_bom
+            # via a side channel so the SPA can label these rows.
+            "sku":         rl.get("sku"),
+            "supplier":    rl.get("supplier"),
+            "section":     rl.get("section"),
+            "phase":       rl.get("phase"),
+            "source":      "rules_engine",
+        })
+    return out
+
+
 def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
                    output_mode: str) -> list:
     """
@@ -357,6 +429,11 @@ def _format_bom(line_items: list, profile: ClientProfile,
         if show_price:
             entry['unit_price']  = item['unit_price']
             entry['total_price'] = item['total_price']
+
+        # Preserve rules-engine provenance for SPA labeling, when set.
+        for key in ('sku', 'supplier', 'section', 'phase', 'source'):
+            if item.get(key) is not None:
+                entry[key] = item[key]
 
         formatted_items.append(entry)
 

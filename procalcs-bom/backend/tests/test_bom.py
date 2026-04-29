@@ -393,3 +393,49 @@ class TestPricingLogic:
         }
         items = _apply_pricing(raw, sample_profile, "full")
         assert items[0]['description'] == '4\" snap collar'
+
+
+class TestFormatRuleLinesForBom:
+    """
+    The rules engine emits SKU dicts with catalog-sourced unit_cost.
+    _format_rule_lines_for_bom should reshape them into the same
+    line-item shape _apply_pricing produces and apply profile markup.
+    """
+
+    def test_applies_category_markup(self, sample_profile):
+        from services.bom_service import _format_rule_lines_for_bom
+        rule_lines = [{
+            "sku": "AHVE24BP1300A",
+            "supplier": "GOODMAN",
+            "section": "Equipment",
+            "category": "equipment",
+            "phase": None,
+            "description": "Goodman 2-ton air handler",
+            "quantity": 1.0,
+            "unit": "ea",
+            "unit_cost": 1000.0,
+            "total_cost": 1000.0,
+        }]
+        out = _format_rule_lines_for_bom(rule_lines, sample_profile)
+        assert len(out) == 1
+        # equipment markup is 15% in the sample profile
+        assert out[0]["markup_pct"] == 15.0
+        assert out[0]["unit_price"] == 1150.0
+        assert out[0]["total_price"] == 1150.0
+        assert out[0]["source"] == "rules_engine"
+        assert out[0]["sku"] == "AHVE24BP1300A"
+
+    def test_zero_unit_cost_yields_zero_totals(self, sample_profile):
+        from services.bom_service import _format_rule_lines_for_bom
+        rule_lines = [{
+            "sku": "FREEBIE",
+            "category": "consumable",
+            "description": "No-price item",
+            "quantity": 5.0,
+            "unit": "ea",
+            "unit_cost": 0.0,
+            "total_cost": 0.0,
+        }]
+        out = _format_rule_lines_for_bom(rule_lines, sample_profile)
+        assert out[0]["total_cost"] == 0.0
+        assert out[0]["total_price"] == 0.0
