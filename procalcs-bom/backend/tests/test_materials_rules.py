@@ -28,6 +28,17 @@ class TestComputeScope:
     def test_none_design_data(self):
         assert compute_scope(None) == Scope()
 
+    def test_parser_canonical_air_handler_type_detected(self):
+        # Regression: utils/rup_parser emits {"type": "air_handler"}.
+        # Earlier compute_scope only matched "ahu" or "air handler"
+        # (space) and missed every Wrightsoft-parsed AHU on the Enos
+        # Edge eval — yielding 0 rules-engine lines on a real RUP.
+        s = compute_scope({"equipment": [
+            {"type": "air_handler", "name": "AHU - 1"},
+            {"type": "air_handler", "name": "AHU - 2"},
+        ]})
+        assert s.ahu_count == 2
+
     def test_ahu_implies_condenser_and_heat_kit_when_no_furnace(self):
         # Industry default: residential AHU implies 1 condenser + 1 heat kit.
         s = compute_scope({"equipment": [{"type": "AHU", "name": "AHU - 1"}]})

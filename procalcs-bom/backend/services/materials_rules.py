@@ -147,7 +147,10 @@ def _equipment_type(item: dict) -> str:
     for key in ("type", "category", "kind", "name"):
         v = item.get(key)
         if isinstance(v, str) and v.strip():
-            return v.strip().lower()
+            # Normalize underscores → spaces so "air_handler" (parser
+            # canonical form) matches the same keyword set as
+            # "Air Handler" or "AHU - 1".
+            return v.strip().lower().replace("_", " ")
     return ""
 
 
