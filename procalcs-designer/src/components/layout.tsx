@@ -19,6 +19,7 @@ import {
   Activity,
   Sun,
   Moon,
+  Beaker,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,9 +48,10 @@ const navigation = [
   { name: "SKU Catalog", href: "/sku-catalog", icon: PackageSearch, section: "BOM Management" },
   { name: "BOM Engine", href: "/bom-engine", icon: Cpu, section: "Processing" },
   { name: "BOM Output", href: "/bom-output", icon: FileStack, section: "Processing" },
+  { name: "Rules Preview", href: "/diagnostics/rules-preview", icon: Beaker, section: "Diagnostics" },
 ];
 
-const sections = ["Overview", "BOM Management", "Processing"];
+const sections = ["Overview", "BOM Management", "Processing", "Diagnostics"];
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();

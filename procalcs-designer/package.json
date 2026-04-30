@@ -16,7 +16,8 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
     "test:auth": "tsx --test server/auth/token.test.ts server/auth/middleware.test.ts",
-    "test": "npm run test:auth"
+    "test:client": "tsx --test src/lib/bom-mapping.test.ts",
+    "test": "npm run test:auth && npm run test:client"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

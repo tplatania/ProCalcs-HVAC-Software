@@ -37,115 +37,37 @@ import {
   loadParsedRup,
   clearParsedRup,
   type BomResponse,
-  type BomLineItem,
   type StoredParseResult,
 } from "@/lib/api-hooks";
+import {
+  mapLineItem,
+  buildCsvRows,
+  serializeCsv,
+  computeProvenanceCounts,
+  CATEGORIES,
+  type BomLine,
+  type Category,
+  type Source,
+} from "@/lib/bom-mapping";
 
-// ─── Display shapes ──────────────────────────────────────────────────────
+// ─── Category presentation ───────────────────────────────────────────────
+// (Pure data lives in bom-mapping.ts; visual metadata stays here because
+//  it depends on lucide icon imports + Tailwind class strings.)
 
-type Source = "rules" | "ai";
-
-interface BomLine {
-  id: string;
-  category: Category;
-  clientName: string;
-  standardName: string;
-  qty: number;
-  unit: string;
-  unitCost: number;
-  markupPct: number;
-  total: number;
-  // Provenance — populated when the upstream rules engine fills these in.
-  sku?: string;
-  source: Source; // narrowed: lines without explicit source are treated as "ai"
-}
-
-const CATEGORY_META = {
+const CATEGORY_META: Record<Category, { label: string; icon: typeof Thermometer; color: string; bg: string }> = {
   equipment:  { label: "Equipment",   icon: Thermometer, color: "text-purple-500",  bg: "bg-purple-500/10" },
   duct:       { label: "Duct",        icon: Wind,        color: "text-blue-500",    bg: "bg-blue-500/10"   },
   fitting:    { label: "Fittings",    icon: Wrench,      color: "text-amber-500",   bg: "bg-amber-500/10"  },
   consumable: { label: "Consumables", icon: Package,     color: "text-green-500",   bg: "bg-green-500/10"  },
-} as const;
-
-type Category = keyof typeof CATEGORY_META;
-
-// Normalize unknown categories from the Flask backend into the 4 buckets
-// the UI can render. Any unrecognized category falls back to consumable.
-function normalizeCategory(raw: string | undefined): Category {
-  if (!raw) return "consumable";
-  const key = raw.toLowerCase().trim();
-  if (key === "equipment") return "equipment";
-  if (key === "duct") return "duct";
-  if (key === "fitting") return "fitting";
-  if (key === "register") return "fitting"; // registers visually live under fittings
-  if (key === "consumable") return "consumable";
-  return "consumable";
-}
-
-// Map a Flask-shaped line_item into the BomLine display shape. Prices
-// are shown when available (full/materials_only/client_proposal modes),
-// otherwise unit_cost + total_cost are used (cost_estimate mode).
-function mapLineItem(item: BomLineItem, index: number): BomLine {
-  const cat = normalizeCategory(item.category);
-  const unitCost = item.unit_price ?? item.unit_cost ?? 0;
-  const total = item.total_price ?? item.total_cost ?? 0;
-  // Treat any non-"rules" source (or absent source) as AI. The rules engine
-  // explicitly emits source="rules" for deterministic SKU lines; anything
-  // else originated from the Claude estimator and should be flagged for review.
-  const source: Source = item.source === "rules" ? "rules" : "ai";
-  return {
-    id: `${cat}-${index}`,
-    category: cat,
-    clientName: item.description || "(unnamed)",
-    standardName: item.description || "(unnamed)",
-    qty: item.quantity ?? 0,
-    unit: item.unit || "EA",
-    unitCost,
-    markupPct: item.markup_pct ?? 0,
-    total,
-    sku: item.sku || undefined,
-    source,
-  };
-}
+};
 
 // ─── CSV export helper ───────────────────────────────────────────────────
 
+// CSV row construction + escaping live in bom-mapping.ts so they're
+// unit-tested. This wrapper handles only the browser side: Blob, anchor
+// click, and revoke.
 function downloadCsv(bom: BomResponse): void {
-  const rows = [
-    [
-      "Category",
-      "Source",
-      "SKU",
-      "Description",
-      "Qty",
-      "Unit",
-      "Unit Cost",
-      "Unit Price",
-      "Markup %",
-      "Total",
-    ],
-  ];
-  for (const item of bom.line_items) {
-    rows.push([
-      item.category ?? "",
-      item.source === "rules" ? "rules" : "ai",
-      item.sku ?? "",
-      (item.description ?? "").replace(/"/g, '""'),
-      String(item.quantity ?? 0),
-      item.unit ?? "",
-      String(item.unit_cost ?? ""),
-      String(item.unit_price ?? ""),
-      String(item.markup_pct ?? ""),
-      String(item.total_price ?? item.total_cost ?? 0),
-    ]);
-  }
-  rows.push([]);
-  rows.push(["Total Cost", "", "", "", "", "", "", "", "", String(bom.totals.total_cost ?? "")]);
-  rows.push(["Total Price", "", "", "", "", "", "", "", "", String(bom.totals.total_price ?? "")]);
-
-  const csv = rows
-    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-    .join("\r\n");
+  const csv = serializeCsv(buildCsvRows(bom));
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -454,19 +376,14 @@ function BomResultView({
     [bom]
   );
 
-  // Counts by provenance — prefer the backend-provided counts (from the
-  // rules-engine merge in procalcs-bom) and fall back to derivation from
-  // line_items for older response shapes.
-  const rulesCount = bom.rules_engine_item_count ?? lines.filter((l) => l.source === "rules").length;
-  const aiCount = bom.ai_item_count ?? lines.filter((l) => l.source === "ai").length;
-  const hasProvenance = rulesCount > 0 || aiCount > 0;
+  const { rules: rulesCount, ai: aiCount, hasProvenance } = useMemo(
+    () => computeProvenanceCounts(bom),
+    [bom]
+  );
 
   const byCategory = useMemo(() => {
     return Object.fromEntries(
-      (Object.keys(CATEGORY_META) as Category[]).map((cat) => [
-        cat,
-        lines.filter((l) => l.category === cat),
-      ])
+      CATEGORIES.map((cat) => [cat, lines.filter((l) => l.category === cat)])
     ) as Record<Category, BomLine[]>;
   }, [lines]);
 

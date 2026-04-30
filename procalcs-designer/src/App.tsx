@@ -13,6 +13,7 @@ import EditProfile from "@/pages/profiles/detail";
 import BomEngine from "@/pages/bom-engine";
 import BomOutput from "@/pages/bom-output";
 import SkuCatalogPage from "@/pages/sku-catalog";
+import RulesPreviewPage from "@/pages/diagnostics/rules-preview";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/sku-catalog" component={SkuCatalogPage} />
         <Route path="/bom-engine" component={BomEngine} />
         <Route path="/bom-output" component={BomOutput} />
+        <Route path="/diagnostics/rules-preview" component={RulesPreviewPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -264,6 +264,61 @@ export function useRenderBomPdf() {
   });
 }
 
+// ─── Rules-engine preview ───────────────────────────────────────────────
+//
+// Diagnostic endpoint that runs ONLY the deterministic materials_rules
+// engine — no Anthropic call, no profile, no markup, no totals other
+// than rules-engine cost. Designed for designers + Richard's team to
+// inspect what the catalog-driven baseline produces against any RUP.
+// Backed by procalcs-bom commit ae5bd2b (POST /api/v1/bom/rules-preview).
+
+export interface RulesPreviewScope {
+  // Free-form scope flags from compute_scope() (e.g. has_ahu, has_furnace,
+  // duct_lf_total, register_count, etc.). Forwarded as-is for visibility.
+  [key: string]: unknown;
+}
+
+export interface RulesPreviewResponse {
+  scope: RulesPreviewScope;
+  line_items: BomLineItem[];
+  item_count: number;
+  totals: { total_cost: number | null };
+}
+
+export function useRulesPreview() {
+  return useMutation<
+    RulesPreviewResponse,
+    { error: string; status?: number },
+    {
+      design_data: RupDesignData | Record<string, any>;
+      output_mode?: "full" | "materials_only" | "labor_materials" | "client_proposal" | "cost_estimate";
+    }
+  >({
+    mutationFn: async (payload) => {
+      const res = await fetch("/api/bom/rules-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      let body: any = null;
+      try {
+        body = await res.json();
+      } catch {
+        /* fall through */
+      }
+
+      if (!res.ok || !body?.success) {
+        throw {
+          error: body?.error ?? `Rules preview failed (${res.status})`,
+          status: res.status,
+        };
+      }
+      return body.data as RulesPreviewResponse;
+    },
+  });
+}
+
 // POST structured design_data + client_id to /api/bom/generate.
 // The backend calls Claude, applies pricing, and returns the formatted
 // BOM. Expected latency is 10–20s on a warm container, longer on cold.
