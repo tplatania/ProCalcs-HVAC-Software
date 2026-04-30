@@ -1,0 +1,49 @@
+name: designer CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev/gerald-designer
+    paths:
+      - 'procalcs-designer/**'
+      - '.github/workflows/designer-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'procalcs-designer/**'
+      - '.github/workflows/designer-ci.yml'
+
+# Cancel in-progress runs when a new commit lands on the same branch/PR.
+concurrency:
+  group: designer-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: procalcs-designer
+
+jobs:
+  verify:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: procalcs-designer/.nvmrc
+          cache: npm
+          cache-dependency-path: procalcs-designer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (client + server)
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
