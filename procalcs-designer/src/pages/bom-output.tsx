@@ -27,6 +27,7 @@ import {
   Cpu,
   XCircle,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +43,8 @@ import {
 
 // ─── Display shapes ──────────────────────────────────────────────────────
 
+type Source = "rules" | "ai";
+
 interface BomLine {
   id: string;
   category: Category;
@@ -52,6 +55,9 @@ interface BomLine {
   unitCost: number;
   markupPct: number;
   total: number;
+  // Provenance — populated when the upstream rules engine fills these in.
+  sku?: string;
+  source: Source; // narrowed: lines without explicit source are treated as "ai"
 }
 
 const CATEGORY_META = {
@@ -83,6 +89,10 @@ function mapLineItem(item: BomLineItem, index: number): BomLine {
   const cat = normalizeCategory(item.category);
   const unitCost = item.unit_price ?? item.unit_cost ?? 0;
   const total = item.total_price ?? item.total_cost ?? 0;
+  // Treat any non-"rules" source (or absent source) as AI. The rules engine
+  // explicitly emits source="rules" for deterministic SKU lines; anything
+  // else originated from the Claude estimator and should be flagged for review.
+  const source: Source = item.source === "rules" ? "rules" : "ai";
   return {
     id: `${cat}-${index}`,
     category: cat,
@@ -93,6 +103,8 @@ function mapLineItem(item: BomLineItem, index: number): BomLine {
     unitCost,
     markupPct: item.markup_pct ?? 0,
     total,
+    sku: item.sku || undefined,
+    source,
   };
 }
 
@@ -100,11 +112,24 @@ function mapLineItem(item: BomLineItem, index: number): BomLine {
 
 function downloadCsv(bom: BomResponse): void {
   const rows = [
-    ["Category", "Description", "Qty", "Unit", "Unit Cost", "Unit Price", "Markup %", "Total"],
+    [
+      "Category",
+      "Source",
+      "SKU",
+      "Description",
+      "Qty",
+      "Unit",
+      "Unit Cost",
+      "Unit Price",
+      "Markup %",
+      "Total",
+    ],
   ];
   for (const item of bom.line_items) {
     rows.push([
       item.category ?? "",
+      item.source === "rules" ? "rules" : "ai",
+      item.sku ?? "",
       (item.description ?? "").replace(/"/g, '""'),
       String(item.quantity ?? 0),
       item.unit ?? "",
@@ -115,8 +140,8 @@ function downloadCsv(bom: BomResponse): void {
     ]);
   }
   rows.push([]);
-  rows.push(["Total Cost", "", "", "", "", "", "", String(bom.totals.total_cost ?? "")]);
-  rows.push(["Total Price", "", "", "", "", "", "", String(bom.totals.total_price ?? "")]);
+  rows.push(["Total Cost", "", "", "", "", "", "", "", "", String(bom.totals.total_cost ?? "")]);
+  rows.push(["Total Price", "", "", "", "", "", "", "", "", String(bom.totals.total_price ?? "")]);
 
   const csv = rows
     .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -418,6 +443,7 @@ function BomResultView({
 }) {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<"all" | Category>("all");
+  const [filterSource, setFilterSource] = useState<"all" | Source>("all");
   const [expandedCategories, setExpandedCategories] = useState<Set<Category>>(
     new Set(["equipment", "duct", "fitting", "consumable"])
   );
@@ -427,6 +453,13 @@ function BomResultView({
     () => (bom.line_items ?? []).map((item, i) => mapLineItem(item, i)),
     [bom]
   );
+
+  // Counts by provenance — prefer the backend-provided counts (from the
+  // rules-engine merge in procalcs-bom) and fall back to derivation from
+  // line_items for older response shapes.
+  const rulesCount = bom.rules_engine_item_count ?? lines.filter((l) => l.source === "rules").length;
+  const aiCount = bom.ai_item_count ?? lines.filter((l) => l.source === "ai").length;
+  const hasProvenance = rulesCount > 0 || aiCount > 0;
 
   const byCategory = useMemo(() => {
     return Object.fromEntries(
@@ -548,6 +581,39 @@ function BomResultView({
         </CardContent>
       </Card>
 
+      {/* Provenance summary — only shown when the upstream rules engine
+          has reported per-source counts. Lets designers see at a glance
+          which lines are deterministic (rules) vs estimated (AI). */}
+      {hasProvenance && (
+        <Card className="border-muted">
+          <CardContent className="p-4 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm">
+                <span className="font-semibold">{rulesCount}</span>{" "}
+                <span className="text-muted-foreground">
+                  rules-engine line{rulesCount === 1 ? "" : "s"} (deterministic)
+                </span>
+              </span>
+            </div>
+            <Separator orientation="vertical" className="h-6 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="text-sm">
+                <span className="font-semibold">{aiCount}</span>{" "}
+                <span className="text-muted-foreground">
+                  AI-estimated line{aiCount === 1 ? "" : "s"} (review)
+                </span>
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground sm:ml-auto no-print">
+              Rules-engine quantities are emitted from the catalog and won't change between runs.
+              AI lines may vary — spot-check before sending to the client.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Category summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 no-print">
         {(Object.entries(CATEGORY_META) as [Category, typeof CATEGORY_META[Category]][]).map(
@@ -615,7 +681,20 @@ function BomResultView({
             ))}
           </SelectContent>
         </Select>
-        {(search || filterCategory !== "all") && (
+        {hasProvenance && (
+          <Select value={filterSource} onValueChange={(v) => setFilterSource(v as any)}>
+            <SelectTrigger className="h-9 text-sm w-40">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="rules">Rules engine only</SelectItem>
+              <SelectItem value="ai">AI-estimated only</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {(search || filterCategory !== "all" || filterSource !== "all") && (
           <Button
             variant="ghost"
             size="sm"
@@ -623,6 +702,7 @@ function BomResultView({
             onClick={() => {
               setSearch("");
               setFilterCategory("all");
+              setFilterSource("all");
             }}
           >
             Clear
@@ -636,12 +716,16 @@ function BomResultView({
           .filter(([cat]) => filterCategory === "all" || filterCategory === cat)
           .map(([cat, catLines]) => {
             const meta = CATEGORY_META[cat];
-            const visibleLines = catLines.filter(
-              (l) =>
-                !search ||
-                l.standardName.toLowerCase().includes(search.toLowerCase()) ||
-                l.clientName.toLowerCase().includes(search.toLowerCase())
-            );
+            const visibleLines = catLines.filter((l) => {
+              if (filterSource !== "all" && l.source !== filterSource) return false;
+              if (!search) return true;
+              const needle = search.toLowerCase();
+              return (
+                l.standardName.toLowerCase().includes(needle) ||
+                l.clientName.toLowerCase().includes(needle) ||
+                (l.sku ?? "").toLowerCase().includes(needle)
+              );
+            });
             if (visibleLines.length === 0) return null;
             const subtotal = visibleLines.reduce((s, l) => s + l.total, 0);
             const expanded = expandedCategories.has(cat);
@@ -689,6 +773,14 @@ function BomResultView({
                         <thead>
                           <tr className="border-b bg-muted/30 text-muted-foreground">
                             <th className="text-left px-5 py-2.5 font-medium">Description</th>
+                            {hasProvenance && (
+                              <th className="text-left px-2 py-2.5 font-medium hidden lg:table-cell">
+                                Source
+                              </th>
+                            )}
+                            <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">
+                              SKU
+                            </th>
                             <th className="text-right px-3 py-2.5 font-medium">Qty</th>
                             <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">
                               Unit
@@ -706,6 +798,30 @@ function BomResultView({
                           {visibleLines.map((line) => (
                             <tr key={line.id} className="hover:bg-muted/20 transition-colors">
                               <td className="px-5 py-2.5 font-medium">{line.clientName}</td>
+                              {hasProvenance && (
+                                <td className="px-2 py-2.5 hidden lg:table-cell">
+                                  {line.source === "rules" ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] gap-1 border-emerald-600/30 text-emerald-700 dark:text-emerald-400"
+                                    >
+                                      <ShieldCheck className="w-3 h-3" />
+                                      Rules
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] gap-1 border-amber-600/30 text-amber-700 dark:text-amber-400"
+                                    >
+                                      <Sparkles className="w-3 h-3" />
+                                      AI
+                                    </Badge>
+                                  )}
+                                </td>
+                              )}
+                              <td className="px-3 py-2.5 hidden md:table-cell font-mono text-[11px] text-muted-foreground">
+                                {line.sku ?? "—"}
+                              </td>
                               <td className="px-3 py-2.5 text-right">{line.qty}</td>
                               <td className="px-3 py-2.5 text-right text-muted-foreground hidden sm:table-cell">
                                 {line.unit}
@@ -725,7 +841,7 @@ function BomResultView({
                         <tfoot>
                           <tr className="border-t bg-muted/20">
                             <td
-                              colSpan={5}
+                              colSpan={hasProvenance ? 7 : 6}
                               className="px-5 py-2.5 font-semibold text-right hidden md:table-cell"
                             >
                               {meta.label} Subtotal

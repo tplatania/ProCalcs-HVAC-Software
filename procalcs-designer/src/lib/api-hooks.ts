@@ -57,6 +57,14 @@ export interface BomLineItem {
   total_cost?: number;
   total_price?: number;
   markup_pct?: number;
+  // Provenance fields added by the Python rules engine (see procalcs-bom
+  // commit ae5bd2b "Materials rules engine"). Present on rule-emitted lines;
+  // missing or "ai" on AI-estimated lines.
+  sku?: string;
+  supplier?: string;
+  section?: string;
+  phase?: string;
+  source?: "rules" | "ai" | string;
 }
 
 export interface BomResponse {
@@ -69,6 +77,10 @@ export interface BomResponse {
   line_items: BomLineItem[];
   totals: { total_cost: number | null; total_price: number | null };
   item_count: number;
+  // Per-source counts from the rules-engine merge in Python.
+  // Optional because pre-rules-engine clients may not return them.
+  rules_engine_item_count?: number;
+  ai_item_count?: number;
 }
 
 // ─── Query keys ──────────────────────────────────────────────────────────
