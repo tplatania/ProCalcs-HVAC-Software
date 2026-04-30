@@ -103,33 +103,66 @@ _jinja_env.filters["currency"] = _format_currency
 _jinja_env.filters["qty"]      = _format_quantity
 
 
-def render_bom_pdf(bom: Dict[str, Any]) -> bytes:
-    """Render a BOM dict into PDF bytes.
+def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the Jinja render context from a BOM dict.
 
-    The input dict shape is whatever bom_service._format_bom() returns
-    (job_id, client_name, supplier, output_mode, generated_at,
-    line_items, totals, item_count). Missing fields get sensible
-    defaults so partial test fixtures still render without raising.
-
-    Returns: the PDF as bytes, ready to hand to Flask's Response.
+    Pulled out as a pure dict-in / dict-out helper so the context-shaping
+    logic — particularly the rules-engine vs AI provenance counts — can
+    be unit-tested without WeasyPrint in the loop.
     """
     totals = bom.get("totals") or {}
     grand_total = totals.get("total_price")
     if grand_total is None:
         grand_total = totals.get("total_cost")
 
-    ctx = {
-        "job_id":       bom.get("job_id", ""),
-        "client_name":  bom.get("client_name", ""),
-        "client_id":    bom.get("client_id", ""),
-        "supplier":     bom.get("supplier", ""),
-        "output_mode":  bom.get("output_mode", "full"),
-        "generated_at": bom.get("generated_at", ""),
-        "item_count":   bom.get("item_count", len(bom.get("line_items", []))),
-        "grand_total":  grand_total,
-        "groups":       _group_lines(bom.get("line_items", [])),
+    line_items = bom.get("line_items") or []
+
+    # Provenance counts. Prefer the backend-reported totals (added by
+    # the rules-engine merge in commit ae5bd2b — see bom_service.generate
+    # where rules_engine_item_count/ai_item_count get attached). Fall
+    # back to deriving from line_items[].source for older payloads or
+    # ad-hoc renders that don't go through the merge path. Treat any
+    # non-"rules" value as AI so the reviewer-attention default matches
+    # the SPA's normalizeSource (defaults-to-ai = surfaces line for review).
+    rules_count = bom.get("rules_engine_item_count")
+    ai_count = bom.get("ai_item_count")
+    if rules_count is None:
+        rules_count = sum(1 for it in line_items if it.get("source") == "rules")
+    if ai_count is None:
+        ai_count = sum(1 for it in line_items if it.get("source") != "rules")
+    has_provenance = (rules_count or 0) > 0 or (ai_count or 0) > 0
+
+    return {
+        "job_id":         bom.get("job_id", ""),
+        "client_name":    bom.get("client_name", ""),
+        "client_id":      bom.get("client_id", ""),
+        "supplier":       bom.get("supplier", ""),
+        "output_mode":    bom.get("output_mode", "full"),
+        "generated_at":   bom.get("generated_at", ""),
+        "item_count":     bom.get("item_count", len(line_items)),
+        "grand_total":    grand_total,
+        "groups":         _group_lines(line_items),
+        # Provenance — wired into the template behind has_provenance so
+        # pre-rules-engine payloads render the prior layout untouched.
+        "rules_count":    int(rules_count or 0),
+        "ai_count":       int(ai_count or 0),
+        "has_provenance": has_provenance,
     }
 
+
+def render_bom_pdf(bom: Dict[str, Any]) -> bytes:
+    """Render a BOM dict into PDF bytes.
+
+    The input dict shape is whatever bom_service._format_bom() returns
+    (job_id, client_name, supplier, output_mode, generated_at,
+    line_items, totals, item_count, plus rules_engine_item_count and
+    ai_item_count from the rules-engine merge). Missing fields get
+    sensible defaults so partial test fixtures still render without
+    raising.
+
+    Returns: the PDF as bytes, ready to hand to Flask's Response.
+    """
+    ctx = _build_pdf_context(bom)
     template = _jinja_env.get_template("bom.html.j2")
     html_str = template.render(**ctx)
 

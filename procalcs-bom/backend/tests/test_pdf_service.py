@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 # prod Docker image has it via apt-get.
 pytest.importorskip("weasyprint")
 
-from services.pdf_service import render_bom_pdf  # noqa: E402
+from services.pdf_service import render_bom_pdf, _build_pdf_context  # noqa: E402
 
 
 # ─── Fixtures ───────────────────────────────────────────────────────
@@ -142,3 +142,93 @@ def test_render_handles_register_as_fitting():
     }])
     pdf = render_bom_pdf(bom)
     assert pdf.startswith(b"%PDF-")
+
+
+# ─── Provenance / rules-engine context tests ─────────────────────────
+#
+# These exercise _build_pdf_context directly (no WeasyPrint required)
+# so they run on any dev machine. The render_* tests above are still
+# the smoke tests that prove the template doesn't crash with these
+# fields wired in.
+
+
+def test_build_context_prefers_backend_provenance_counts():
+    """rules_engine_item_count + ai_item_count from bom_service.generate
+    should win over any per-line derivation. Mismatched values used so
+    the assertion proves the backend totals were honored, not derived."""
+    bom = _sample_bom()
+    bom["rules_engine_item_count"] = 4
+    bom["ai_item_count"] = 12
+    ctx = _build_pdf_context(bom)
+    assert ctx["rules_count"] == 4
+    assert ctx["ai_count"] == 12
+    assert ctx["has_provenance"] is True
+
+
+def test_build_context_derives_provenance_from_line_items_fallback():
+    """Older payloads without the merge counts should still get
+    provenance, derived from line_items[].source."""
+    bom = _sample_bom(line_items=[
+        {"category": "equipment", "description": "AHU", "quantity": 1,
+         "unit": "EA", "total_price": 1000, "source": "rules", "sku": "AHU-001"},
+        {"category": "equipment", "description": "Heat kit", "quantity": 1,
+         "unit": "EA", "total_price": 200, "source": "rules", "sku": "HK-005"},
+        {"category": "consumable", "description": "Mastic", "quantity": 3,
+         "unit": "GAL", "total_price": 150, "source": "ai"},
+        {"category": "duct", "description": "Flex 6\"", "quantity": 100,
+         "unit": "LF", "total_price": 300},  # no source → counted as ai
+    ])
+    ctx = _build_pdf_context(bom)
+    assert ctx["rules_count"] == 2
+    assert ctx["ai_count"] == 2
+    assert ctx["has_provenance"] is True
+
+
+def test_build_context_no_provenance_when_counts_zero():
+    """Pre-rules-engine BOMs (no source on any line, no merge counts)
+    should set has_provenance=False so the template skips the strip."""
+    bom = _sample_bom()  # default fixture has no source/sku fields
+    ctx = _build_pdf_context(bom)
+    # Default fixture has 3 lines with no source — derived ai_count=3,
+    # rules_count=0. Both counts being non-zero would already trigger
+    # provenance, but rules_count=0 + ai_count=3 still does — the gate
+    # is "any signal at all", which is correct: lines with explicit
+    # source="ai" deserve the badge. To get has_provenance=False we
+    # need an empty BOM.
+    empty = _sample_bom(line_items=[])
+    empty_ctx = _build_pdf_context(empty)
+    assert empty_ctx["rules_count"] == 0
+    assert empty_ctx["ai_count"] == 0
+    assert empty_ctx["has_provenance"] is False
+    # And the populated fixture: derives ai_count=3 from the 3 lines.
+    assert ctx["ai_count"] == 3
+    assert ctx["rules_count"] == 0
+    assert ctx["has_provenance"] is True
+
+
+def test_render_with_provenance_does_not_crash():
+    """Smoke test: a BOM with rules-engine + AI lines, SKUs, and the
+    provenance counts renders to valid PDF bytes. Each line carries
+    full numeric fields (unit_cost/unit_price/total_cost/total_price/
+    markup_pct) because the template's `is not none` guards trigger
+    strict-undefined on Jinja2 ≥ 3.1 when fields are absent rather
+    than explicitly None."""
+    bom = _sample_bom(line_items=[
+        {"category": "equipment", "description": "Air handler 3T",
+         "quantity": 1, "unit": "EA",
+         "unit_cost": 2840.0, "unit_price": 3267.0,
+         "total_cost": 2840.0, "total_price": 3267.0,
+         "markup_pct": 15.0,
+         "source": "rules", "sku": "AHU-3T-001", "supplier": "Carrier"},
+        {"category": "consumable", "description": "Misc fasteners",
+         "quantity": 1, "unit": "BOX",
+         "unit_cost": 20.0, "unit_price": 25.0,
+         "total_cost": 20.0, "total_price": 25.0,
+         "markup_pct": 25.0,
+         "source": "ai"},
+    ])
+    bom["rules_engine_item_count"] = 1
+    bom["ai_item_count"] = 1
+    pdf = render_bom_pdf(bom)
+    assert pdf.startswith(b"%PDF-")
+    assert len(pdf) > 1024

@@ -182,6 +182,69 @@
     margin-top: 4pt;
     text-align: right;
   }
+
+  /* ===== Provenance summary ===== */
+  /* Only renders when has_provenance is true. Mirrors the SPA's BOM
+     output card so PDF readers see the same trust gradient. */
+  .provenance {
+    border: 1pt solid #e2e8f0;
+    border-radius: 6pt;
+    padding: 8pt 14pt;
+    margin-bottom: 16pt;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 14pt;
+    flex-wrap: wrap;
+    font-size: 9pt;
+  }
+  .provenance .pchip {
+    display: inline-block;
+    padding: 2pt 6pt;
+    border-radius: 3pt;
+    font-weight: 600;
+    margin-right: 4pt;
+  }
+  .provenance .pchip.rules {
+    background: #ecfdf5;
+    color: #047857;
+    border: 0.5pt solid #6ee7b7;
+  }
+  .provenance .pchip.ai {
+    background: #fffbeb;
+    color: #b45309;
+    border: 0.5pt solid #fcd34d;
+  }
+  .provenance .pnote {
+    color: #94a3b8;
+    font-size: 8pt;
+    margin-left: auto;
+  }
+
+  /* ===== Source/SKU columns ===== */
+  table.items td.sku {
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 8pt;
+    color: #64748b;
+  }
+  .src-badge {
+    display: inline-block;
+    padding: 1pt 5pt;
+    border-radius: 2pt;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.3pt;
+  }
+  .src-badge.rules {
+    background: #ecfdf5;
+    color: #047857;
+    border: 0.5pt solid #6ee7b7;
+  }
+  .src-badge.ai {
+    background: #fffbeb;
+    color: #b45309;
+    border: 0.5pt solid #fcd34d;
+  }
 </style>
 </head>
 <body>
@@ -217,6 +280,15 @@
   </table>
 </div>
 
+<!-- ===== Provenance summary (rules vs AI) ===== -->
+{% if has_provenance %}
+<div class="provenance">
+  <span><span class="pchip rules">{{ rules_count }}</span> rules-engine line{{ '' if rules_count == 1 else 's' }} (deterministic)</span>
+  <span><span class="pchip ai">{{ ai_count }}</span> AI-estimated line{{ '' if ai_count == 1 else 's' }} (review)</span>
+  <span class="pnote">Rules-engine quantities are emitted from the catalog and won't change between runs.</span>
+</div>
+{% endif %}
+
 <!-- ===== Category tables ===== -->
 {% for group in groups %}
 <div class="category">
@@ -229,6 +301,7 @@
   <table class="items">
     <thead>
       <tr>
+        {% if has_provenance %}<th>Src</th><th>SKU</th>{% endif %}
         <th>Description</th>
         <th class="num">Qty</th>
         <th>Unit</th>
@@ -240,6 +313,16 @@
     <tbody>
       {% for item in group.lines %}
       <tr>
+        {% if has_provenance %}
+        <td>
+          {% if item.source == 'rules' %}
+            <span class="src-badge rules">RULES</span>
+          {% else %}
+            <span class="src-badge ai">AI</span>
+          {% endif %}
+        </td>
+        <td class="sku">{{ item.sku or "—" }}</td>
+        {% endif %}
         <td>{{ item.description or "(unnamed)" }}</td>
         <td class="num">{{ item.quantity | qty }}</td>
         <td>{{ item.unit or "EA" }}</td>
@@ -251,7 +334,7 @@
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="5" class="num">{{ group.meta.label }} Subtotal</td>
+        <td colspan="{{ 7 if has_provenance else 5 }}" class="num">{{ group.meta.label }} Subtotal</td>
         <td class="num">{{ group.subtotal | currency }}</td>
       </tr>
     </tfoot>
