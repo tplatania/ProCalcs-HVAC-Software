@@ -21,3 +21,23 @@ python-dateutil==2.9.0
 
 # PDF rendering (branded BOM output, server-side Jinja2 → HTML → PDF)
 weasyprint==63.0
+
+# ---------------------------------------------------------------------
+# Billing / subscriptions (added Apr 30 2026 — see _repo-docs/SAAS_BILLING_DESIGN.md)
+# ---------------------------------------------------------------------
+
+# ORM + migrations for the users + subscriptions tables (Postgres only;
+# Firestore continues to back client_profiles + sku_catalog).
+SQLAlchemy>=2.0.41
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+
+# Stripe SDK for checkout sessions, customer portal, and webhook handling.
+stripe==14.0.0
+
+# Postgres driver — pg8000 is pure-Python (works on Cloud Run without GTK
+# system libs) and is what Ask-Your-HVAC-Pro uses against Cloud SQL.
+pg8000==1.30.3
+
+# Cloud SQL connector for production deploys (matches Ask-Your-HVAC-Pro).
+cloud-sql-python-connector[pg8000]==1.5.0
