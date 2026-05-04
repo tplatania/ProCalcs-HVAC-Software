@@ -21,6 +21,7 @@ import dashboardRouter from "./routes/dashboard.js";
 import bomRouter from "./routes/bom.js";
 import skuCatalogRouter from "./routes/skuCatalog.js";
 import pdfCleanupRouter from "./routes/pdfCleanup.js";
+import billingRouter from "./routes/billing.js";
 import authRouter from "./auth/routes.js";
 import { requireAuth } from "./auth/middleware.js";
 import { authConfig } from "./auth/config.js";
@@ -34,11 +35,15 @@ const app = express();
 // Must run before both so the parsed cookies are on req.cookies.
 app.use(cookieParser());
 
-// JSON body parser — skipped for /api/pdf-cleanup and /api/bom/parse-rup
-// so multipart / raw-binary uploads pass through to the backend untouched.
+// JSON body parser — skipped for /api/pdf-cleanup, /api/bom/parse-rup,
+// and /api/billing/webhook so multipart / raw-binary uploads pass through
+// to the backend untouched. Stripe signs the EXACT bytes it sends; if
+// express.json() parses + re-serializes them, signature verification
+// would fail upstream.
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/pdf-cleanup")) return next();
   if (req.path === "/api/bom/parse-rup") return next();
+  if (req.path === "/api/billing/webhook") return next();
   express.json({ limit: "10mb" })(req, res, next);
 });
 
@@ -61,6 +66,12 @@ app.get("/api/healthz", (_req, res) => {
 // design (the whole point is to establish auth).
 app.use("/api/auth", authRouter);
 
+// Stripe webhook — must be unauthenticated (Stripe is the caller, not
+// a logged-in user). Mounted before requireAuth-protected routes so
+// it doesn't fall through. Signature is verified upstream in
+// procalcs-bom against STRIPE_WEBHOOK_SECRET.
+app.use("/api/billing/webhook", billingRouter);
+
 // Protected API routes — every request past this line has req.user
 // set by requireAuth, or was 401'd before reaching the router.
 app.use("/api/client-profiles", requireAuth, clientProfilesRouter);
@@ -68,6 +79,7 @@ app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/bom", requireAuth, bomRouter);
 app.use("/api/sku-catalog", requireAuth, skuCatalogRouter);
 app.use("/api/pdf-cleanup", requireAuth, pdfCleanupRouter);
+app.use("/api/billing", requireAuth, billingRouter);
 
 // Unmatched /api/* → JSON 404 (do NOT fall through to the SPA shell)
 app.use("/api", (_req, res) => {

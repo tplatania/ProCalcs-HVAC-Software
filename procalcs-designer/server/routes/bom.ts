@@ -14,18 +14,9 @@
 
 import { Router, type Request, type Response } from "express";
 import { config } from "../config.js";
+import { buildUpstreamHeaders } from "../upstreamHeaders.js";
 
 const router = Router();
-
-// Headers attached to every upstream call so the BOM service can
-// authorize (shared secret) and attribute (client id) the request.
-function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = { "X-Client-Id": config.clientId };
-  if (config.serviceSharedSecret) {
-    h["X-Procalcs-Service-Token"] = config.serviceSharedSecret;
-  }
-  return h;
-}
 
 router.all("/*splat", async (req: Request, res: Response) => {
   const upstreamUrl = `${config.flaskBomBaseUrl}/api/v1/bom${req.path}`;
@@ -33,7 +24,7 @@ router.all("/*splat", async (req: Request, res: Response) => {
   // ─── Multipart / raw-binary branch: /parse-rup ──────────────────────
   if (req.path === "/parse-rup") {
     try {
-      const headers: Record<string, string> = { ...authHeaders() };
+      const headers: Record<string, string> = { ...buildUpstreamHeaders(req) };
       const ct = req.headers["content-type"];
       if (ct) headers["Content-Type"] = Array.isArray(ct) ? ct[0] : ct;
 
@@ -73,7 +64,7 @@ router.all("/*splat", async (req: Request, res: Response) => {
     try {
       const upstream = await fetch(upstreamUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json", ...buildUpstreamHeaders(req) },
         body: JSON.stringify(req.body ?? {}),
       });
 
@@ -106,7 +97,7 @@ router.all("/*splat", async (req: Request, res: Response) => {
   try {
     const upstream = await fetch(upstreamUrl, {
       method: req.method,
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...buildUpstreamHeaders(req) },
       body:
         req.method === "GET" || req.method === "HEAD"
           ? undefined

@@ -531,3 +531,111 @@ export function useDeleteSku() {
   });
 }
 
+
+// ─── Billing / subscriptions ───────────────────────────────────────────
+//
+// Endpoints proxy to procalcs-bom /api/v1/billing/*, which were added
+// in the Apr 30 2026 evening session — see _repo-docs/SAAS_BILLING_DESIGN.md.
+// All four require an authenticated user (Express requireAuth → user
+// identity forwarded as X-Procalcs-User-Email upstream). Webhook is
+// not consumed by the SPA — only Stripe calls it.
+
+export type SubscriptionTier = "internal" | "trial" | "starter" | "pro" | "enterprise";
+
+export interface BillingTierConfig {
+  label:          string;
+  bom_limit:      number;          // -1 = unlimited
+  price_monthly:  number | null;
+  price_yearly:   number | null;
+  features:       string[];
+}
+
+export interface BillingConfig {
+  publishable_key: string;
+  billing_enabled: boolean;
+  trial_days:      number;
+  tiers:           Record<SubscriptionTier, BillingTierConfig>;
+}
+
+export interface BillingMe {
+  id:                     number;
+  email:                  string;
+  name:                   string | null;
+  subscription_tier:      SubscriptionTier;
+  tier_label:             string;
+  subscription_status:    string | null;
+  trial_ends_at:          string | null;   // ISO
+  current_period_end:     string | null;   // ISO
+  cancel_at_period_end:   boolean;
+  bom_count_total:        number;
+  bom_count_monthly:      number;
+  bom_limit:              number;          // -1 = unlimited
+  boms_remaining:         number;          // -1 = unlimited
+  features:               string[];
+  created_at:             string | null;
+  last_login:             string | null;
+}
+
+export type BillingPlan =
+  | "starter_monthly"
+  | "starter_yearly"
+  | "pro_monthly"
+  | "pro_yearly";
+
+export const getBillingConfigQueryKey = () => ["billing", "config"] as const;
+export const getBillingMeQueryKey     = () => ["billing", "me"] as const;
+
+export function useBillingConfig() {
+  return useQuery({
+    queryKey: getBillingConfigQueryKey(),
+    queryFn: () => apiFetchEnvelope<BillingConfig>("/api/billing/config"),
+    // Tier table is effectively static per deploy — cache aggressively
+    // so the pricing page renders without a network round-trip on
+    // navigation.
+    staleTime: 60 * 60 * 1000, // 1h
+  });
+}
+
+export function useBillingMe(opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: getBillingMeQueryKey(),
+    queryFn: () => apiFetchEnvelope<BillingMe>("/api/billing/me"),
+    enabled: opts?.enabled ?? true,
+  });
+}
+
+// Open Stripe-hosted checkout. The mutation returns the Stripe URL;
+// the caller is responsible for window.location.assign() to it (so
+// the redirect happens from a real user gesture, not a hidden iframe).
+export function useStartCheckout() {
+  return useMutation<
+    { session_id: string; url: string },
+    { error: string; status?: number },
+    { plan: BillingPlan; success_url?: string; cancel_url?: string }
+  >({
+    mutationFn: (payload) =>
+      apiFetchEnvelope<{ session_id: string; url: string }>(
+        "/api/billing/checkout",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      ),
+  });
+}
+
+// Open the Stripe customer portal so the user can change plan / update
+// card / cancel. Like checkout, returns a URL we then assign to.
+export function useOpenBillingPortal() {
+  return useMutation<
+    { url: string },
+    { error: string; status?: number },
+    { return_url?: string } | undefined
+  >({
+    mutationFn: (payload) =>
+      apiFetchEnvelope<{ url: string }>("/api/billing/portal", {
+        method: "POST",
+        body: JSON.stringify(payload ?? {}),
+      }),
+  });
+}
