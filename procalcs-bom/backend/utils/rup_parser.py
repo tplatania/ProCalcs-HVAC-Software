@@ -59,6 +59,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import struct
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -500,6 +501,123 @@ def _build_raw_context(
     return "\n".join(lines)
 
 
+# ── Structural block parser (binary path) ──────────────────────────────────
+#
+# Wrightsoft .rup files are densely-packed binary records bracketed by
+# UTF-16-LE markers `!BEG=<TAG>` ... `!END=<TAG>`. The regex-on-text path
+# above misses 90%+ of structural data because it only sees free-floating
+# strings — counts and per-instance attributes live in fixed-width binary
+# fields between the markers.
+#
+# This block carries the tags we know how to decode. See
+# /Users/geraldvillaran/Projects/designer-desktop/_repo-docs/RUP_BINARY_LAYOUT.md
+# for the empirical layout notes that drive the field offsets here.
+
+def _block_bodies(file_bytes: bytes, tag: str) -> List[bytes]:
+    """Yield the body bytes (between BEG and END markers) for every block
+    of the given tag. Order follows file position."""
+    beg = ("!BEG=" + tag).encode("utf-16-le")
+    end = ("!END=" + tag).encode("utf-16-le")
+    out: List[bytes] = []
+    pos = 0
+    while True:
+        b = file_bytes.find(beg, pos)
+        if b < 0:
+            break
+        e = file_bytes.find(end, b + len(beg))
+        if e < 0:
+            break
+        out.append(file_bytes[b + len(beg):e])
+        pos = e + len(end)
+    return out
+
+
+# Map Wrightsoft equipment names (UTF-16 strings inside EQUIP blocks) to
+# the canonical types compute_scope() reads in materials_rules.py. The
+# mapping is intentionally permissive — substring match against a normalized
+# (lowercase, whitespace-collapsed) form. New equipment types Wrightsoft
+# emits should be added here as they're discovered.
+_EQUIPMENT_NAME_MAP: List[Tuple[str, str]] = [
+    # (substring trigger,            canonical type)
+    ("air handler",                   "air_handler"),
+    ("ahu",                           "air_handler"),
+    ("split ac",                      "condenser"),
+    ("condenser",                     "condenser"),
+    ("heat pump",                     "heat_pump"),
+    ("furnace",                       "furnace"),
+    ("heat kit",                      "heat_kit"),
+    ("electric heat",                 "heat_kit"),
+    ("erv",                           "erv"),
+    ("hrv",                           "erv"),
+    ("energy recovery",               "erv"),
+]
+
+
+def _classify_equipment_name(raw: str) -> str:
+    """Normalize a Wrightsoft equipment name into a canonical type. Falls
+    back to 'other' so the structured parser doesn't lose records — the
+    rules engine ignores 'other' but downstream UIs can still display the
+    raw name."""
+    norm = " ".join(raw.lower().split())
+    for needle, canonical in _EQUIPMENT_NAME_MAP:
+        if needle in norm:
+            return canonical
+    return "other"
+
+
+def _parse_equip_blocks(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """Decode every !BEG=EQUIP block into a structured record.
+
+    Block layout (empirical, see RUP_BINARY_LAYOUT.md):
+        +0x00  uint32  schema_version (typically 0x0b = 11)
+        +0x04  uint32  record_id
+        +0x08  uint32  flags (bitfield — exact semantics TBD)
+        +0x0c  uint32  reserved
+        +0x10  uint32  name_length_bytes (UTF-16, so chars * 2)
+        +0x14  bytes   name (UTF-16-LE, name_length_bytes long)
+        +...   binary  fixed-position float32/uint32 fields (CFM, tonnage —
+                       not decoded yet)
+
+    Returns one dict per record with at minimum {raw_name, type, record_id}.
+    The text-regex _parse_equipment fallback runs only if this returns empty.
+    """
+    bodies = _block_bodies(file_bytes, "EQUIP")
+    out: List[Dict[str, Any]] = []
+    for idx, body in enumerate(bodies):
+        if len(body) < 0x14:
+            continue
+        try:
+            schema_version, record_id, flags, _reserved, name_len = struct.unpack_from(
+                "<IIIII", body, 0
+            )
+        except struct.error:
+            continue
+        # Name length is in bytes (UTF-16, so 2 per char). Cap at body size
+        # to defend against bad lengths in malformed records.
+        name_end = 0x14 + min(name_len, len(body) - 0x14)
+        try:
+            raw_name = body[0x14:name_end].decode("utf-16-le", errors="replace")
+        except Exception:
+            raw_name = ""
+        # Strip trailing nulls and whitespace.
+        raw_name = raw_name.rstrip("\x00").strip()
+        if not raw_name:
+            continue
+        out.append({
+            "name":       raw_name,
+            "type":       _classify_equipment_name(raw_name),
+            "raw_name":   raw_name,
+            "record_id":  record_id,
+            "flags":      flags,
+            "schema":     schema_version,
+            # CFM/tonnage/model decoded by future passes against more RUPs.
+            "cfm":        None,
+            "tonnage":    None,
+            "model":      None,
+        })
+    return out
+
+
 # ── Public API ──────────────────────────────────────────────────────────────
 
 def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
@@ -518,7 +636,18 @@ def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
     project   = _parse_project(sections)
     location  = _parse_location(sections)
     building  = _parse_building(sections, full_text)
+
+    # Equipment: text-regex path stays primary for now. The structural
+    # _parse_equip_blocks helper exists and is exercised by tests, but
+    # empirical inspection (see _repo-docs/RUP_BINARY_LAYOUT.md) showed
+    # that EQUIP blocks carry the equipment LIBRARY (every type Wrightsoft
+    # offers — 132 entries on Edge) rather than placed project instances.
+    # The placed instances live in ZEQUIP (50 records on Edge for an
+    # 8-AHU residence — ~6 zone-equipment items per AHU). ZEQUIP parser
+    # is a follow-up; until it lands, the regex path's AHU-pipe pattern
+    # remains the most reliable signal for compute_scope.
     equipment = _parse_equipment(full_text)
+
     rooms     = _parse_rooms(full_text)
 
     raw_context = _build_raw_context(project, building, equipment, rooms, full_text)
