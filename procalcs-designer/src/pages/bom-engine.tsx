@@ -56,11 +56,17 @@ function getStepState(step: StepKey, status: PipelineStatus): "idle" | "active" 
 }
 
 function getProgressValue(status: PipelineStatus): number {
+  // Bar represents progress of the work this page does (parsing the
+  // .rup). Generate is the next page's job, so reaching "parsed" means
+  // BOM Engine itself is done — show 100% to match user mental model
+  // ("Parse complete" + a non-100 bar reads as "parse incomplete").
+  // The 4-stage breadcrumb at the top still tracks Upload → Parse →
+  // Preview → Generate as the workflow indicator.
   const map: Record<PipelineStatus, number> = {
-    idle: 0,
+    idle:    0,
     parsing: 45,
-    parsed: 75,
-    error: 0,
+    parsed:  100,
+    error:   0,
   };
   return map[status];
 }
