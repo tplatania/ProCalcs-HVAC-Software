@@ -30,6 +30,8 @@ from extensions import db
 from models import BomRun
 from models.bom_run import REVIEWER_STATUSES
 from services import bom_service
+from services.bom_comparator import compare_bom
+from services.sample_bom import parse_sample_bom_bytes
 
 logger = logging.getLogger("procalcs_bom.bom_runs")
 
@@ -235,3 +237,81 @@ def regenerate_run(run_id: int):
         return _err("Something went wrong during regeneration.", 500)
 
     return _ok(bom)
+
+
+# ─── Compare with sample BOM ────────────────────────────────────────
+
+# Cap upload size — Tom's reference BOMs are 30-100 rows; even with
+# heavy formatting they're under 1 MB. Cap at 5 MB so a malformed
+# upload can't OOM the worker.
+_MAX_SAMPLE_BYTES = 5 * 1024 * 1024
+
+
+@bom_runs_bp.route("/<int:run_id>/compare", methods=["POST"])
+def compare_run(run_id: int):
+    """Compare a saved BOM run against a contractor's reference sample.
+
+    Two intake modes:
+
+      a) multipart upload of a Wrightsoft .xls / .xlsx — parsed via
+         services.sample_bom into the canonical line-item shape.
+      b) JSON body `{"sample_lines": [{"sku":..., "quantity":...}, ...]}`
+         — for callers that already extracted the rows (e.g. the SPA's
+         paste-CSV path, or an automated harness loading a fixture).
+
+    Returns the report from services.bom_comparator unchanged: a
+    metrics roll-up + per-line outcomes (matched / qty_mismatch /
+    missing / extra). Does NOT persist the report — Phase 8/9 will
+    layer on storage when we wire the regression suite.
+    """
+    run = BomRun.query.get(run_id)
+    if run is None:
+        return _err(f"Run {run_id} not found", 404)
+    if not run.generated_bom:
+        return _err(
+            "Run has no generated_bom — nothing to compare against.", 422,
+        )
+
+    sample_lines: list[dict] = []
+    source_filename: str | None = None
+
+    # Multipart-file branch
+    if "file" in request.files:
+        upload = request.files["file"]
+        source_filename = upload.filename or "sample.xls"
+        file_bytes = upload.read()
+        if not file_bytes:
+            return _err("Uploaded sample file is empty", 400)
+        if len(file_bytes) > _MAX_SAMPLE_BYTES:
+            return _err(
+                f"Sample file exceeds {_MAX_SAMPLE_BYTES // 1024 // 1024} MB limit",
+                413,
+            )
+        try:
+            sample_lines = parse_sample_bom_bytes(file_bytes, filename=source_filename)
+        except ValueError as exc:
+            return _err(str(exc), 400)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("compare_run parse failed run_id=%s: %s", run_id, exc, exc_info=True)
+            return _err("Failed to parse sample BOM", 500)
+    else:
+        body = request.get_json(silent=True) or {}
+        sl = body.get("sample_lines")
+        if not isinstance(sl, list):
+            return _err(
+                "Send either a multipart 'file' upload or {\"sample_lines\": [...]}.",
+                400,
+            )
+        sample_lines = sl
+
+    try:
+        report = compare_bom(sample_lines, run.generated_bom)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("compare_run compute failed run_id=%s: %s", run_id, exc, exc_info=True)
+        return _err("Comparison failed", 500)
+
+    payload = report.to_dict()
+    payload["run_id"] = run.id
+    payload["sample_filename"] = source_filename
+    payload["sample_lines"] = sample_lines  # echoed for SPA preview
+    return _ok(payload)

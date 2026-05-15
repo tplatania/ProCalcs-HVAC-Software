@@ -348,3 +348,91 @@ class TestRegenerateRun:
         resp = client.post(f"/api/v1/bom-runs/{run.id}/regenerate", json={})
         assert resp.status_code == 422
         assert "cannot regenerate" in resp.get_json()["error"]
+
+# ─── POST /<id>/compare ─────────────────────────────────────────────
+
+class TestCompareRun:
+    def _seed_run_with_bom(self, line_items: list[dict]):
+        run = BomRun.record(
+            client_id="x", job_id="cmp-job", output_mode="full",
+            parsed_design_data={},
+            generated_bom={
+                "line_items": line_items,
+                "item_count": len(line_items),
+                "totals": {"total_cost": 0, "total_price": 0},
+            },
+        )
+        db.session.commit()
+        return run
+
+    def test_compare_with_json_sample_lines_payload(self, app, client):
+        run = self._seed_run_with_bom([
+            {"sku": "A", "description": "AHU", "quantity": 1},
+            {"sku": "B", "description": "Cond", "quantity": 1},
+        ])
+        resp = client.post(
+            f"/api/v1/bom-runs/{run.id}/compare",
+            json={"sample_lines": [
+                {"sku": "A", "description": "AHU", "quantity": 1},
+                {"sku": "C", "description": "Missing", "quantity": 1},
+            ]},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        d = resp.get_json()["data"]
+        assert d["run_id"] == run.id
+        m = d["metrics"]
+        assert m["matched"] == 1
+        assert m["missing"] == 1
+        assert m["extra"] == 1  # B was in run but not in sample
+        assert m["sku_match_rate"] == 0.5
+
+    def test_compare_with_xlsx_upload(self, app, client):
+        from io import BytesIO
+        from openpyxl import Workbook
+        run = self._seed_run_with_bom([
+            {"sku": "AHU-24K", "description": "Air handler", "quantity": 1},
+        ])
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Src", "Name", "Description", "Qty"])
+        ws.append(["GOOD", "AHU-24K", "Air handler", 1])
+        buf = BytesIO()
+        wb.save(buf)
+
+        resp = client.post(
+            f"/api/v1/bom-runs/{run.id}/compare",
+            data={"file": (BytesIO(buf.getvalue()), "sample.xlsx")},
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 200, resp.get_json()
+        d = resp.get_json()["data"]
+        assert d["sample_filename"] == "sample.xlsx"
+        assert d["metrics"]["matched"] == 1
+
+    def test_404_for_missing_run(self, app, client):
+        resp = client.post("/api/v1/bom-runs/9999/compare", json={"sample_lines": []})
+        assert resp.status_code == 404
+
+    def test_422_when_run_has_no_generated_bom(self, app, client):
+        run = BomRun.record(
+            client_id="x", job_id="cmp-job", output_mode="full",
+            parsed_design_data={}, generated_bom=None,
+        )
+        db.session.commit()
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/compare", json={"sample_lines": []})
+        assert resp.status_code == 422
+        assert "nothing to compare" in resp.get_json()["error"].lower()
+
+    def test_400_when_neither_file_nor_sample_lines_provided(self, app, client):
+        run = self._seed_run_with_bom([{"sku": "A", "description": "x", "quantity": 1}])
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/compare", json={})
+        assert resp.status_code == 400
+        # Pre-Phase-3 row simulation — design_data is None.
+        run = BomRun.record(
+            client_id="x", job_id="y", output_mode="full",
+            parsed_design_data=None, generated_bom={"item_count": 0},
+        )
+        db.session.commit()
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/regenerate", json={})
+        assert resp.status_code == 422
+        assert "cannot regenerate" in resp.get_json()["error"]

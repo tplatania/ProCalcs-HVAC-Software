@@ -41,3 +41,11 @@ pg8000==1.30.3
 
 # Cloud SQL connector for production deploys (matches Ask-Your-HVAC-Pro).
 cloud-sql-python-connector[pg8000]==1.5.0
+
+# ---------------------------------------------------------------------
+# Sample-BOM XLS comparator (May 2026 — Phase 7 testing harness)
+# ---------------------------------------------------------------------
+# openpyxl handles .xlsx (Wrightsoft + Excel newer); xlrd 2.0 handles
+# the legacy .xls binary format that Tom's reference BOM exports use.
+openpyxl==3.1.5
+xlrd==2.0.2
