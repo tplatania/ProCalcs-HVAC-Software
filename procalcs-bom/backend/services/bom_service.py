@@ -194,7 +194,60 @@ def generate(client_id: str, job_id: str, design_data: dict,
 
     logger.info("BOM generated successfully for job %s — %s line items",
                 job_id, len(bom.get('line_items', [])))
+
+    # Phase 3 (May 2026) — persist the run for Richard's testing-harness
+    # history page. Best-effort: a DB hiccup must NOT fail an otherwise
+    # successful BOM generation, since that's what the user is paying
+    # to wait 15 seconds for. Caller can still recover the BOM from the
+    # response even if persistence failed.
+    try:
+        _record_bom_run(
+            client_id=client_id,
+            job_id=job_id,
+            output_mode=effective_mode,
+            design_data=design_data,
+            generated_bom=bom,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("BOM persistence failed for job %s — %s", job_id, exc)
+
     return bom
+
+
+def _record_bom_run(
+    *,
+    client_id: str,
+    job_id: str,
+    output_mode: str,
+    design_data: dict,
+    generated_bom: dict,
+) -> None:
+    """Insert one bom_runs row + commit. Pulled out so the try/except
+    around it stays narrow — DB failures shouldn't poison the BOM
+    response. See models/bom_run.py for the full schema."""
+    from models import BomRun
+    from extensions import db
+    from flask import g, has_request_context
+
+    # Created-by attribution from the user-identity-forwarding middleware
+    # (see app.py register_user_middleware). Optional — if the request
+    # didn't carry X-Procalcs-User-Email (shared-secret-only call), we
+    # still record the run but with no email.
+    created_by_email = None
+    if has_request_context():
+        user = getattr(g, "current_user", None)
+        if user is not None:
+            created_by_email = getattr(user, "email", None)
+
+    BomRun.record(
+        client_id=client_id,
+        job_id=job_id,
+        output_mode=output_mode,
+        parsed_design_data=design_data,
+        generated_bom=generated_bom,
+        created_by_email=created_by_email,
+    )
+    db.session.commit()
 
 
 # ===============================

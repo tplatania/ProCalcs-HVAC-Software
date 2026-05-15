@@ -6,3 +6,4 @@
 
 from .user import User                    # noqa: F401
 from .subscription_event import SubscriptionEvent  # noqa: F401
+from .bom_run import BomRun                # noqa: F401
