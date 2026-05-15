@@ -123,17 +123,39 @@ def _validate_design_data(design: dict) -> list:
     """Validate the design_data block from Designer Desktop."""
     errors = []
 
-    # At minimum we need some design content to work with
-    has_content = any([
+    # At minimum we need some design content to work with — either
+    # structured arrays (the parser's preferred output) OR a non-trivial
+    # raw_rup_context narrative the AI can read to estimate quantities.
+    #
+    # The hybrid path is the documented design from rup_parser.py: when
+    # structured extraction is partial (Manual D / ducts-only RUPs leave
+    # equipment/duct_runs/fittings/registers empty), the parser dumps
+    # the file's narrative text into raw_rup_context and the BOM service
+    # passes that to Claude. Eval 2026-04-29 confirmed Easy + Average
+    # sample RUPs hit this path; the validator's previous reject made
+    # the documented hybrid useless.
+    #
+    # MIN_RAW_CONTEXT_CHARS is the floor for "AI has enough text to
+    # work with". 200 chars covers the smallest real RUP we've seen
+    # (Easy = 487 chars, Average = 462 chars, Edge = 1591 chars).
+    # Lower than that = parser failure or empty file; reject.
+    MIN_RAW_CONTEXT_CHARS = 200
+
+    has_structured = any([
         design.get('duct_runs'),
         design.get('equipment'),
         design.get('fittings'),
         design.get('registers'),
     ])
-    if not has_content:
+    raw_ctx = design.get('raw_rup_context') or ''
+    has_narrative_fallback = len(raw_ctx) >= MIN_RAW_CONTEXT_CHARS
+
+    if not has_structured and not has_narrative_fallback:
         errors.append(
-            "design_data must contain at least one of: "
-            "duct_runs, equipment, fittings, registers."
+            "design_data must contain at least one of: duct_runs, equipment, "
+            f"fittings, registers — or a raw_rup_context of {MIN_RAW_CONTEXT_CHARS}+ "
+            f"characters for the AI hybrid path. Got structured=empty, "
+            f"raw_rup_context={len(raw_ctx)} chars."
         )
 
     # Validate building block if present

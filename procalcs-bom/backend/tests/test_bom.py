@@ -234,6 +234,81 @@ class TestValidateBomRequest:
         errors = validate_bom_request(None)
         assert len(errors) > 0
 
+    # ─── Hybrid path (May 2026 fix) ────────────────────────────────
+    #
+    # The validator was hard-rejecting design_data with empty
+    # duct_runs/equipment/fittings/registers, even when raw_rup_context
+    # carried the parsed narrative the AI is meant to read. That made
+    # the documented hybrid path useless on Manual D / ducts-only RUPs
+    # (Easy + Average sample RUPs from eval-2026-04-29). Loosened to
+    # accept a non-trivial raw_rup_context as a valid fallback.
+
+    def _empty_arrays_design(self, raw_ctx: str = "") -> dict:
+        """Build a design_data with all 4 structured arrays empty.
+        Matches what rup_parser emits on Manual D / ducts-only RUPs."""
+        return {
+            "project":  {"name": "Test ADU"},
+            "building": {"type": "single_level", "duct_location": "attic"},
+            "equipment": [], "duct_runs": [], "fittings": [], "registers": [],
+            "rooms": [],
+            "raw_rup_context": raw_ctx,
+        }
+
+    def test_empty_arrays_with_long_raw_context_accepted(self, valid_bom_request):
+        # Easy sample RUP yielded 487 chars of raw_rup_context. Average
+        # was 462. Both must validate now.
+        valid_bom_request["design_data"] = self._empty_arrays_design(
+            raw_ctx="x" * 500  # comfortably above the 200-char floor
+        )
+        errors = validate_bom_request(valid_bom_request)
+        assert errors == [], (
+            "hybrid path should accept empty arrays + non-trivial raw_rup_context"
+        )
+
+    def test_empty_arrays_with_short_raw_context_rejected(self, valid_bom_request):
+        # Below the floor — likely a parser failure. Reject so we don't
+        # spend Anthropic tokens on garbage.
+        valid_bom_request["design_data"] = self._empty_arrays_design(
+            raw_ctx="too short"
+        )
+        errors = validate_bom_request(valid_bom_request)
+        assert any("raw_rup_context" in e for e in errors)
+
+    def test_empty_arrays_with_no_raw_context_rejected(self, valid_bom_request):
+        # Truly empty design_data. Should still reject with a clear msg.
+        valid_bom_request["design_data"] = self._empty_arrays_design(raw_ctx="")
+        errors = validate_bom_request(valid_bom_request)
+        assert any("raw_rup_context" in e for e in errors)
+        assert any("0 chars" in e for e in errors)
+
+    def test_floor_boundary_at_200_chars(self, valid_bom_request):
+        """Pin the floor: exactly 200 chars passes; 199 fails. Lets
+        future tuning of MIN_RAW_CONTEXT_CHARS happen with a clear test
+        signal rather than a quiet behavior shift."""
+        valid_bom_request["design_data"] = self._empty_arrays_design(
+            raw_ctx="x" * 200
+        )
+        assert validate_bom_request(valid_bom_request) == []
+
+        valid_bom_request["design_data"] = self._empty_arrays_design(
+            raw_ctx="x" * 199
+        )
+        errors = validate_bom_request(valid_bom_request)
+        assert any("199 chars" in e for e in errors)
+
+    def test_structured_data_alone_still_works(self, valid_bom_request):
+        """Pre-fix path unchanged: any structured array populated
+        validates regardless of raw_rup_context length."""
+        valid_bom_request["design_data"] = {
+            "project":  {"name": "Edge"},
+            "building": {"type": "single_level", "duct_location": "attic"},
+            "equipment": [{"name": "AHU-1", "type": "air_handler"}],
+            "duct_runs": [], "fittings": [], "registers": [],
+            "rooms": [],
+            "raw_rup_context": "",  # not needed; equipment carries us
+        }
+        assert validate_bom_request(valid_bom_request) == []
+
 
 # ===============================
 # ClientProfile Model Tests
