@@ -35,6 +35,7 @@ from models import BomRun
 from models.bom_run import REVIEWER_STATUSES
 from services import bom_service
 from services.bom_comparator import compare_bom
+from services.bom_diff import diff_summary, is_regression
 from services.sample_bom import parse_sample_bom_bytes
 
 logger = logging.getLogger("procalcs_bom.bom_runs")
@@ -500,6 +501,20 @@ def run_regression_suite(tag: str):
             member["child_id"] = child_id
             member["item_count"] = bom.get("item_count")
 
+            # Phase 11 — auto-detect drift. Compare parent.generated_bom
+            # vs the just-generated child. Surface diff metrics + a
+            # boolean so the SPA can label this row as "regression"
+            # without an extra round trip.
+            try:
+                summary = diff_summary(parent.generated_bom, bom)
+                member["diff"] = summary
+                member["regression_detected"] = is_regression(summary)
+            except Exception as exc:  # noqa: BLE001
+                # Diff is best-effort — failure must not poison the
+                # suite-run report. Log and continue.
+                logger.warning("diff_summary failed parent=%s child=%s: %s",
+                               parent.id, child_id, exc)
+
             # Carry the suite tag forward so the next regression-suite
             # invocation picks up the freshly-generated child as a
             # member too. Without this the suite would calcify to its
@@ -519,8 +534,9 @@ def run_regression_suite(tag: str):
         members.append(member)
 
     summary = {
-        "ok":     sum(1 for m in members if m["status"] == "ok"),
-        "errors": sum(1 for m in members if m["status"] == "error"),
-        "total":  len(members),
+        "ok":          sum(1 for m in members if m["status"] == "ok"),
+        "errors":      sum(1 for m in members if m["status"] == "error"),
+        "regressions": sum(1 for m in members if m.get("regression_detected")),
+        "total":       len(members),
     }
     return _ok({"tag": suite_tag, "summary": summary, "members": members})

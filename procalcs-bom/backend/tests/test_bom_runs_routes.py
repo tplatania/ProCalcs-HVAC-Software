@@ -557,6 +557,31 @@ class TestTagsAndSuites:
         resp = client.post("/api/v1/bom-runs/regression-suites/no-such-tag/run", json={})
         assert resp.status_code == 404
 
+    def test_run_suite_includes_diff_and_regression_flag(self, app, client, profile_dict, design_data):
+        """Phase 11 — every suite member should carry parent vs child
+        diff metrics + a regression_detected boolean."""
+        for p in self._patches(profile_dict): p.start()
+        try:
+            bom_service.generate("test-contractor", "p1", design_data)
+            for r in BomRun.query.all():
+                r.tags = ["regression-v2"]
+            db.session.commit()
+
+            resp = client.post("/api/v1/bom-runs/regression-suites/regression-v2/run", json={})
+            d = resp.get_json()["data"]
+            assert "regressions" in d["summary"]
+            m = d["members"][0]
+            assert m["status"] == "ok"
+            assert "diff" in m
+            assert "regression_detected" in m
+            # Empty AI patches → identical parent + child → no regression
+            assert m["diff"]["unchanged"] >= 0
+            assert m["regression_detected"] is False
+        finally:
+            for p in self._patches(profile_dict):
+                try: p.stop()
+                except Exception: pass
+
     def test_run_suite_member_without_design_data_marked_error(self, app, client):
         # Seed a row with no design_data — suite still completes, this
         # member reports error.
