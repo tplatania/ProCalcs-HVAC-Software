@@ -420,6 +420,15 @@ export interface SKUItem {
   default_unit_price: number;
   notes: string;
   disabled: boolean;
+  // Phase 3.5 additions (May 2026) — all optional. Existing SKUs return
+  // empty array / null for these. See procalcs-bom services/sku_catalog.py
+  // SKUItem dataclass for field semantics.
+  wrightsoft_codes?: string[];
+  capacity_btu?: number | null;
+  capacity_min_btu?: number | null;
+  capacity_max_btu?: number | null;
+  manufacturer?: string | null;
+  contractor_id?: string | null;
 }
 
 export interface SKUCatalogMeta {
