@@ -355,3 +355,318 @@ class TestDeleteRoute:
                            side_effect=CatalogError("missing", status_code=404)):
             resp = client.delete("/api/v1/sku-catalog/NOPE")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.5 schema bump (May 2026) — additive fields
+# ---------------------------------------------------------------------------
+#
+# Five new optional fields added to SKUItem so the catalog can carry the
+# data needed for catalog-augmented BOM generation: wrightsoft_codes
+# (bridge into Wrightsoft generic_parts.csv), capacity_btu and
+# capacity_min/max_btu (equipment sizing tolerance band), manufacturer
+# (display name separate from 4-char supplier code), contractor_id
+# (per-contractor scoping).
+#
+# Goal of these tests: prove the bump is fully additive — every existing
+# payload shape still validates, every old-shape SKU still loads, and
+# the new fields default to sensible empty values.
+
+
+class TestSchemaBumpRoundTrip:
+    """Existing 21 starter SKUs and old-shape payloads must still work."""
+
+    def test_old_shape_payload_validates_clean(self):
+        """A payload missing every Phase-3.5 field must still pass
+        validation and return defaulted values for the new keys."""
+        old = {
+            "sku":                "OLD-SHAPE",
+            "supplier":           "WSF",
+            "section":            "Equipment",
+            "phase":              None,
+            "description":        "Pre-3.5 SKU",
+            "trigger":            "always",
+            "quantity":           {"mode": "fixed", "value": 1},
+            "default_unit_price": 0,
+        }
+        clean = sku_catalog.validate_item(old)
+        assert clean["wrightsoft_codes"] == []
+        assert clean["capacity_btu"] is None
+        assert clean["capacity_min_btu"] is None
+        assert clean["capacity_max_btu"] is None
+        assert clean["manufacturer"] is None
+        assert clean["contractor_id"] is None
+
+    def test_old_shape_round_trips_through_dataclass(self):
+        old = {
+            "sku":                "OLD-SHAPE-2",
+            "supplier":           "WSF",
+            "section":            "Equipment",
+            "phase":              None,
+            "description":        "Pre-3.5 SKU 2",
+            "trigger":            "always",
+            "quantity":           {"mode": "fixed", "value": 1},
+            "default_unit_price": 0,
+        }
+        clean = sku_catalog.validate_item(old)
+        item = sku_catalog.SKUItem.from_dict(clean)
+        assert item.wrightsoft_codes == ()  # tuple, not list, because dataclass is frozen+hashable
+        assert item.capacity_btu is None
+        # Round-trip back to dict and confirm shape
+        out = item.to_dict()
+        assert out["wrightsoft_codes"] == []
+        assert out["capacity_btu"] is None
+
+
+class TestNewShapeValidation:
+    """Phase-3.5 payloads carry the new fields and validate correctly."""
+
+    def _goodman_ahu(self, **overrides):
+        base = {
+            "sku":                "GOOD-AHU-24K",
+            "supplier":           "GOOD",
+            "section":            "Equipment",
+            "phase":              None,
+            "description":        "Goodman AHU AHVE24BP1300A",
+            "trigger":            "ahu_present",
+            "quantity":           {"mode": "per_unit"},
+            "default_unit_price": 1850.0,
+            "wrightsoft_codes":   ["AHVE24BP1300A"],
+            "capacity_btu":       24000,
+            "capacity_min_btu":   22000,
+            "capacity_max_btu":   26000,
+            "manufacturer":       "Goodman",
+            "contractor_id":      None,
+        }
+        base.update(overrides)
+        return base
+
+    def test_full_new_shape_validates_and_round_trips(self):
+        clean = sku_catalog.validate_item(self._goodman_ahu())
+        item = sku_catalog.SKUItem.from_dict(clean)
+        assert item.wrightsoft_codes == ("AHVE24BP1300A",)
+        assert item.capacity_btu == 24000
+        assert item.capacity_min_btu == 22000
+        assert item.capacity_max_btu == 26000
+        assert item.manufacturer == "Goodman"
+
+    def test_string_wrightsoft_code_coerced_to_list(self):
+        """Form inputs and CSV cells often deliver a single string, not a
+        list. The validator should tolerate that and wrap it."""
+        clean = sku_catalog.validate_item(
+            self._goodman_ahu(wrightsoft_codes="AHVE24BP1300A")
+        )
+        assert clean["wrightsoft_codes"] == ["AHVE24BP1300A"]
+
+    def test_blank_strings_in_codes_dropped(self):
+        clean = sku_catalog.validate_item(
+            self._goodman_ahu(wrightsoft_codes=["A", "", "B", " "])
+        )
+        assert clean["wrightsoft_codes"] == ["A", "B"]
+
+    def test_capacity_min_without_max_rejected(self):
+        with pytest.raises(CatalogError) as exc_info:
+            sku_catalog.validate_item(
+                self._goodman_ahu(capacity_min_btu=22000, capacity_max_btu=None)
+            )
+        assert "must be set together" in str(exc_info.value)
+
+    def test_capacity_max_without_min_rejected(self):
+        with pytest.raises(CatalogError) as exc_info:
+            sku_catalog.validate_item(
+                self._goodman_ahu(capacity_min_btu=None, capacity_max_btu=26000)
+            )
+        assert "must be set together" in str(exc_info.value)
+
+    def test_capacity_min_greater_than_max_rejected(self):
+        with pytest.raises(CatalogError) as exc_info:
+            sku_catalog.validate_item(
+                self._goodman_ahu(capacity_min_btu=30000, capacity_max_btu=25000)
+            )
+        assert "must be <=" in str(exc_info.value)
+
+    def test_capacity_btu_outside_band_rejected(self):
+        with pytest.raises(CatalogError) as exc_info:
+            sku_catalog.validate_item(
+                self._goodman_ahu(capacity_btu=30000, capacity_min_btu=22000, capacity_max_btu=25000)
+            )
+        assert "must lie within" in str(exc_info.value)
+
+    def test_capacity_string_input_coerced_to_int(self):
+        """JSON forms sometimes deliver numbers as strings."""
+        clean = sku_catalog.validate_item(
+            self._goodman_ahu(capacity_btu="24000", capacity_min_btu="22000", capacity_max_btu="26000.0")
+        )
+        assert clean["capacity_btu"] == 24000
+        assert clean["capacity_min_btu"] == 22000
+        assert clean["capacity_max_btu"] == 26000
+
+    def test_manufacturer_and_contractor_id_blank_normalized_to_none(self):
+        clean = sku_catalog.validate_item(
+            self._goodman_ahu(manufacturer="  ", contractor_id="")
+        )
+        assert clean["manufacturer"] is None
+        assert clean["contractor_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.6 bulk-import endpoint (May 2026)
+# ---------------------------------------------------------------------------
+#
+# POST /api/v1/sku-catalog/bulk-import accepts {"items": [...]} and
+# does idempotent upsert. Per-row failures isolated; whole batch
+# reported in summary.
+
+class TestBulkUpsertService:
+    """Unit tests for sku_catalog.bulk_upsert (no Flask)."""
+
+    def _payload(self, sku_id: str, **overrides):
+        base = {
+            "sku":                sku_id,
+            "supplier":           "WSF",
+            "section":            "Equipment",
+            "phase":              None,
+            "description":        f"Test SKU {sku_id}",
+            "trigger":            "always",
+            "quantity":           {"mode": "fixed", "value": 1},
+            "default_unit_price": 0,
+        }
+        base.update(overrides)
+        return base
+
+    def test_creates_when_no_existing(self, fake_db):
+        # Every doc.get() returns "not exists" so all rows are creates.
+        snap = MagicMock(); snap.exists = False
+        fake_db.collection.return_value.document.return_value.get.return_value = snap
+
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            summary = sku_catalog.bulk_upsert(
+                [self._payload("A"), self._payload("B"), self._payload("C")],
+                actor_email="tester@example.com",
+            )
+        assert summary["created"] == 3
+        assert summary["updated"] == 0
+        assert summary["skipped"] == 0
+        assert summary["errors"] == []
+
+    def test_updates_when_existing(self, fake_db):
+        # Every doc.get() returns "exists" so all rows are updates.
+        snap = _doc_mock(exists=True, data={"sku": "X", "created_at": "old"})
+        fake_db.collection.return_value.document.return_value.get.return_value = snap
+
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            summary = sku_catalog.bulk_upsert(
+                [self._payload("X")],
+                actor_email="tester@example.com",
+            )
+        assert summary["created"] == 0
+        assert summary["updated"] == 1
+
+    def test_isolates_per_row_failure(self, fake_db):
+        snap = MagicMock(); snap.exists = False
+        fake_db.collection.return_value.document.return_value.get.return_value = snap
+
+        rows = [
+            self._payload("GOOD-1"),
+            {"sku": "BAD", "supplier": ""},   # missing required fields
+            self._payload("GOOD-2"),
+            "not even a dict",                 # totally invalid
+            self._payload("GOOD-3"),
+        ]
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            summary = sku_catalog.bulk_upsert(rows, actor_email="tester@example.com")
+        assert summary["created"] == 3
+        assert summary["skipped"] == 2
+        assert {e["index"] for e in summary["errors"]} == {1, 3}
+
+    def test_non_list_payload_raises(self):
+        with pytest.raises(CatalogError) as exc_info:
+            sku_catalog.bulk_upsert({"items": "not a list"})
+        assert exc_info.value.status_code == 400
+
+
+class TestBulkImportRoute:
+    """HTTP-level tests for POST /api/v1/sku-catalog/bulk-import."""
+
+    @pytest.fixture
+    def client(self):
+        app = Flask(__name__)
+        app.register_blueprint(sku_catalog_bp, url_prefix='/api/v1/sku-catalog')
+        return app.test_client()
+
+    def test_200_on_success(self, client, fake_db):
+        snap = MagicMock(); snap.exists = False
+        fake_db.collection.return_value.document.return_value.get.return_value = snap
+
+        body = {
+            "items": [
+                {
+                    "sku":                "BULK-1",
+                    "supplier":           "WSF",
+                    "section":            "Equipment",
+                    "phase":              None,
+                    "description":        "Bulk row 1",
+                    "trigger":            "always",
+                    "quantity":           {"mode": "fixed", "value": 1},
+                    "default_unit_price": 0,
+                },
+            ],
+        }
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            resp = client.post(
+                "/api/v1/sku-catalog/bulk-import",
+                json=body,
+            )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["data"]["created"] == 1
+        assert data["data"]["updated"] == 0
+        assert data["data"]["skipped"] == 0
+
+    def test_400_on_non_list_items(self, client):
+        resp = client.post("/api/v1/sku-catalog/bulk-import", json={"items": "not-a-list"})
+        assert resp.status_code == 400
+        assert resp.get_json()["success"] is False
+
+    def test_400_on_missing_items_key(self, client):
+        resp = client.post("/api/v1/sku-catalog/bulk-import", json={})
+        assert resp.status_code == 400
+
+    def test_idempotency_re_import_yields_zero_created(self, client, fake_db):
+        """First call: doc not exists → created.
+        Second call (same SKU): doc exists → updated."""
+        snap_missing = MagicMock(); snap_missing.exists = False
+        snap_exists  = _doc_mock(exists=True, data={"sku": "IDEM", "created_at": "first"})
+
+        # First import — creates
+        fake_db.collection.return_value.document.return_value.get.return_value = snap_missing
+        body = {
+            "items": [{
+                "sku":                "IDEM",
+                "supplier":           "WSF",
+                "section":            "Equipment",
+                "phase":              None,
+                "description":        "Idempotent SKU",
+                "trigger":            "always",
+                "quantity":           {"mode": "fixed", "value": 1},
+                "default_unit_price": 0,
+            }],
+        }
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            r1 = client.post("/api/v1/sku-catalog/bulk-import", json=body)
+        assert r1.get_json()["data"]["created"] == 1
+
+        # Second import — updates
+        fake_db.collection.return_value.document.return_value.get.return_value = snap_exists
+        with patch.object(sku_catalog, "_get_db", return_value=fake_db), \
+             patch.object(sku_catalog, "reload"):
+            r2 = client.post("/api/v1/sku-catalog/bulk-import", json=body)
+        d2 = r2.get_json()["data"]
+        assert d2["created"] == 0
+        assert d2["updated"] == 1

@@ -131,6 +131,56 @@ def create_item():
 
 
 # ===============================
+# POST — Bulk import (Phase 3.6, May 2026)
+# ===============================
+#
+# Body shape:
+#   {"items": [<sku payload>, <sku payload>, ...]}
+#
+# Each item is validated and either created (no existing doc with that
+# sku) or fully replaced (idempotent upsert). Per-row failures don't
+# abort the batch — they're surfaced as a list in the response.
+#
+# Designed for two callers:
+#   1. The SPA's bulk-import UI (paste CSV → POST as JSON)
+#   2. Tom uploading vendor catalogs (Goodman / Rheia / contractor-brand)
+#      converted from CSV to JSON either by the SPA or by curl one-liner
+#
+# The SPA handles CSV-to-JSON conversion client-side so this endpoint
+# stays JSON-only — keeps the auth/middleware contract simple and the
+# response shape predictable.
+
+@sku_catalog_bp.route('/bulk-import', methods=['POST'])
+def bulk_import():
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return jsonify({
+            "success": False,
+            "data":    None,
+            "error":   "Body must be {\"items\": [<sku payload>, ...]}",
+        }), 400
+
+    try:
+        summary = sku_catalog.bulk_upsert(items, actor_email=_actor())
+    except CatalogError as exc:
+        return _err(exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("bulk_import failed: %s", exc)
+        return jsonify({
+            "success": False,
+            "data":    None,
+            "error":   "Bulk import failed.",
+        }), 500
+
+    # 200 even when individual rows failed — the operation as a whole
+    # succeeded (some rows landed, some were rejected with reasons).
+    # The SPA decides whether to surface per-row errors or treat any
+    # error count > 0 as a hard failure.
+    return jsonify({"success": True, "data": summary, "error": None}), 200
+
+
+# ===============================
 # PUT — Update
 # ===============================
 

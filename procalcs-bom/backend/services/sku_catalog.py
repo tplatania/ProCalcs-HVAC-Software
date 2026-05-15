@@ -79,7 +79,31 @@ VALID_PHASES = {None, "Rough", "Finish"}
 
 @dataclass(frozen=True)
 class SKUItem:
-    """One catalog entry."""
+    """One catalog entry.
+
+    Schema bumped May 2026 (Phase 3.5) with five additive fields to
+    support catalog-augmented BOM generation when the parser surfaces
+    equipment with capacity but no SKU. None of the new fields are
+    required — existing 21 starter SKUs round-trip unchanged. New
+    fields enable:
+
+    - wrightsoft_codes: bridge to generic_ids in Wrightsoft's
+      generic_parts.csv (loaded by services/wrightsoft_catalog.py).
+      One catalog SKU can cover multiple Wrightsoft generics
+      (e.g. one Goodman AHU SKU covers AHU-24K, AHU-30K, AHU-36K).
+    - capacity_btu: nominal sizing for equipment SKUs. Used by the
+      catalog-augmented BOM generator (Phase 3.7) to pick the right
+      SKU when the parser reports "5-ton AHU".
+    - capacity_min_btu / capacity_max_btu: tolerance band so a
+      "24K AHU" SKU can match RUP equipment in the 22–26K range
+      without an exact-match miss.
+    - manufacturer: full display name ("Goodman", "Rheia") separate
+      from the existing 4-char `supplier` code (GOOD, RHEA).
+    - contractor_id: optional scope. When set, this SKU only applies
+      to BOMs generated for that contractor's profile. When null,
+      the SKU is globally available. Replaces the need for separate
+      per-contractor catalogs — designers manage one unified catalog.
+    """
     sku: str
     supplier: str
     section: str
@@ -90,9 +114,25 @@ class SKUItem:
     default_unit_price: float
     notes: str = ""
     disabled: bool = False
+    # Phase 3.5 additions — all optional, default to "no constraint".
+    wrightsoft_codes: tuple[str, ...] = ()
+    capacity_btu: Optional[int] = None
+    capacity_min_btu: Optional[int] = None
+    capacity_max_btu: Optional[int] = None
+    manufacturer: Optional[str] = None
+    contractor_id: Optional[str] = None
 
     @classmethod
     def from_dict(cls, raw: dict) -> "SKUItem":
+        # wrightsoft_codes is stored as a list in JSON/Firestore but
+        # held as a tuple in Python so the dataclass stays hashable
+        # (frozen=True requires immutable fields).
+        codes_raw = raw.get("wrightsoft_codes") or []
+        if isinstance(codes_raw, str):
+            # Tolerate single-string (common from form inputs / CSV cells)
+            codes = (codes_raw,) if codes_raw else ()
+        else:
+            codes = tuple(str(c) for c in codes_raw if c)
         return cls(
             sku=raw["sku"],
             supplier=raw["supplier"],
@@ -104,6 +144,12 @@ class SKUItem:
             default_unit_price=float(raw.get("default_unit_price") or 0),
             notes=raw.get("notes", ""),
             disabled=bool(raw.get("disabled", False)),
+            wrightsoft_codes=codes,
+            capacity_btu=_coerce_int_or_none(raw.get("capacity_btu")),
+            capacity_min_btu=_coerce_int_or_none(raw.get("capacity_min_btu")),
+            capacity_max_btu=_coerce_int_or_none(raw.get("capacity_max_btu")),
+            manufacturer=(raw.get("manufacturer") or None) or None,
+            contractor_id=(raw.get("contractor_id") or None) or None,
         )
 
     def to_dict(self) -> dict:
@@ -118,7 +164,25 @@ class SKUItem:
             "default_unit_price": self.default_unit_price,
             "notes": self.notes,
             "disabled": self.disabled,
+            "wrightsoft_codes": list(self.wrightsoft_codes),
+            "capacity_btu": self.capacity_btu,
+            "capacity_min_btu": self.capacity_min_btu,
+            "capacity_max_btu": self.capacity_max_btu,
+            "manufacturer": self.manufacturer,
+            "contractor_id": self.contractor_id,
         }
+
+
+def _coerce_int_or_none(value: Any) -> Optional[int]:
+    """Cast a raw payload value to int or None. Empty string, None,
+    and anything that can't parse become None — used by from_dict to
+    accept loose JSON / CSV input."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))  # tolerate "24000.0" style strings
+    except (TypeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +246,33 @@ def validate_item(payload: dict, *, require_sku: bool = True) -> dict:
         errors.append("default_unit_price must be numeric")
         default_unit_price = 0.0
 
+    # Phase 3.5 — validate the new optional fields. All five default to
+    # null/empty when missing; specific shape constraints only.
+    raw_codes = payload.get("wrightsoft_codes") or []
+    if isinstance(raw_codes, str):
+        raw_codes = [raw_codes] if raw_codes else []
+    if not isinstance(raw_codes, list):
+        errors.append("wrightsoft_codes must be a list of strings")
+        raw_codes = []
+    wrightsoft_codes = [str(c).strip() for c in raw_codes if str(c).strip()]
+
+    capacity_btu     = _coerce_int_or_none(payload.get("capacity_btu"))
+    capacity_min_btu = _coerce_int_or_none(payload.get("capacity_min_btu"))
+    capacity_max_btu = _coerce_int_or_none(payload.get("capacity_max_btu"))
+
+    # If a tolerance band is given, both endpoints must be present and
+    # min <= nominal <= max (when nominal also given).
+    if (capacity_min_btu is None) != (capacity_max_btu is None):
+        errors.append("capacity_min_btu and capacity_max_btu must be set together")
+    elif capacity_min_btu is not None and capacity_max_btu is not None:
+        if capacity_min_btu > capacity_max_btu:
+            errors.append("capacity_min_btu must be <= capacity_max_btu")
+        if capacity_btu is not None and not (capacity_min_btu <= capacity_btu <= capacity_max_btu):
+            errors.append("capacity_btu must lie within [capacity_min_btu, capacity_max_btu]")
+
+    manufacturer = (payload.get("manufacturer") or "").strip() or None
+    contractor_id = (payload.get("contractor_id") or "").strip() or None
+
     if errors:
         raise CatalogError("; ".join(errors), status_code=400)
 
@@ -196,6 +287,13 @@ def validate_item(payload: dict, *, require_sku: bool = True) -> dict:
         "default_unit_price": default_unit_price,
         "notes": (payload.get("notes") or "").strip(),
         "disabled": bool(payload.get("disabled", False)),
+        # Phase 3.5 additions — null/empty when omitted.
+        "wrightsoft_codes": wrightsoft_codes,
+        "capacity_btu":     capacity_btu,
+        "capacity_min_btu": capacity_min_btu,
+        "capacity_max_btu": capacity_max_btu,
+        "manufacturer":     manufacturer,
+        "contractor_id":    contractor_id,
     }
 
 
@@ -457,6 +555,98 @@ def delete_item(sku: str, *, actor_email: Optional[str] = None) -> None:
     doc_ref.delete()
     logger.info("[SKUCatalog] Deleted %s by %s", sku, actor_email or "anon")
     reload()
+
+
+def bulk_upsert(
+    payloads: list[dict],
+    *,
+    actor_email: Optional[str] = None,
+) -> dict:
+    """Idempotent bulk upsert.
+
+    Walks ``payloads`` in order. Each payload is validated and either
+    created (if no doc with that sku exists) or fully replaced (if it
+    does). Per-row failures are isolated — a bad row contributes an
+    entry to ``errors`` and the rest of the batch continues.
+
+    Returns a summary dict::
+
+        {
+            "created":  N,   # new docs written
+            "updated":  M,   # existing docs replaced
+            "skipped":  K,   # rows that failed validation
+            "errors":   [{"index": i, "sku": "...", "error": "..."}],
+        }
+
+    Designed to be called by /api/v1/sku-catalog/bulk-import. Single
+    cache reload at the end (not per-row) so importing 100 SKUs is
+    one Firestore-stream invalidation, not 100.
+    """
+    db = _require_db()
+    summary: dict[str, Any] = {
+        "created": 0,
+        "updated": 0,
+        "skipped": 0,
+        "errors":  [],
+    }
+    if not isinstance(payloads, list):
+        raise CatalogError("bulk import expects a list of SKU dicts", status_code=400)
+
+    now = _utc_now()
+    for index, payload in enumerate(payloads):
+        if not isinstance(payload, dict):
+            summary["skipped"] += 1
+            summary["errors"].append({
+                "index": index,
+                "sku":   None,
+                "error": f"row {index} is not an object (got {type(payload).__name__})",
+            })
+            continue
+
+        try:
+            clean = validate_item(payload, require_sku=True)
+        except CatalogError as exc:
+            summary["skipped"] += 1
+            summary["errors"].append({
+                "index": index,
+                "sku":   payload.get("sku"),
+                "error": str(exc),
+            })
+            continue
+
+        doc_ref = db.collection(COLLECTION).document(clean["sku"])
+        snap = doc_ref.get()
+        if snap.exists:
+            existing = snap.to_dict() or {}
+            record = {
+                **clean,
+                "created_at": existing.get("created_at"),
+                "updated_at": now,
+                "created_by": existing.get("created_by"),
+                "updated_by": actor_email,
+            }
+            summary["updated"] += 1
+        else:
+            record = {
+                **clean,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": actor_email,
+                "updated_by": actor_email,
+            }
+            summary["created"] += 1
+
+        doc_ref.set(record)
+
+    if summary["created"] or summary["updated"]:
+        reload()  # single cache invalidation for the whole batch
+
+    logger.info(
+        "[SKUCatalog] bulk-upsert by %s: created=%d updated=%d skipped=%d",
+        actor_email or "anon",
+        summary["created"], summary["updated"], summary["skipped"],
+    )
+    return summary
 
 
 def set_disabled(sku: str, disabled: bool, *, actor_email: Optional[str] = None) -> dict:
