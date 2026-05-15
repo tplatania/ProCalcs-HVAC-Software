@@ -201,6 +201,75 @@ def generate(client_id: str, job_id: str, design_data: dict,
 # AI Prompt + API Call
 # ===============================
 
+def _build_available_catalog_block(
+    profile: ClientProfile,
+    claimed_lines: list,
+) -> str:
+    """List the SKU Catalog entries available for the AI to reference,
+    filtered to ones not already claimed by catalog_match + rules_engine.
+
+    Phase 2 of Path B (May 2026). Closes the AI's previous gap of
+    inventing SKU codes that look plausible but don't exist. By listing
+    every callable catalog SKU + its key fields (manufacturer, capacity,
+    description), Claude can output the EXACT sku string and the
+    downstream pipeline picks up the catalog metadata (cost, supplier,
+    section) deterministically.
+
+    Filtering rules:
+      - Exclude SKUs already in `claimed_lines` (catalog_match or
+        rules_engine emitted them — no point listing for AI dup)
+      - Include both contractor-scoped (matching profile.client_id)
+        and globally-scoped (contractor_id None) SKUs
+      - Exclude disabled SKUs
+
+    Token budget: ~80 chars per SKU. With the 21 starter SKUs this is
+    ~1.7 KB. Even at 200 SKUs it's ~16 KB — well within Anthropic's
+    200K context window.
+
+    Returns "" when the catalog is empty or all entries are claimed.
+    """
+    try:
+        all_skus = sku_catalog.all_items(include_disabled=False)
+    except Exception:
+        # Catalog unavailable (Firestore creds missing in tests) — skip
+        # the block entirely so the prompt stays valid.
+        return ""
+
+    claimed = {li.get("sku") for li in (claimed_lines or []) if li.get("sku")}
+    contractor_id = getattr(profile, "client_id", None)
+
+    in_scope = [
+        s for s in all_skus
+        if s.sku not in claimed
+        and (s.contractor_id is None or s.contractor_id == contractor_id)
+    ]
+    if not in_scope:
+        return ""
+
+    rows: list[str] = []
+    for s in in_scope:
+        # One line per SKU: sku, capacity hint, description.
+        cap_hint = ""
+        if s.capacity_btu is not None:
+            cap_hint = f" [{s.capacity_btu} BTU]"
+        elif s.capacity_min_btu is not None and s.capacity_max_btu is not None:
+            cap_hint = f" [{s.capacity_min_btu}-{s.capacity_max_btu} BTU]"
+        mfr = f" ({s.manufacturer})" if s.manufacturer else ""
+        rows.append(f"  - {s.sku}{cap_hint}{mfr} — {s.description}")
+
+    return (
+        "\n\nAVAILABLE CATALOG SKUs (you may reference any of these by "
+        "exact `sku` code in the lines you output — the system will look "
+        "up cost/supplier/section automatically. Prefer matching by "
+        "capacity when an equipment item has BTU/tonnage. Set the `sku` "
+        "field on lines where you pick a catalog entry; leave `sku` "
+        "blank when no catalog entry fits and the line is genuinely "
+        "novel):\n"
+        + "\n".join(rows)
+        + "\n"
+    )
+
+
 def _build_catalog_context_block(claimed_lines: list) -> str:
     """Build the 'ALREADY COVERED' prompt block so Claude doesn't
     re-emit lines the catalog_match + rules_engine layers already
@@ -256,6 +325,13 @@ def _build_ai_prompt(
     # already claimed. Empty when both layers emitted nothing.
     catalog_context_block = _build_catalog_context_block(claimed_lines or [])
 
+    # Phase 2 of Path B (May 2026) — list AVAILABLE catalog SKUs the AI
+    # can reference. Closes the SKU-hallucination gap for Easy + Avg
+    # RUPs whose parser leaves equipment[] empty (no catalog_match
+    # candidates). When Claude picks a catalog SKU, _apply_pricing
+    # preserves the sku field through to BOM output.
+    available_catalog_block = _build_available_catalog_block(profile, claimed_lines or [])
+
     # Hybrid fallback section — included when raw_rup_context is present
     # (i.e. the design_data came from the .rup parser in procalcs-bom/
     # backend/utils/rup_parser.py, which leaves duct_runs/fittings/registers
@@ -296,7 +372,7 @@ Fittings: {fittings}
 
 Equipment: {equipment}
 
-Registers/Grilles: {registers}{rooms_block}{fallback_block}{catalog_context_block}
+Registers/Grilles: {registers}{rooms_block}{fallback_block}{available_catalog_block}{catalog_context_block}
 
 CLIENT PREFERENCES:
 Preferred mastic brand: {mastic_brand}
@@ -311,10 +387,10 @@ Estimate quantities for ALL of the following — drawn items AND field consumabl
 
 {{
   "drawn_items": [
-    {{"category": "duct", "description": "...", "quantity": 0.0, "unit": "LF"}},
-    {{"category": "fitting", "description": "...", "quantity": 0.0, "unit": "EA"}},
-    {{"category": "equipment", "description": "...", "quantity": 0.0, "unit": "EA"}},
-    {{"category": "register", "description": "...", "quantity": 0.0, "unit": "EA"}}
+    {{"category": "duct", "description": "...", "quantity": 0.0, "unit": "LF", "sku": "<optional catalog sku>"}},
+    {{"category": "fitting", "description": "...", "quantity": 0.0, "unit": "EA", "sku": "<optional catalog sku>"}},
+    {{"category": "equipment", "description": "...", "quantity": 0.0, "unit": "EA", "sku": "<optional catalog sku>"}},
+    {{"category": "register", "description": "...", "quantity": 0.0, "unit": "EA", "sku": "<optional catalog sku>"}}
   ],
   "consumables": [
     {{"category": "consumable", "description": "Duct mastic ({mastic_brand})", "quantity": 0.0, "unit": "GAL"}},
@@ -339,6 +415,7 @@ For hanger straps: approximately 1 per 4-5 LF of horizontal duct run.
         registers=json.dumps(registers, indent=2),
         rooms_block=rooms_block,
         fallback_block=fallback_block,
+        available_catalog_block=available_catalog_block,
         catalog_context_block=catalog_context_block,
         mastic_brand=profile.brands.mastic_brand or 'standard',
         tape_brand=profile.brands.tape_brand or 'standard',
@@ -568,7 +645,33 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
         quantity    = float(item.get('quantity') or 0.0)
         unit        = item.get('unit', 'EA')
 
-        unit_cost   = _get_unit_cost(description, category, profile)
+        # Phase 2 of Path B (May 2026): if the AI emitted a `sku` field
+        # referencing a real catalog entry, look it up and use the
+        # catalog's cost + supplier + section + manufacturer. This is
+        # the bridge that makes "AVAILABLE CATALOG SKUs" prompt block
+        # actually pay off — Claude picks the SKU, we attach the
+        # deterministic catalog metadata.
+        ai_sku = (item.get('sku') or '').strip() or None
+        catalog_entry = sku_catalog.get(ai_sku) if ai_sku else None
+
+        if catalog_entry is not None:
+            # Catalog wins on cost + supplier + section + manufacturer.
+            # Description stays as AI emitted (more contextual than
+            # the catalog row's generic name).
+            unit_cost     = float(catalog_entry.default_unit_price or 0.0)
+            sku_resolved  = catalog_entry.sku
+            supplier      = catalog_entry.supplier
+            section       = catalog_entry.section
+            manufacturer  = catalog_entry.manufacturer
+        else:
+            # No SKU or unknown SKU — fall back to the legacy
+            # description-based unit-cost lookup.
+            unit_cost     = _get_unit_cost(description, category, profile)
+            sku_resolved  = ai_sku  # may be a SKU we just don't know
+            supplier      = None
+            section       = None
+            manufacturer  = None
+
         markup_pct  = _get_markup_pct(category, profile)
         # Compute totals from the unrounded arithmetic to avoid a
         # compounding banker's-rounding error. Example:
@@ -589,7 +692,7 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
                 display_name = override.client_name or description
                 break
 
-        line_items.append({
+        line = {
             "category":    category,
             "description": display_name,
             "quantity":    quantity,
@@ -599,7 +702,22 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
             "total_cost":  total_cost,
             "total_price": total_price,
             "markup_pct":  markup_pct,
-        })
+        }
+        # Provenance — only set when AI gave us a sku. _format_bom
+        # picks up these fields automatically (Phase 3.7 / Phase 5).
+        if sku_resolved:
+            line["sku"] = sku_resolved
+            line["source"] = (
+                "ai_with_catalog_sku" if catalog_entry else "ai_inferred"
+            )
+        if supplier:
+            line["supplier"] = supplier
+        if section:
+            line["section"] = section
+        if manufacturer:
+            line["manufacturer"] = manufacturer
+
+        line_items.append(line)
 
     return line_items
 

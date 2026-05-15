@@ -573,3 +573,181 @@ class TestPromptGrounding:
 
         assert "ALREADY COVERED" in captured["prompt"]
         assert "GOOD-AHU-24K" in captured["prompt"]
+
+
+# ─── Phase 2 of Path B (May 2026) — catalog-aware AI prompt ──────────
+#
+# AI prompt now includes an "AVAILABLE CATALOG SKUs" block listing
+# entries Claude can reference by exact sku string. _apply_pricing
+# preserves the AI-emitted sku and looks up catalog metadata
+# (cost / supplier / section / manufacturer). Closes the SKU
+# hallucination gap on Easy + Avg RUPs whose parser leaves
+# equipment[] empty (no catalog_match candidates).
+
+class TestAvailableCatalogBlock:
+    @pytest.fixture
+    def profile(self):
+        from models.client_profile import ClientProfile
+        return ClientProfile.from_dict({
+            "client_id": "test-contractor", "client_name": "X",
+            "is_active": True, "supplier": {"supplier_name": "S"},
+            "markup": {"equipment_pct": 15, "materials_pct": 25,
+                       "consumables_pct": 30, "labor_pct": 0},
+            "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+            "default_output_mode": "full", "include_labor": False, "notes": "",
+        })
+
+    def test_lists_catalog_skus_in_prompt(self, profile):
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        cat = [
+            _sku("GOOD-AHU-24K", capacity_btu=24000, description="Goodman AHU 24K"),
+            _sku("GOOD-COND-24K", trigger="condenser_present",
+                 capacity_btu=24000, description="Goodman Condenser 24K"),
+        ]
+        with patch.object(sku_catalog, "all_items", return_value=cat):
+            block = bom_service._build_available_catalog_block(profile, claimed_lines=[])
+        assert "AVAILABLE CATALOG SKUs" in block
+        assert "GOOD-AHU-24K" in block
+        assert "GOOD-COND-24K" in block
+        assert "[24000 BTU]" in block
+        assert "(Goodman)" in block
+
+    def test_excludes_claimed_skus(self, profile):
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        cat = [
+            _sku("GOOD-AHU-24K", description="AHU"),
+            _sku("GOOD-COND-24K", description="Condenser"),
+        ]
+        claimed = [{"source": "catalog_match", "sku": "GOOD-AHU-24K", "description": "AHU"}]
+        with patch.object(sku_catalog, "all_items", return_value=cat):
+            block = bom_service._build_available_catalog_block(profile, claimed_lines=claimed)
+        assert "GOOD-AHU-24K" not in block
+        assert "GOOD-COND-24K" in block
+
+    def test_filters_by_contractor_scope(self, profile):
+        """Beazer-scoped SKUs included for Beazer profile, hidden for others.
+        Global SKUs (contractor_id None) always included."""
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        cat = [
+            _sku("GLOBAL-AHU", contractor_id=None, description="Global AHU"),
+            _sku("BEAZER-AHU", contractor_id="beazer-homes-az", description="Beazer AHU"),
+            _sku("OTHER-AHU", contractor_id="other-contractor", description="Other AHU"),
+        ]
+        # Profile is "test-contractor" — should see GLOBAL only
+        with patch.object(sku_catalog, "all_items", return_value=cat):
+            block = bom_service._build_available_catalog_block(profile, claimed_lines=[])
+        assert "GLOBAL-AHU" in block
+        assert "BEAZER-AHU" not in block
+        assert "OTHER-AHU" not in block
+
+    def test_returns_empty_when_no_catalog(self, profile):
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        with patch.object(sku_catalog, "all_items", return_value=[]):
+            assert bom_service._build_available_catalog_block(profile, claimed_lines=[]) == ""
+
+    def test_returns_empty_when_all_skus_claimed(self, profile):
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        cat = [_sku("X", description="X")]
+        claimed = [{"source": "rules_engine", "sku": "X"}]
+        with patch.object(sku_catalog, "all_items", return_value=cat):
+            assert bom_service._build_available_catalog_block(profile, claimed_lines=claimed) == ""
+
+    def test_falls_back_silently_when_catalog_unavailable(self, profile):
+        """Firestore creds missing in tests — block returns empty rather
+        than crashing _build_ai_prompt."""
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        with patch.object(sku_catalog, "all_items", side_effect=RuntimeError("no creds")):
+            assert bom_service._build_available_catalog_block(profile, claimed_lines=[]) == ""
+
+
+class TestApplyPricingPreservesSku:
+    """When AI emits a `sku` field, _apply_pricing preserves it and
+    looks up catalog metadata (cost, supplier, section, manufacturer)."""
+
+    @pytest.fixture
+    def profile(self):
+        from models.client_profile import ClientProfile
+        return ClientProfile.from_dict({
+            "client_id": "x", "client_name": "X", "is_active": True,
+            "supplier": {"supplier_name": "S"},
+            "markup": {"equipment_pct": 15, "materials_pct": 25,
+                       "consumables_pct": 30, "labor_pct": 0},
+            "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+            "default_output_mode": "full", "include_labor": False, "notes": "",
+        })
+
+    def test_ai_sku_resolves_to_catalog_metadata(self, profile):
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        catalog_sku = _sku(
+            "GOOD-AHU-24K", description="Goodman AHU 24K",
+            default_unit_price=1850.0, supplier="GOOD",
+            section="Equipment", manufacturer="Goodman",
+        )
+        ai_response = {
+            "drawn_items": [{
+                "category": "equipment",
+                "description": "Goodman 2-ton AHU",
+                "quantity": 1, "unit": "EA",
+                "sku": "GOOD-AHU-24K",
+            }],
+            "consumables": [],
+        }
+        with patch.object(sku_catalog, "get", side_effect=lambda s: catalog_sku if s == "GOOD-AHU-24K" else None):
+            priced = bom_service._apply_pricing(ai_response, profile, "full")
+        assert len(priced) == 1
+        line = priced[0]
+        assert line["sku"] == "GOOD-AHU-24K"
+        assert line["source"] == "ai_with_catalog_sku"
+        assert line["unit_cost"] == 1850.0  # from catalog
+        assert line["supplier"] == "GOOD"
+        assert line["section"] == "Equipment"
+        assert line["manufacturer"] == "Goodman"
+
+    def test_unknown_ai_sku_keeps_sku_marks_inferred(self, profile):
+        """AI may reference a sku we don't have (typo, future SKU,
+        hallucination). Preserve the sku string for visibility, mark
+        source=ai_inferred, fall back to legacy unit-cost lookup."""
+        from unittest.mock import patch
+        from services import bom_service, sku_catalog
+        ai_response = {
+            "drawn_items": [{
+                "category": "equipment",
+                "description": "Mystery part",
+                "quantity": 1, "unit": "EA",
+                "sku": "MADE-UP-SKU-999",
+            }],
+            "consumables": [],
+        }
+        with patch.object(sku_catalog, "get", return_value=None):
+            priced = bom_service._apply_pricing(ai_response, profile, "full")
+        line = priced[0]
+        assert line["sku"] == "MADE-UP-SKU-999"
+        assert line["source"] == "ai_inferred"
+        # No catalog match — falls back to legacy description lookup (probably 0)
+        assert "supplier" not in line
+        assert "section" not in line
+
+    def test_no_sku_field_unchanged_behavior(self, profile):
+        """Pre-Phase-2 behavior: AI lines without sku field don't get
+        source/sku/supplier/section keys added. Backwards compat."""
+        from services import bom_service
+        ai_response = {
+            "drawn_items": [{
+                "category": "consumable",
+                "description": "Mastic",
+                "quantity": 3, "unit": "GAL",
+            }],
+            "consumables": [],
+        }
+        priced = bom_service._apply_pricing(ai_response, profile, "full")
+        line = priced[0]
+        assert "sku" not in line
+        assert "source" not in line
+        assert "supplier" not in line
