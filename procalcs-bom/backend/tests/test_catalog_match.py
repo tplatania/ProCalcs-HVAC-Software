@@ -415,3 +415,42 @@ class TestPhantomSuppressionInBomGenerate:
         assert "GOOD-HEATKIT-5KW" in skus, (
             f"heat kit (different trigger) wrongly suppressed: {skus}"
         )
+
+
+# ─── Phase 5 — Section assignment in BOM output ──────────────────────
+#
+# Every line item must carry a `section` field for SPA + PDF grouping.
+# Catalog and rules-engine lines pull section from the SKU Catalog;
+# AI lines fall through the _AI_CATEGORY_TO_SECTION map. Default
+# "Duct System Equipment" so unmapped categories stay visible.
+
+class TestSectionAssignment:
+    """Pin the Phase 5 section-assignment behavior so AI lines always
+    land in the right section bucket and nothing leaks unsectioned."""
+
+    def test_section_for_line_honors_explicit(self):
+        from services.bom_service import _section_for_line
+        assert _section_for_line({"section": "Equipment"}) == "Equipment"
+        assert _section_for_line({"section": "Rheia Duct System Equipment"}) == "Rheia Duct System Equipment"
+
+    def test_section_for_line_maps_ai_categories(self):
+        from services.bom_service import _section_for_line
+        assert _section_for_line({"category": "equipment"}) == "Equipment"
+        assert _section_for_line({"category": "duct"}) == "Duct System Equipment"
+        assert _section_for_line({"category": "fitting"}) == "Duct System Equipment"
+        assert _section_for_line({"category": "register"}) == "Duct System Equipment"
+        assert _section_for_line({"category": "consumable"}) == "Duct System Equipment"
+
+    def test_section_for_line_defaults_unknown_to_duct_system(self):
+        from services.bom_service import _section_for_line
+        # Default keeps the line visible rather than letting it fall
+        # off the bottom of an unbucketed PDF section.
+        assert _section_for_line({"category": "mystery"}) == "Duct System Equipment"
+        assert _section_for_line({}) == "Duct System Equipment"
+
+    def test_section_for_line_explicit_blank_falls_back_to_category(self):
+        from services.bom_service import _section_for_line
+        # Defensive: an empty string in section should NOT short-circuit
+        # the category fallback. Whitespace-only too.
+        assert _section_for_line({"section": "", "category": "equipment"}) == "Equipment"
+        assert _section_for_line({"section": "  ", "category": "equipment"}) == "Equipment"

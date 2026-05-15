@@ -23,6 +23,39 @@ from services.catalog_match import (
 )
 from models.client_profile import ClientProfile
 
+
+# Phase 5 (May 2026) — Map the AI-prompt category vocabulary
+# (duct/fitting/equipment/register/consumable) into the contractor
+# section structure (Equipment / Duct System Equipment / Rheia Duct
+# System Equipment / Labor) per the sample BOM target shape.
+#
+# Rules-engine lines and catalog-match lines already carry a section
+# field from the SKU Catalog; this fallback only kicks in for AI lines
+# that the catalog couldn't pre-claim. Rheia routing requires explicit
+# catalog signal — we don't try to AI-detect Rheia from a generic
+# "duct" category since Rheia is small-diameter high-velocity and
+# distinguishing it needs the HVDALL category match (Phase 2).
+_AI_CATEGORY_TO_SECTION: dict[str, str] = {
+    "equipment":  "Equipment",
+    "duct":       "Duct System Equipment",
+    "fitting":    "Duct System Equipment",
+    "register":   "Duct System Equipment",
+    "consumable": "Duct System Equipment",
+}
+
+
+def _section_for_line(item: dict) -> str:
+    """Best section guess for a line item. Honors any pre-computed
+    section (catalog or rules-engine emitted), then falls back to the
+    AI-category map. Defaults to 'Duct System Equipment' so unknown
+    AI items still group somewhere visible rather than disappearing
+    into an unbucketed bottom-of-PDF section."""
+    explicit = (item.get("section") or "").strip()
+    if explicit:
+        return explicit
+    cat = (item.get("category") or "").lower().strip()
+    return _AI_CATEGORY_TO_SECTION.get(cat, "Duct System Equipment")
+
 logger = logging.getLogger('procalcs_bom')
 
 
@@ -545,10 +578,17 @@ def _format_bom(line_items: list, profile: ClientProfile,
             entry['unit_price']  = item['unit_price']
             entry['total_price'] = item['total_price']
 
-        # Preserve provenance fields for SPA labeling, when set.
+        # Section is the contractor-facing grouping (Equipment / Duct
+        # System Equipment / Rheia Duct System Equipment / Labor) that
+        # the SPA + PDF render as collapsible sections. Always populated:
+        # catalog/rules lines carry it from the SKU Catalog, AI lines
+        # get it from the category fallback map (Phase 5, May 2026).
+        entry['section'] = _section_for_line(item)
+
+        # Preserve other provenance fields for SPA labeling, when set.
         # Phase 3.7 added 'manufacturer' and 'confidence' for catalog-
         # match lines (catalog_exact / catalog_band / catalog_default).
-        for key in ('sku', 'supplier', 'section', 'phase', 'source',
+        for key in ('sku', 'supplier', 'phase', 'source',
                     'manufacturer', 'confidence'):
             if item.get(key) is not None:
                 entry[key] = item[key]
