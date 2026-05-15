@@ -126,7 +126,12 @@ def generate(client_id: str, job_id: str, design_data: dict,
 
     # Step 2b — AI fills the gaps the catalog doesn't cover yet
     # (consumables, miscellaneous fittings, brand-specific items).
-    raw_quantities = _call_ai_for_quantities(design_data, profile)
+    # Phase 7: pass already-claimed lines so Claude knows what NOT to
+    # duplicate. Reduces hallucination + saves output tokens.
+    already_claimed = catalog_matched + rules_priced
+    raw_quantities = _call_ai_for_quantities(
+        design_data, profile, claimed_lines=already_claimed,
+    )
 
     # Step 3 — Apply pricing for AI-estimated items (Python does all math)
     ai_priced = _apply_pricing(raw_quantities, profile, effective_mode)
@@ -196,11 +201,48 @@ def generate(client_id: str, job_id: str, design_data: dict,
 # AI Prompt + API Call
 # ===============================
 
-def _build_ai_prompt(design_data: dict, profile: ClientProfile) -> str:
+def _build_catalog_context_block(claimed_lines: list) -> str:
+    """Build the 'ALREADY COVERED' prompt block so Claude doesn't
+    re-emit lines the catalog_match + rules_engine layers already
+    handled. Each entry is one line: source · sku · description.
+    Returns empty string when nothing's claimed (early in adoption,
+    before contractors encode SKUs)."""
+    if not claimed_lines:
+        return ""
+    rows = []
+    for li in claimed_lines:
+        src   = li.get("source", "?")
+        sku   = li.get("sku", "(no-sku)")
+        desc  = (li.get("description") or "").strip()
+        rows.append(f"  - [{src}] sku={sku} — {desc}")
+    return (
+        "\n\nALREADY COVERED (these SKUs are already in the BOM via "
+        "the deterministic catalog/rules layers — do NOT emit "
+        "duplicate lines for these). If you generate a line that "
+        "describes the same physical item, the system will drop it "
+        "via description-substring dedupe, so save us tokens by "
+        "skipping them entirely:\n"
+        + "\n".join(rows)
+        + "\n"
+    )
+
+
+def _build_ai_prompt(
+    design_data: dict,
+    profile: ClientProfile,
+    *,
+    claimed_lines: list | None = None,
+) -> str:
     """
     Build the prompt sent to Claude.
     Instructs AI to return ONLY quantities — no pricing, no math.
     Pricing is applied by Python after the AI responds.
+
+    Phase 7 (May 2026): now accepts claimed_lines — the lines already
+    emitted by catalog_match + rules_engine. We pass these to Claude
+    as an "ALREADY COVERED" block so it doesn't duplicate equipment
+    SKUs the deterministic layers already handled. Optional —
+    pre-Phase-7 callers (tests, legacy) still work.
     """
     building  = design_data.get('building', {})
     duct_runs = design_data.get('duct_runs', [])
@@ -209,6 +251,10 @@ def _build_ai_prompt(design_data: dict, profile: ClientProfile) -> str:
     registers = design_data.get('registers', [])
     rooms     = design_data.get('rooms', [])
     raw_ctx   = design_data.get('raw_rup_context', '')
+
+    # Phase 7 — context block listing what catalog_match + rules_engine
+    # already claimed. Empty when both layers emitted nothing.
+    catalog_context_block = _build_catalog_context_block(claimed_lines or [])
 
     # Hybrid fallback section — included when raw_rup_context is present
     # (i.e. the design_data came from the .rup parser in procalcs-bom/
@@ -250,7 +296,7 @@ Fittings: {fittings}
 
 Equipment: {equipment}
 
-Registers/Grilles: {registers}{rooms_block}{fallback_block}
+Registers/Grilles: {registers}{rooms_block}{fallback_block}{catalog_context_block}
 
 CLIENT PREFERENCES:
 Preferred mastic brand: {mastic_brand}
@@ -293,6 +339,7 @@ For hanger straps: approximately 1 per 4-5 LF of horizontal duct run.
         registers=json.dumps(registers, indent=2),
         rooms_block=rooms_block,
         fallback_block=fallback_block,
+        catalog_context_block=catalog_context_block,
         mastic_brand=profile.brands.mastic_brand or 'standard',
         tape_brand=profile.brands.tape_brand or 'standard',
         flex_brand=profile.brands.flex_duct_brand or 'standard',
@@ -300,10 +347,20 @@ For hanger straps: approximately 1 per 4-5 LF of horizontal duct run.
     return prompt
 
 
-def _call_ai_for_quantities(design_data: dict, profile: ClientProfile) -> dict:
+def _call_ai_for_quantities(
+    design_data: dict,
+    profile: ClientProfile,
+    *,
+    claimed_lines: list | None = None,
+) -> dict:
     """
     Send design data to Claude and get raw material quantities back.
     Returns parsed JSON dict. Raises RuntimeError on failure.
+
+    Phase 7 (May 2026): claimed_lines is the list of catalog_match +
+    rules_engine lines already emitted. Threaded into _build_ai_prompt
+    as an "ALREADY COVERED" block so Claude doesn't duplicate them.
+    Optional kwarg — pre-Phase-7 callers (tests, legacy) still work.
     """
     try:
         api_key = current_app.config.get('ANTHROPIC_API_KEY', '')
@@ -311,7 +368,7 @@ def _call_ai_for_quantities(design_data: dict, profile: ClientProfile) -> dict:
         max_tokens = current_app.config.get('ANTHROPIC_MAX_TOKENS', 4096)
 
         client = anthropic.Anthropic(api_key=api_key)
-        prompt = _build_ai_prompt(design_data, profile)
+        prompt = _build_ai_prompt(design_data, profile, claimed_lines=claimed_lines)
 
         response = client.messages.create(
             model=model,

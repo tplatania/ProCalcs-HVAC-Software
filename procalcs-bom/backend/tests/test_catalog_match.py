@@ -454,3 +454,122 @@ class TestSectionAssignment:
         # the category fallback. Whitespace-only too.
         assert _section_for_line({"section": "", "category": "equipment"}) == "Equipment"
         assert _section_for_line({"section": "  ", "category": "equipment"}) == "Equipment"
+
+
+# ─── Phase 7 — AI prompt grounding ───────────────────────────────────
+#
+# When catalog_match + rules_engine emit lines, _build_ai_prompt
+# receives them and renders an "ALREADY COVERED" block telling Claude
+# which SKUs are already in the BOM. This reduces hallucination + saves
+# output tokens. Backwards compatible — calls without claimed_lines
+# (legacy tests, fresh deployments) get the original prompt.
+
+class TestPromptGrounding:
+    """Pin the Phase 7 prompt-grounding behavior so the catalog
+    context flows through to Claude without breaking the prompt
+    template's existing format placeholders."""
+
+    @pytest.fixture
+    def profile(self):
+        from models.client_profile import ClientProfile
+        return ClientProfile.from_dict({
+            "client_id": "x", "client_name": "X", "is_active": True,
+            "supplier": {"supplier_name": "S"},
+            "markup": {"equipment_pct": 15, "materials_pct": 25,
+                       "consumables_pct": 30, "labor_pct": 0},
+            "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+            "default_output_mode": "full", "include_labor": False, "notes": "",
+        })
+
+    @pytest.fixture
+    def design_data(self):
+        return {
+            "building":         {"type": "single_level", "duct_location": "attic"},
+            "duct_runs":        [], "fittings":  [], "equipment": [],
+            "registers":        [], "rooms":     [], "raw_rup_context": "",
+        }
+
+    def test_no_already_covered_block_when_claimed_omitted(self, profile, design_data):
+        from services.bom_service import _build_ai_prompt
+        prompt = _build_ai_prompt(design_data, profile)
+        assert "ALREADY COVERED" not in prompt
+
+    def test_no_already_covered_block_when_claimed_empty(self, profile, design_data):
+        from services.bom_service import _build_ai_prompt
+        prompt = _build_ai_prompt(design_data, profile, claimed_lines=[])
+        assert "ALREADY COVERED" not in prompt
+
+    def test_already_covered_block_lists_each_claimed_sku(self, profile, design_data):
+        from services.bom_service import _build_ai_prompt
+        claimed = [
+            {"source": "catalog_match", "sku": "GOOD-AHU-24K",
+             "description": "Goodman AHU 24K"},
+            {"source": "rules_engine", "sku": "RHEA-3IN-DUCT",
+             "description": "3-in Rheia duct"},
+        ]
+        prompt = _build_ai_prompt(design_data, profile, claimed_lines=claimed)
+        assert "ALREADY COVERED" in prompt
+        assert "GOOD-AHU-24K" in prompt
+        assert "RHEA-3IN-DUCT" in prompt
+        assert "Goodman AHU 24K" in prompt
+        assert "3-in Rheia duct" in prompt
+
+    def test_block_includes_source_label_per_line(self, profile, design_data):
+        from services.bom_service import _build_ai_prompt
+        claimed = [
+            {"source": "catalog_match", "sku": "X", "description": "X-desc"},
+            {"source": "rules_engine",  "sku": "Y", "description": "Y-desc"},
+        ]
+        prompt = _build_ai_prompt(design_data, profile, claimed_lines=claimed)
+        # Designers reading prompt logs benefit from knowing which layer
+        # emitted each line (catalog_match vs rules_engine).
+        assert "[catalog_match]" in prompt
+        assert "[rules_engine]" in prompt
+
+    def test_lines_with_no_sku_or_description_handled_gracefully(self, profile, design_data):
+        from services.bom_service import _build_ai_prompt
+        claimed = [
+            {"source": "rules_engine"},   # no sku, no description
+            {"source": "catalog_match", "sku": "OK", "description": "Okay"},
+        ]
+        # Should not crash and should still include the well-formed line.
+        prompt = _build_ai_prompt(design_data, profile, claimed_lines=claimed)
+        assert "ALREADY COVERED" in prompt
+        assert "(no-sku)" in prompt
+        assert "OK" in prompt
+
+    def test_call_ai_for_quantities_passes_through_claimed_lines(self, profile, design_data):
+        """Smoke-test that the kwarg threads through to the prompt."""
+        from unittest.mock import patch, MagicMock
+        from services import bom_service
+
+        # Capture the prompt actually sent to Anthropic
+        captured = {}
+        def fake_create(**kwargs):
+            captured["prompt"] = kwargs["messages"][0]["content"]
+            stub_response = MagicMock()
+            stub_response.content = [MagicMock(text='{"drawn_items": [], "consumables": []}')]
+            return stub_response
+
+        # Need a Flask app context for current_app.config
+        from flask import Flask
+        app = Flask(__name__)
+        app.config["ANTHROPIC_API_KEY"] = "test-key"
+        app.config["ANTHROPIC_MODEL"] = "claude-test"
+        app.config["ANTHROPIC_MAX_TOKENS"] = 1024
+
+        claimed = [{"source": "catalog_match", "sku": "GOOD-AHU-24K",
+                    "description": "Goodman AHU 24K"}]
+
+        with app.app_context(), \
+             patch("services.bom_service.anthropic.Anthropic") as mock_anthropic:
+            mock_client = MagicMock()
+            mock_client.messages.create.side_effect = fake_create
+            mock_anthropic.return_value = mock_client
+
+            bom_service._call_ai_for_quantities(
+                design_data, profile, claimed_lines=claimed,
+            )
+
+        assert "ALREADY COVERED" in captured["prompt"]
+        assert "GOOD-AHU-24K" in captured["prompt"]
