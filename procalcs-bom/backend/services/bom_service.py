@@ -15,7 +15,12 @@ import json
 import anthropic
 from flask import current_app
 from services.profile_service import get_profile_by_id
+from services import sku_catalog
 from services.materials_rules import generate_rule_lines
+from services.catalog_match import (
+    match_equipment_to_catalog,
+    coalesce_matched_lines,
+)
 from models.client_profile import ClientProfile
 
 logger = logging.getLogger('procalcs_bom')
@@ -72,6 +77,20 @@ def generate(client_id: str, job_id: str, design_data: dict,
     rule_lines = generate_rule_lines(design_data, output_mode=effective_mode)
     rules_priced = _format_rule_lines_for_bom(rule_lines, profile)
 
+    # Step 2a' — Catalog-augmented per-equipment match (Phase 3.7,
+    # May 2026). The rules engine fires SKUs by trigger flags but
+    # doesn't pick by capacity — if a project has 5 AHUs at 24 kBTU
+    # and 3 at 36 kBTU, the rules engine emits 8x of one SKU. This
+    # step looks up each parsed equipment item's capacity in the SKU
+    # Catalog (filtered by contractor_id + capacity tolerance band)
+    # and emits per-instance matches with confidence flags.
+    # Coalesces same-SKU matches so output stays compact.
+    equipment = (design_data or {}).get("equipment") or []
+    matched_per_instance = match_equipment_to_catalog(equipment, client_id)
+    catalog_matched = _format_catalog_matches_for_bom(
+        coalesce_matched_lines(matched_per_instance), profile,
+    )
+
     # Step 2b — AI fills the gaps the catalog doesn't cover yet
     # (consumables, miscellaneous fittings, brand-specific items).
     raw_quantities = _call_ai_for_quantities(design_data, profile)
@@ -79,20 +98,60 @@ def generate(client_id: str, job_id: str, design_data: dict,
     # Step 3 — Apply pricing for AI-estimated items (Python does all math)
     ai_priced = _apply_pricing(raw_quantities, profile, effective_mode)
 
-    # Rules win on SKU/description collisions: drop AI items whose
-    # description substring-matches a rules-engine line. Coarse but
-    # safe — rules-engine descriptions come from the curated catalog.
-    rules_descs = {(li.get("description") or "").lower() for li in rules_priced}
-    deduped_ai = [
-        li for li in ai_priced
-        if not any(rd and rd in (li.get("description") or "").lower() for rd in rules_descs)
+    # Source precedence: catalog_match > rules_engine > AI.
+    #
+    # Two collision rules — order matters:
+    #
+    # 1. SKU-level dedupe: rules engine fires every catalog SKU whose
+    #    trigger flag is true (e.g. trigger=ahu_present matches ALL AHU
+    #    SKUs without capacity discrimination). If catalog_match already
+    #    emitted a per-equipment line for SKU X, don't let the rules
+    #    engine re-emit X. Same for AI.
+    # 2. Trigger-level suppression: if catalog_match emitted ANY line for
+    #    trigger T (e.g. ahu_present via per-equipment capacity match),
+    #    suppress all OTHER rules-engine SKUs that would fire on T.
+    #    Otherwise we get phantom lines: a 60K AHU SKU fires because
+    #    trigger=ahu_present is true, even though no 60K equipment
+    #    exists in the design. Real money problem if not suppressed.
+    # 3. Description-substring dedupe: catches AI items whose generic
+    #    description matches something the catalog or rules already
+    #    covered (e.g. AI emits "Air handler 24000 BTU" while catalog
+    #    emitted GOOD-AHU-24K).
+
+    catalog_skus = {li.get("sku") for li in catalog_matched if li.get("sku")}
+    # Pull the trigger keys claimed by catalog_match. Sourced from the
+    # original rule_lines vocabulary (ahu_present, condenser_present,
+    # erv_present, heat_kit_present) — see services/catalog_match.py.
+    claimed_triggers = {
+        sku_catalog.get(li.get("sku")).trigger
+        for li in catalog_matched
+        if li.get("sku") and sku_catalog.get(li.get("sku"))
+    }
+    deduped_rules = [
+        li for li in rules_priced
+        if li.get("sku") not in catalog_skus
+        and (
+            sku_catalog.get(li.get("sku")) is None
+            or sku_catalog.get(li.get("sku")).trigger not in claimed_triggers
+        )
     ]
 
-    priced_items = rules_priced + deduped_ai
+    claimed_descs: set[str] = set()
+    for li in catalog_matched + deduped_rules:
+        d = (li.get("description") or "").lower()
+        if d:
+            claimed_descs.add(d)
+    deduped_ai = [
+        li for li in ai_priced
+        if not any(c and c in (li.get("description") or "").lower() for c in claimed_descs)
+    ]
+
+    priced_items = catalog_matched + deduped_rules + deduped_ai
 
     # Step 4 — Format final BOM
     bom = _format_bom(priced_items, profile, job_id, effective_mode)
-    bom["rules_engine_item_count"] = len(rules_priced)
+    bom["catalog_match_item_count"] = len(catalog_matched)
+    bom["rules_engine_item_count"] = len(deduped_rules)
     bom["ai_item_count"] = len(deduped_ai)
 
     logger.info("BOM generated successfully for job %s — %s line items",
@@ -294,6 +353,62 @@ def _get_markup_pct(category: str, profile: ClientProfile) -> float:
     return float(markup_map.get(category, 0.0))
 
 
+def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile) -> list:
+    """Apply contractor pricing/markup to per-equipment catalog matches.
+
+    Mirrors _format_rule_lines_for_bom (same shape downstream) but
+    preserves the catalog_match `source` and per-line `confidence`
+    flags so the SPA can render confidence badges next to SKUs whose
+    capacity match was banded rather than exact.
+
+    Phase 3.7, May 2026.
+    """
+    out = []
+    for ml in matched_lines:
+        category    = ml.get("category", "equipment")
+        description = ml.get("description", "")
+        quantity    = float(ml.get("quantity") or 0.0)
+        unit        = ml.get("unit", "EA")
+        unit_cost   = float(ml.get("unit_cost") or 0.0)
+        markup_pct  = _get_markup_pct(category, profile)
+
+        raw_unit_price = unit_cost * (1 + markup_pct / 100)
+        total_cost  = round(quantity * unit_cost, 2)
+        unit_price  = round(raw_unit_price, 2)
+        total_price = round(quantity * raw_unit_price, 2)
+
+        # Apply client part name override if one matches the catalog
+        # description. Lets contractors rename a Goodman AHU into their
+        # internal nomenclature without touching the catalog.
+        display_name = description
+        for override in profile.part_name_overrides:
+            if override.standard_name and override.standard_name.lower() in description.lower():
+                display_name = override.client_name or description
+                break
+
+        out.append({
+            "category":     category,
+            "description":  display_name,
+            "quantity":     quantity,
+            "unit":         unit,
+            "unit_cost":    unit_cost,
+            "unit_price":   unit_price,
+            "total_cost":   total_cost,
+            "total_price":  total_price,
+            "markup_pct":   markup_pct,
+            # Provenance — preserved through _format_bom so the SPA can
+            # render badges + confidence indicators per line.
+            "sku":          ml.get("sku"),
+            "supplier":     ml.get("supplier"),
+            "section":      ml.get("section"),
+            "phase":        ml.get("phase"),
+            "manufacturer": ml.get("manufacturer"),
+            "source":       "catalog_match",
+            "confidence":   ml.get("confidence"),
+        })
+    return out
+
+
 def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list:
     """
     Shape rules-engine output (SKU-keyed dicts from materials_rules.
@@ -430,8 +545,11 @@ def _format_bom(line_items: list, profile: ClientProfile,
             entry['unit_price']  = item['unit_price']
             entry['total_price'] = item['total_price']
 
-        # Preserve rules-engine provenance for SPA labeling, when set.
-        for key in ('sku', 'supplier', 'section', 'phase', 'source'):
+        # Preserve provenance fields for SPA labeling, when set.
+        # Phase 3.7 added 'manufacturer' and 'confidence' for catalog-
+        # match lines (catalog_exact / catalog_band / catalog_default).
+        for key in ('sku', 'supplier', 'section', 'phase', 'source',
+                    'manufacturer', 'confidence'):
             if item.get(key) is not None:
                 entry[key] = item[key]
 

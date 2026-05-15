@@ -1,0 +1,417 @@
+"""
+Phase 3.7 (May 2026) — tests for services/catalog_match.py.
+
+Verifies the per-equipment SKU lookup that sits between the rules
+engine and the AI fallback. Covers:
+
+  - Equipment-type → trigger mapping (air_handler→ahu_present,
+    condenser→condenser_present, ERV/HRV→erv_present, etc.)
+  - Capacity derivation from {tonnage, cfm, capacity_btu} fields
+    (tonnage wins, CFM falls back, explicit btu honored)
+  - Tolerance-band picker (catalog_exact > catalog_band > catalog_default)
+  - Contractor scoping (contractor-scoped SKUs win over globals)
+  - Coalescing same-SKU per-equipment matches into single rows
+  - Disabled SKUs ignored
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from services import sku_catalog
+from services import catalog_match
+
+
+# ─── Test SKU factory ──────────────────────────────────────────────
+
+def _sku(
+    sku_id: str,
+    *,
+    trigger: str = "ahu_present",
+    capacity_btu: int | None = None,
+    capacity_min: int | None = None,
+    capacity_max: int | None = None,
+    contractor_id: str | None = None,
+    description: str | None = None,
+    disabled: bool = False,
+    section: str = "Equipment",
+    supplier: str = "GOOD",
+    manufacturer: str | None = "Goodman",
+    default_unit_price: float = 100.0,
+) -> sku_catalog.SKUItem:
+    return sku_catalog.SKUItem(
+        sku=sku_id,
+        supplier=supplier,
+        section=section,
+        phase=None,
+        description=description or f"Test SKU {sku_id}",
+        trigger=trigger,
+        quantity={"mode": "fixed", "value": 1},
+        default_unit_price=default_unit_price,
+        notes="",
+        disabled=disabled,
+        wrightsoft_codes=(),
+        capacity_btu=capacity_btu,
+        capacity_min_btu=capacity_min,
+        capacity_max_btu=capacity_max,
+        manufacturer=manufacturer,
+        contractor_id=contractor_id,
+    )
+
+
+# ─── _trigger_for_equipment ─────────────────────────────────────────
+
+class TestTriggerForEquipment:
+    def test_air_handler_maps_to_ahu_present(self):
+        assert catalog_match._trigger_for_equipment("air_handler") == "ahu_present"
+
+    def test_condenser_maps_to_condenser_present(self):
+        assert catalog_match._trigger_for_equipment("condenser") == "condenser_present"
+
+    def test_heat_pump_rides_on_condenser_trigger(self):
+        assert catalog_match._trigger_for_equipment("heat_pump") == "condenser_present"
+
+    def test_furnace_rides_on_ahu_trigger(self):
+        assert catalog_match._trigger_for_equipment("furnace") == "ahu_present"
+
+    def test_erv_and_hrv_both_map_to_erv_present(self):
+        assert catalog_match._trigger_for_equipment("erv") == "erv_present"
+        assert catalog_match._trigger_for_equipment("hrv") == "erv_present"
+
+    def test_unknown_returns_none(self):
+        assert catalog_match._trigger_for_equipment("flux_capacitor") is None
+        assert catalog_match._trigger_for_equipment(None) is None
+        assert catalog_match._trigger_for_equipment("") is None
+
+    def test_normalizes_case_and_spaces(self):
+        assert catalog_match._trigger_for_equipment("  AIR HANDLER ") == "ahu_present"
+
+
+# ─── _equipment_capacity_btu ────────────────────────────────────────
+
+class TestEquipmentCapacityBtu:
+    def test_tonnage_wins_when_present(self):
+        # 2 tons → 24,000 BTU
+        eq = {"type": "air_handler", "tonnage": 2.0, "cfm": 800}
+        assert catalog_match._equipment_capacity_btu(eq) == 24_000
+
+    def test_falls_back_to_cfm_when_no_tonnage(self):
+        # 800 CFM → 800 * 30 = 24,000 BTU
+        eq = {"type": "air_handler", "tonnage": None, "cfm": 800}
+        assert catalog_match._equipment_capacity_btu(eq) == 24_000
+
+    def test_explicit_btu_honored_when_no_other(self):
+        eq = {"type": "air_handler", "capacity_btu": 36_000}
+        assert catalog_match._equipment_capacity_btu(eq) == 36_000
+
+    def test_returns_none_when_no_signal(self):
+        assert catalog_match._equipment_capacity_btu({}) is None
+        assert catalog_match._equipment_capacity_btu({"type": "air_handler"}) is None
+
+    def test_handles_string_numerics(self):
+        # JSON sometimes serializes numbers as strings
+        eq = {"type": "air_handler", "tonnage": "3.0"}
+        assert catalog_match._equipment_capacity_btu(eq) == 36_000
+
+    def test_returns_none_on_garbage(self):
+        eq = {"type": "air_handler", "tonnage": "not-a-number"}
+        # tonnage parse fails, no cfm, no btu → None
+        assert catalog_match._equipment_capacity_btu(eq) is None
+
+
+# ─── _pick_sku_by_capacity ──────────────────────────────────────────
+
+class TestPickSkuByCapacity:
+    def test_exact_match_wins_over_band(self):
+        candidates = [
+            _sku("BAND-24", capacity_min=22_000, capacity_max=26_000),
+            _sku("EXACT-24", capacity_btu=24_000),
+        ]
+        sku, conf = catalog_match._pick_sku_by_capacity(candidates, 24_000)
+        assert sku.sku == "EXACT-24"
+        assert conf == "catalog_exact"
+
+    def test_band_match_when_no_exact(self):
+        candidates = [_sku("BAND-24", capacity_min=22_000, capacity_max=26_000)]
+        sku, conf = catalog_match._pick_sku_by_capacity(candidates, 23_500)
+        assert sku.sku == "BAND-24"
+        assert conf == "catalog_band"
+
+    def test_default_when_no_capacity_info(self):
+        candidates = [_sku("NO-CAP")]
+        sku, conf = catalog_match._pick_sku_by_capacity(candidates, None)
+        assert sku.sku == "NO-CAP"
+        assert conf == "catalog_default"
+
+    def test_no_match_when_empty(self):
+        sku, conf = catalog_match._pick_sku_by_capacity([], 24_000)
+        assert sku is None
+        assert conf == "no_match"
+
+    def test_default_fallback_when_target_outside_all_bands(self):
+        # 50K BTU — no SKU matches that band, but we still emit
+        # something rather than dropping the equipment item entirely.
+        candidates = [_sku("BAND-24", capacity_min=22_000, capacity_max=26_000)]
+        sku, conf = catalog_match._pick_sku_by_capacity(candidates, 50_000)
+        assert sku.sku == "BAND-24"
+        assert conf == "catalog_default"
+
+
+# ─── _candidate_skus_for_trigger ────────────────────────────────────
+
+class TestCandidateSkus:
+    def test_filters_by_trigger(self):
+        catalog = [
+            _sku("AHU-1", trigger="ahu_present"),
+            _sku("COND-1", trigger="condenser_present"),
+        ]
+        cands = catalog_match._candidate_skus_for_trigger("ahu_present", None, catalog)
+        assert [c.sku for c in cands] == ["AHU-1"]
+
+    def test_global_skus_match_when_contractor_id_none(self):
+        catalog = [
+            _sku("GLOBAL-AHU", contractor_id=None),
+            _sku("BEAZER-AHU", contractor_id="beazer-homes-az"),
+        ]
+        cands = catalog_match._candidate_skus_for_trigger("ahu_present", None, catalog)
+        assert [c.sku for c in cands] == ["GLOBAL-AHU"]
+
+    def test_contractor_scoped_first_then_global(self):
+        catalog = [
+            _sku("GLOBAL-AHU", contractor_id=None),
+            _sku("BEAZER-AHU", contractor_id="beazer-homes-az"),
+        ]
+        cands = catalog_match._candidate_skus_for_trigger(
+            "ahu_present", "beazer-homes-az", catalog
+        )
+        # Both match; contractor-scoped first
+        assert cands[0].sku == "BEAZER-AHU"
+        assert cands[1].sku == "GLOBAL-AHU"
+
+    def test_disabled_skus_skipped(self):
+        catalog = [
+            _sku("AHU-1", disabled=True),
+            _sku("AHU-2", disabled=False),
+        ]
+        cands = catalog_match._candidate_skus_for_trigger("ahu_present", None, catalog)
+        assert [c.sku for c in cands] == ["AHU-2"]
+
+
+# ─── match_equipment_to_catalog (integration) ───────────────────────
+
+class TestMatchEquipmentToCatalog:
+    def test_emits_one_line_per_equipment_with_correct_sku(self):
+        catalog = [
+            _sku("GOOD-AHU-24K", capacity_btu=24_000),
+            _sku("GOOD-AHU-36K", capacity_btu=36_000),
+        ]
+        equipment = [
+            {"name": "AHU 1", "type": "air_handler", "tonnage": 2.0},  # 24K
+            {"name": "AHU 2", "type": "air_handler", "tonnage": 3.0},  # 36K
+            {"name": "AHU 3", "type": "air_handler", "tonnage": 2.0},  # 24K again
+        ]
+        out = catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog,
+        )
+        assert len(out) == 3
+        skus = [line["sku"] for line in out]
+        assert skus == ["GOOD-AHU-24K", "GOOD-AHU-36K", "GOOD-AHU-24K"]
+        assert all(line["confidence"] == "catalog_exact" for line in out)
+
+    def test_skips_unknown_equipment_types(self):
+        catalog = [_sku("AHU-1")]
+        equipment = [{"type": "flux_capacitor"}]
+        assert catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog
+        ) == []
+
+    def test_skips_when_no_candidates_for_trigger(self):
+        catalog = [_sku("COND-1", trigger="condenser_present")]
+        equipment = [{"type": "air_handler", "tonnage": 2.0}]
+        assert catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog
+        ) == []
+
+    def test_empty_or_missing_equipment_returns_empty(self):
+        assert catalog_match.match_equipment_to_catalog([], None) == []
+        assert catalog_match.match_equipment_to_catalog(None, None) == []  # type: ignore[arg-type]
+
+    def test_contractor_scoped_sku_wins_over_global(self):
+        catalog = [
+            _sku("GLOBAL-AHU", capacity_btu=24_000, contractor_id=None),
+            _sku("BEAZER-AHU", capacity_btu=24_000, contractor_id="beazer-homes-az"),
+        ]
+        equipment = [{"type": "air_handler", "tonnage": 2.0}]
+        out = catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id="beazer-homes-az", catalog=catalog,
+        )
+        assert out[0]["sku"] == "BEAZER-AHU"
+
+
+# ─── coalesce_matched_lines ─────────────────────────────────────────
+
+class TestCoalesceMatchedLines:
+    def test_folds_same_sku_into_one_line_with_qty_n(self):
+        catalog = [_sku("GOOD-AHU-24K", capacity_btu=24_000)]
+        equipment = [
+            {"name": f"AHU {i}", "type": "air_handler", "tonnage": 2.0}
+            for i in range(5)
+        ]
+        per_instance = catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog,
+        )
+        coalesced = catalog_match.coalesce_matched_lines(per_instance)
+        assert len(coalesced) == 1
+        assert coalesced[0]["sku"] == "GOOD-AHU-24K"
+        assert coalesced[0]["quantity"] == 5.0
+
+    def test_keeps_distinct_skus_separate(self):
+        catalog = [
+            _sku("GOOD-AHU-24K", capacity_btu=24_000),
+            _sku("GOOD-AHU-36K", capacity_btu=36_000),
+        ]
+        equipment = [
+            {"type": "air_handler", "tonnage": 2.0},
+            {"type": "air_handler", "tonnage": 3.0},
+            {"type": "air_handler", "tonnage": 2.0},
+        ]
+        per_instance = catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog,
+        )
+        coalesced = catalog_match.coalesce_matched_lines(per_instance)
+        assert {ln["sku"]: ln["quantity"] for ln in coalesced} == {
+            "GOOD-AHU-24K": 2.0,
+            "GOOD-AHU-36K": 1.0,
+        }
+
+    def test_strips_internal_match_key_and_target_btu(self):
+        catalog = [_sku("AHU-1", capacity_btu=24_000)]
+        equipment = [{"type": "air_handler", "tonnage": 2.0}]
+        per = catalog_match.match_equipment_to_catalog(
+            equipment, contractor_id=None, catalog=catalog,
+        )
+        coalesced = catalog_match.coalesce_matched_lines(per)
+        assert "_match_key" not in coalesced[0]
+        assert "_target_btu" not in coalesced[0]
+        # User-facing fields preserved
+        assert coalesced[0]["confidence"] == "catalog_exact"
+        assert coalesced[0]["source"] == "catalog_match"
+
+
+# ─── Integration with bom_service.generate (phantom suppression) ────
+#
+# When catalog_match emits a per-equipment line for trigger T (e.g.
+# ahu_present), the rules engine must not also emit OTHER SKUs that
+# would fire on T — otherwise we get phantom rows like a 60K AHU
+# materializing in a project that has no 60K equipment, just because
+# trigger=ahu_present is true and the rules engine fires every
+# matching SKU regardless of capacity. Real-money problem.
+#
+# This test pins the dedupe behavior introduced in Phase 3.7
+# (services/bom_service.py).
+
+class TestPhantomSuppressionInBomGenerate:
+    @pytest.fixture
+    def goodman_catalog(self):
+        return [
+            _sku("GOOD-AHU-24K", trigger="ahu_present", capacity_btu=24000,
+                 capacity_min=22000, capacity_max=26000,
+                 description="Goodman AHU 24K"),
+            _sku("GOOD-AHU-36K", trigger="ahu_present", capacity_btu=36000,
+                 capacity_min=34000, capacity_max=38000,
+                 description="Goodman AHU 36K"),
+            # Phantom candidate — fires on ahu_present trigger but no 60K
+            # equipment in the test design. Must be suppressed.
+            _sku("GOOD-AHU-60K", trigger="ahu_present", capacity_btu=60000,
+                 capacity_min=56000, capacity_max=64000,
+                 description="Goodman AHU 60K phantom"),
+            _sku("GOOD-HEATKIT-5KW", trigger="heat_kit_present",
+                 description="Goodman Heat Kit 5kW"),
+        ]
+
+    @pytest.fixture
+    def two_ahu_design(self):
+        return {
+            "project":  {"name": "Phantom-test"},
+            "building": {"type": "single_level", "duct_location": "attic"},
+            "equipment": [
+                {"name": "AHU-1", "type": "air_handler", "tonnage": 2.0},  # 24K
+                {"name": "AHU-2", "type": "air_handler", "tonnage": 3.0},  # 36K
+            ],
+            "rooms": [], "duct_runs": [], "fittings": [], "registers": [],
+            "raw_rup_context": "Test.",
+        }
+
+    def test_60k_phantom_suppressed_when_no_60k_equipment(
+        self, goodman_catalog, two_ahu_design,
+    ):
+        """The 60K AHU SKU must NOT appear in BOM output even though
+        trigger=ahu_present is true. catalog_match captured the AHU
+        trigger via per-equipment matches; rules engine should yield."""
+        from unittest.mock import patch
+        from services import bom_service
+
+        mock_profile = {
+            "client_id": "x", "client_name": "X", "is_active": True,
+            "supplier": {"supplier_name": "S"},
+            "markup": {"equipment_pct": 15, "materials_pct": 25,
+                       "consumables_pct": 30, "labor_pct": 0},
+            "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+            "default_output_mode": "full", "include_labor": False, "notes": "",
+        }
+        sku_index = {s.sku: s for s in goodman_catalog}
+
+        with patch("services.bom_service.get_profile_by_id", return_value=mock_profile), \
+             patch("services.bom_service._call_ai_for_quantities",
+                   return_value={"drawn_items": [], "consumables": []}), \
+             patch("services.sku_catalog.all_items", return_value=goodman_catalog), \
+             patch("services.sku_catalog.get", side_effect=lambda s: sku_index.get(s)), \
+             patch("services.materials_rules.sku_catalog.all_items",
+                   return_value=goodman_catalog):
+            bom = bom_service.generate("x", "phantom-test-job", two_ahu_design)
+
+        emitted_skus = {li.get("sku") for li in bom["line_items"]}
+        assert "GOOD-AHU-60K" not in emitted_skus, (
+            f"phantom 60K AHU leaked into BOM: {emitted_skus}"
+        )
+        # The two real AHUs are present
+        assert "GOOD-AHU-24K" in emitted_skus
+        assert "GOOD-AHU-36K" in emitted_skus
+
+    def test_heat_kit_survives_different_trigger(
+        self, goodman_catalog, two_ahu_design,
+    ):
+        """The heat kit SKU has trigger=heat_kit_present, NOT
+        ahu_present, so catalog_match's claim on ahu_present must
+        not suppress it."""
+        from unittest.mock import patch
+        from services import bom_service
+
+        mock_profile = {
+            "client_id": "x", "client_name": "X", "is_active": True,
+            "supplier": {"supplier_name": "S"},
+            "markup": {"equipment_pct": 15, "materials_pct": 25,
+                       "consumables_pct": 30, "labor_pct": 0},
+            "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+            "default_output_mode": "full", "include_labor": False, "notes": "",
+        }
+        sku_index = {s.sku: s for s in goodman_catalog}
+
+        with patch("services.bom_service.get_profile_by_id", return_value=mock_profile), \
+             patch("services.bom_service._call_ai_for_quantities",
+                   return_value={"drawn_items": [], "consumables": []}), \
+             patch("services.sku_catalog.all_items", return_value=goodman_catalog), \
+             patch("services.sku_catalog.get", side_effect=lambda s: sku_index.get(s)), \
+             patch("services.materials_rules.sku_catalog.all_items",
+                   return_value=goodman_catalog):
+            bom = bom_service.generate("x", "heat-kit-test-job", two_ahu_design)
+
+        skus = [li.get("sku") for li in bom["line_items"]]
+        assert "GOOD-HEATKIT-5KW" in skus, (
+            f"heat kit (different trigger) wrongly suppressed: {skus}"
+        )
