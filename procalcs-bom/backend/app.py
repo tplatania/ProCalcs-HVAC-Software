@@ -99,6 +99,7 @@ def register_blueprints(app):
     from routes.health_routes import health_bp, versioned_health_bp
     from routes.profile_routes import profile_bp
     from routes.bom_routes import bom_bp
+    from routes.bom_runs_routes import bom_runs_bp
     from routes.sku_catalog_routes import sku_catalog_bp
     from routes.billing_routes import billing_bp
 
@@ -108,6 +109,7 @@ def register_blueprints(app):
     app.register_blueprint(versioned_health_bp, url_prefix='/api/v1')
     app.register_blueprint(profile_bp,     url_prefix='/api/v1/profiles')
     app.register_blueprint(bom_bp,         url_prefix='/api/v1/bom')
+    app.register_blueprint(bom_runs_bp,    url_prefix='/api/v1/bom-runs')
     app.register_blueprint(sku_catalog_bp, url_prefix='/api/v1/sku-catalog')
     app.register_blueprint(billing_bp,     url_prefix='/api/v1/billing')
 

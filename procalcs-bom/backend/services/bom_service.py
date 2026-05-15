@@ -77,7 +77,8 @@ OUTPUT_MODES = {
 # ===============================
 
 def generate(client_id: str, job_id: str, design_data: dict,
-             output_mode: str = None) -> dict:
+             output_mode: str = None,
+             regenerated_from_id: int = None) -> dict:
     """
     Generate a complete BOM for a finished HVAC design job.
 
@@ -201,13 +202,19 @@ def generate(client_id: str, job_id: str, design_data: dict,
     # to wait 15 seconds for. Caller can still recover the BOM from the
     # response even if persistence failed.
     try:
-        _record_bom_run(
+        run_id = _record_bom_run(
             client_id=client_id,
             job_id=job_id,
             output_mode=effective_mode,
             design_data=design_data,
             generated_bom=bom,
+            regenerated_from_id=regenerated_from_id,
         )
+        # Surface the persisted run_id in the response so the SPA / tests
+        # can deep-link to the run-history page without a follow-up query.
+        # Stays None if persistence failed (caught below).
+        if run_id is not None:
+            bom["run_id"] = run_id
     except Exception as exc:  # noqa: BLE001
         logger.warning("BOM persistence failed for job %s — %s", job_id, exc)
 
@@ -221,10 +228,12 @@ def _record_bom_run(
     output_mode: str,
     design_data: dict,
     generated_bom: dict,
-) -> None:
-    """Insert one bom_runs row + commit. Pulled out so the try/except
-    around it stays narrow — DB failures shouldn't poison the BOM
-    response. See models/bom_run.py for the full schema."""
+    regenerated_from_id: int = None,
+) -> int:
+    """Insert one bom_runs row + commit, returning the new row id.
+    Pulled out so the try/except around it stays narrow — DB failures
+    shouldn't poison the BOM response. See models/bom_run.py for the
+    full schema."""
     from models import BomRun
     from extensions import db
     from flask import g, has_request_context
@@ -239,15 +248,17 @@ def _record_bom_run(
         if user is not None:
             created_by_email = getattr(user, "email", None)
 
-    BomRun.record(
+    run = BomRun.record(
         client_id=client_id,
         job_id=job_id,
         output_mode=output_mode,
         parsed_design_data=design_data,
         generated_bom=generated_bom,
         created_by_email=created_by_email,
+        regenerated_from_id=regenerated_from_id,
     )
     db.session.commit()
+    return run.id
 
 
 # ===============================
