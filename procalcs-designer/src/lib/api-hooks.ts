@@ -648,3 +648,29 @@ export function useOpenBillingPortal() {
       }),
   });
 }
+
+// Bulk-import endpoint added in procalcs-bom Phase 3.6 (May 2026).
+// POST /api/v1/sku-catalog/bulk-import — proxied via Express. Accepts
+// {items: [<sku payload>, ...]}; returns 200 with summary even when
+// individual rows failed (per-row errors itemized in summary.errors).
+
+export interface SkuBulkImportSummary {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors:  { index: number; sku: string | null; error: string }[];
+}
+
+export function useBulkImportSku() {
+  return useMutation<
+    SkuBulkImportSummary,
+    { error: string; status?: number },
+    { items: Partial<SKUItem>[] }
+  >({
+    mutationFn: ({ items }) =>
+      apiFetchEnvelope<SkuBulkImportSummary>("/api/sku-catalog/bulk-import", {
+        method: "POST",
+        body: JSON.stringify({ items }),
+      }),
+  });
+}
