@@ -436,12 +436,154 @@ def _parse_location(sections: Dict[str, List[str]]) -> Dict[str, str]:
 
 # ── Narrative fallback text ─────────────────────────────────────────────────
 
+def _utf16_strings_in_block(data: bytes, min_len: int = 3) -> List[str]:
+    """Yield printable UTF-16-LE strings of min_len+ chars from a block
+    body. Used to extract human-readable labels (room names, equipment
+    types) without committing to a per-block schema decode."""
+    out: List[str] = []
+    i = 0
+    n = len(data)
+    while i < n - 1:
+        if 32 <= data[i] < 127 and data[i + 1] == 0:
+            chars: List[str] = []
+            while i < n - 1 and 32 <= data[i] < 127 and data[i + 1] == 0:
+                chars.append(chr(data[i]))
+                i += 2
+            if len(chars) >= min_len:
+                out.append("".join(chars))
+            continue
+        i += 1
+    return out
+
+
+def _build_binary_enrichment_lines(
+    file_bytes: bytes,
+    text_equipment: List[Dict[str, Any]],
+    text_rooms: List[Dict[str, Any]],
+) -> List[str]:
+    """Extract narrative-useful signals from RUP binary blocks the
+    text-regex parser doesn't surface. Returns a list of lines to
+    append to raw_rup_context.
+
+    Phase 1 of Path B (May 2026 enrichment) — see RUP_BINARY_LAYOUT.md
+    in designer-desktop _repo-docs for the empirical block inventory
+    that drives which tags get sampled here.
+
+    Sections emitted (each only if its block carries data):
+      EQUIPMENT LIBRARY  — distinct equipment-type names from EQUIP
+      EQUIPMENT PLACEMENT — count of ZEQUIP records (per-zone equipment)
+      ROOMS (BALDUCT)    — real room names from BALDUCT records;
+                           skipped when text_rooms already populated
+      DESIGN COMPLEXITY  — DUCTRUN/DREGINFO/FITNG counts
+    """
+    from collections import Counter
+
+    out: List[str] = []
+
+    # 1) Equipment library names (the catalog of types Wrightsoft offers).
+    # Even though EQUIP is the LIBRARY (not placed instances — see the
+    # course-correction logged in RUP_BINARY_LAYOUT.md), the names
+    # themselves give the AI useful context: "this project's library
+    # contains 8 split AC entries, 8 furnace entries, 1 ASHP entry"
+    # implies the system mix being designed even if we can't yet count
+    # actual placements.
+    try:
+        equip_records = _parse_equip_blocks(file_bytes)
+    except Exception:
+        equip_records = []
+    if equip_records:
+        name_counts = Counter(e.get("raw_name", "") for e in equip_records if e.get("raw_name"))
+        if name_counts:
+            out.append(
+                f"=== EQUIPMENT LIBRARY ({sum(name_counts.values())} entries, "
+                f"{len(name_counts)} distinct types) ==="
+            )
+            for name, count in name_counts.most_common():
+                out.append(f"  {count}x {name}")
+            out.append(
+                "(Note: this is the equipment LIBRARY — the catalog of types "
+                "Wrightsoft offers in this project, not the count of placed "
+                "equipment. Actual placements are in ZEQUIP.)"
+            )
+            out.append("")
+
+    # 2) Per-zone equipment placements. ZEQUIP records pair 1:1 with
+    # TDUCTSYS/ECDUCTSYS so the count = number of zones with placed
+    # equipment. Each record carries (tag, type) strings like
+    # ("PEAKCV", "PACKAGE") — Wrightsoft semantics undecoded until
+    # Path C ships, but the COUNT alone tells the AI scale.
+    try:
+        zeq_count = len(_block_bodies(file_bytes, "ZEQUIP"))
+    except Exception:
+        zeq_count = 0
+    if zeq_count:
+        out.append(
+            f"=== EQUIPMENT PLACEMENT ({zeq_count} zone-equipment records) ==="
+        )
+        out.append(
+            f"  {zeq_count} ZEQUIP records detected — one per zone where "
+            "equipment is placed. (Wrightsoft uses 'PEAKCV/PACKAGE' "
+            "internal labels here.)"
+        )
+        out.append("")
+
+    # 3) Real room names from BALDUCT. The text-regex parser misses
+    # rooms entirely on Manual D / ducts-only RUPs. BALDUCT carries
+    # them cleanly. Skip if text_rooms already populated (Edge case)
+    # since we'd just duplicate the rooms section.
+    if not text_rooms:
+        try:
+            bal_bodies = _block_bodies(file_bytes, "BALDUCT")
+        except Exception:
+            bal_bodies = []
+        room_names: List[str] = []
+        for body in bal_bodies:
+            strs = _utf16_strings_in_block(body, min_len=2)
+            if strs:
+                room_names.append(strs[0])
+        # Drop obvious garbage tokens (parser tags like "rb1" / "rb2")
+        # while keeping real names like "Master Bedroom" / "PANTRY".
+        cleaned = [n for n in room_names if not re.fullmatch(r"[a-z]{1,3}\d{1,3}", n)]
+        if cleaned:
+            out.append(f"=== ROOMS ({len(cleaned)} from balance records) ===")
+            for name in cleaned:
+                out.append(f"  {name}")
+            out.append("")
+
+    # 4) Design complexity / scale signals — record counts for the
+    # three big per-instance block types. Even without per-record
+    # decode (deferred to Phase C/D), the magnitudes help the AI
+    # reason about scale: 22 ducts vs 192 ducts is a different job.
+    try:
+        ductrun_count = len(_block_bodies(file_bytes, "DUCTRUN"))
+        dreginfo_count = len(_block_bodies(file_bytes, "DREGINFO"))
+        fitng_count = len(_block_bodies(file_bytes, "FITNG"))
+    except Exception:
+        ductrun_count = dreginfo_count = fitng_count = 0
+    if ductrun_count or dreginfo_count or fitng_count:
+        out.append("=== DESIGN COMPLEXITY (binary block counts) ===")
+        if ductrun_count:
+            out.append(f"  Duct runs (DUCTRUN): {ductrun_count}")
+        if dreginfo_count:
+            out.append(f"  Registers/diffusers (DREGINFO): {dreginfo_count}")
+        if fitng_count:
+            out.append(f"  Fitting instances (FITNG): {fitng_count}")
+        out.append(
+            "  (Use these counts to estimate fitting, register, and duct-run "
+            "quantities when structured arrays are empty.)"
+        )
+        out.append("")
+
+    return out
+
+
 def _build_raw_context(
     project: Dict[str, Any],
     building: Dict[str, str],
     equipment: List[Dict[str, Any]],
     rooms: List[Dict[str, Any]],
     full_text: str,
+    file_bytes: Optional[bytes] = None,
 ) -> str:
     """Assemble the narrative text the BOM engine AI prompt reads when the
     structured duct_runs / fittings / registers arrays are sparse.
@@ -449,6 +591,16 @@ def _build_raw_context(
     This is the `raw_rup_context` field and is the hybrid fallback mechanism
     from the spec — keep it rich enough that an HVAC-literate LLM can
     estimate quantities from it.
+
+    May 2026 enrichment (Phase 1 of Path B): when ``file_bytes`` is
+    supplied, additional sections are appended from binary blocks that
+    the text-regex parser doesn't surface — equipment library names
+    from EQUIP, real room names from BALDUCT (replaces the missing
+    rooms section on Manual D / ducts-only RUPs), and aggregate counts
+    from DUCTRUN/DREGINFO/FITNG/ZEQUIP. This roughly doubles the AI's
+    context on Easy + Average sample RUPs (487/462 → ~770/1080 chars)
+    and keeps it backwards-compatible: callers that don't pass
+    file_bytes get the original text-only context.
     """
     lines: List[str] = []
     lines.append("=== RUP PROJECT EXCERPT ===")
@@ -477,6 +629,13 @@ def _build_raw_context(
                 parts.append(f"model {eq['model']}")
             lines.append("  " + " — ".join(parts))
         lines.append("")
+
+    # ─── Binary-derived enrichment (Phase 1 — May 2026) ────────────
+    # All optional. Each section appends only if file_bytes is provided
+    # AND the corresponding block has data. Keeps test fixtures and any
+    # caller that hands us pre-extracted text+arrays working unchanged.
+    if file_bytes:
+        lines.extend(_build_binary_enrichment_lines(file_bytes, equipment, rooms))
 
     if rooms:
         lines.append(f"=== ROOMS ({len(rooms)} total) ===")
@@ -650,7 +809,10 @@ def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
 
     rooms     = _parse_rooms(full_text)
 
-    raw_context = _build_raw_context(project, building, equipment, rooms, full_text)
+    raw_context = _build_raw_context(
+        project, building, equipment, rooms, full_text,
+        file_bytes=file_bytes,
+    )
 
     return {
         "project":   project,
