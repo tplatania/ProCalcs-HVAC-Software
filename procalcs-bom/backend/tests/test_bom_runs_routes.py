@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -427,6 +428,150 @@ class TestCompareRun:
         run = self._seed_run_with_bom([{"sku": "A", "description": "x", "quantity": 1}])
         resp = client.post(f"/api/v1/bom-runs/{run.id}/compare", json={})
         assert resp.status_code == 400
+
+
+# ─── Tags + regression suites (Phase 9) ─────────────────────────────
+
+class TestTagsAndSuites:
+    def _seed(self, *, tags=None, design=None):
+        run = BomRun.record(
+            client_id="x", job_id=f"job-{datetime.utcnow().timestamp()}",
+            output_mode="full",
+            parsed_design_data=design or {"equipment": []},
+            generated_bom={"item_count": 1, "totals": {"total_price": 10}},
+            tags=tags or [],
+        )
+        db.session.commit()
+        return run
+
+    # /<id>/tags ——————————————————————————————————————————————————
+
+    def test_add_tags_idempotent(self, app, client):
+        run = self._seed()
+        # First add
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/tags",
+                           json={"add": ["regression-v1", "easy"]})
+        assert resp.status_code == 200
+        assert sorted(resp.get_json()["data"]["tags"]) == ["easy", "regression-v1"]
+        # Re-adding same tag is a no-op
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/tags",
+                           json={"add": ["regression-v1"]})
+        assert sorted(resp.get_json()["data"]["tags"]) == ["easy", "regression-v1"]
+
+    def test_remove_tags(self, app, client):
+        run = self._seed(tags=["a", "b", "c"])
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/tags",
+                           json={"remove": ["b"]})
+        assert sorted(resp.get_json()["data"]["tags"]) == ["a", "c"]
+
+    def test_normalizes_tag_to_lowercase(self, app, client):
+        run = self._seed()
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/tags",
+                           json={"add": ["  Regression-V1  "]})
+        assert resp.get_json()["data"]["tags"] == ["regression-v1"]
+
+    def test_rejects_illegal_chars(self, app, client):
+        run = self._seed()
+        resp = client.post(f"/api/v1/bom-runs/{run.id}/tags",
+                           json={"add": ["hi world!"]})
+        assert resp.status_code == 400
+        assert "illegal characters" in resp.get_json()["error"]
+
+    def test_404_for_missing_run(self, app, client):
+        resp = client.post("/api/v1/bom-runs/9999/tags", json={"add": ["x"]})
+        assert resp.status_code == 404
+
+    # GET /tags ——————————————————————————————————————————————————
+
+    def test_list_tags_distinct_with_counts(self, app, client):
+        self._seed(tags=["regression-v1"])
+        self._seed(tags=["regression-v1", "easy"])
+        self._seed(tags=["edge"])
+        resp = client.get("/api/v1/bom-runs/tags")
+        d = resp.get_json()["data"]
+        # Sorted alphabetically
+        assert [t["tag"] for t in d["tags"]] == ["easy", "edge", "regression-v1"]
+        counts = {t["tag"]: t["count"] for t in d["tags"]}
+        assert counts == {"easy": 1, "edge": 1, "regression-v1": 2}
+
+    def test_list_tags_empty_when_no_runs(self, app, client):
+        resp = client.get("/api/v1/bom-runs/tags")
+        assert resp.get_json()["data"]["tags"] == []
+
+    # List filter ——————————————————————————————————————————————————
+
+    def test_list_filter_by_tag(self, app, client):
+        a = self._seed(tags=["regression-v1"])
+        b = self._seed(tags=["edge"])
+        c = self._seed(tags=["regression-v1", "easy"])
+        resp = client.get("/api/v1/bom-runs/?tag=regression-v1")
+        runs = resp.get_json()["data"]["runs"]
+        ids = {r["id"] for r in runs}
+        assert ids == {a.id, c.id}
+        assert b.id not in ids
+
+    # /regression-suites/<tag>/run ——————————————————————————————
+
+    def _patches(self, profile_dict):
+        return [
+            patch("services.bom_service.get_profile_by_id", return_value=profile_dict),
+            patch("services.bom_service._call_ai_for_quantities",
+                  return_value={"drawn_items": [], "consumables": []}),
+            patch.object(sku_catalog, "all_items", return_value=[]),
+        ]
+
+    def test_run_suite_regenerates_each_member(self, app, client, profile_dict, design_data):
+        # Seed two runs with the same tag, real design_data so generate works
+        for p in self._patches(profile_dict): p.start()
+        try:
+            bom_service.generate("test-contractor", "parent-1", design_data)
+            bom_service.generate("test-contractor", "parent-2", design_data)
+            for r in BomRun.query.all():
+                r.tags = ["regression-v1"]
+            db.session.commit()
+            assert BomRun.query.count() == 2
+
+            resp = client.post("/api/v1/bom-runs/regression-suites/regression-v1/run", json={})
+            assert resp.status_code == 200, resp.get_json()
+            d = resp.get_json()["data"]
+            assert d["tag"] == "regression-v1"
+            assert d["summary"]["ok"] == 2
+            assert d["summary"]["errors"] == 0
+            # Each member produced a child
+            for m in d["members"]:
+                assert m["status"] == "ok"
+                assert m["child_id"] is not None
+            # Children inherit the suite tag (so the next suite-run picks them up too)
+            children = (
+                BomRun.query.filter(BomRun.regenerated_from_id.isnot(None)).all()
+            )
+            assert len(children) == 2
+            for c in children:
+                assert "regression-v1" in (c.tags or [])
+        finally:
+            for p in self._patches(profile_dict):
+                try: p.stop()
+                except Exception: pass
+
+    def test_run_suite_404_when_no_members(self, app, client):
+        resp = client.post("/api/v1/bom-runs/regression-suites/no-such-tag/run", json={})
+        assert resp.status_code == 404
+
+    def test_run_suite_member_without_design_data_marked_error(self, app, client):
+        # Seed a row with no design_data — suite still completes, this
+        # member reports error.
+        run = BomRun.record(
+            client_id="x", job_id="orphan", output_mode="full",
+            parsed_design_data=None, generated_bom={"item_count": 0},
+            tags=["regression-v1"],
+        )
+        db.session.commit()
+        resp = client.post("/api/v1/bom-runs/regression-suites/regression-v1/run", json={})
+        assert resp.status_code == 200
+        d = resp.get_json()["data"]
+        assert d["summary"]["errors"] == 1
+        assert d["summary"]["ok"] == 0
+        assert "no parsed_design_data" in d["members"][0]["error"]
         # Pre-Phase-3 row simulation — design_data is None.
         run = BomRun.record(
             client_id="x", job_id="y", output_mode="full",

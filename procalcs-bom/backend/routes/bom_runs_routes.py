@@ -2,14 +2,18 @@
 bom_runs_routes.py — Run-history API for the testing harness.
 
 Mounted at /api/v1/bom-runs in app.py:
-    GET  /api/v1/bom-runs/                  — paginated list (filters: client_id, reviewer_status, q, limit, offset)
+    GET  /api/v1/bom-runs/                  — paginated list (filters: client_id, reviewer_status, tag, q, limit, offset)
     GET  /api/v1/bom-runs/<int:run_id>      — full record (parsed_design_data + generated_bom included)
-    POST /api/v1/bom-runs/<int:run_id>/review     — set reviewer_status / notes
-    POST /api/v1/bom-runs/<int:run_id>/regenerate — re-run bom_service.generate against the stored design_data,
-                                                    linking the new row via regenerated_from_id
+    POST /api/v1/bom-runs/<int:run_id>/review       — set reviewer_status / notes
+    POST /api/v1/bom-runs/<int:run_id>/regenerate   — re-run bom_service.generate against the stored design_data
+    POST /api/v1/bom-runs/<int:run_id>/compare      — XLS / JSON comparator (Phase 7)
+    POST /api/v1/bom-runs/<int:run_id>/tags         — add / remove tags on a run  (Phase 9)
+    GET  /api/v1/bom-runs/tags                      — distinct tags + counts      (Phase 9)
+    POST /api/v1/bom-runs/regression-suites/<tag>/run
+        — re-run every member of a tagged suite, link via regenerated_from_id     (Phase 9)
 
-Phase 4 of the testing-harness rollout (May 2026). Built on top of
-the bom_runs persistence layer landed in Phase 3 (see services/bom_service.py
+Phase 4 / 7 / 9 of the testing-harness rollout (May 2026). Built on top
+of the bom_runs persistence layer landed in Phase 3 (see services/bom_service.py
 and models/bom_run.py).
 
 All routes require the SERVICE_SHARED_SECRET (verified by app-level
@@ -83,6 +87,7 @@ def list_runs():
         client_id       = (request.args.get("client_id") or "").strip()
         reviewer_status = (request.args.get("reviewer_status") or "").strip()
         q               = (request.args.get("q") or "").strip()
+        tag             = (request.args.get("tag") or "").strip()
 
         try:
             limit = int(request.args.get("limit", _DEFAULT_LIMIT))
@@ -116,13 +121,26 @@ def list_runs():
                 BomRun.created_by_email.ilike(like),
             ))
 
-        total = query.count()
-        rows = (
-            query.order_by(BomRun.created_at.desc())
-                 .limit(limit)
-                 .offset(offset)
-                 .all()
-        )
+        # Tag filter — applied in Python after the SQL fetch. JSONB
+        # membership filters differ between Postgres + SQLite, and the
+        # bom_runs table is small (staging-scale): this keeps the route
+        # cross-DB without extra dialect plumbing. If/when the table
+        # grows we'll add a Postgres-specific `tags @> [tag]` predicate.
+        if tag:
+            all_matching = (
+                query.order_by(BomRun.created_at.desc()).all()
+            )
+            filtered = [r for r in all_matching if tag in (r.tags or [])]
+            total = len(filtered)
+            rows = filtered[offset : offset + limit]
+        else:
+            total = query.count()
+            rows = (
+                query.order_by(BomRun.created_at.desc())
+                     .limit(limit)
+                     .offset(offset)
+                     .all()
+            )
         return _ok({
             "runs":   [r.to_summary() for r in rows],
             "total":  total,
@@ -315,3 +333,194 @@ def compare_run(run_id: int):
     payload["sample_filename"] = source_filename
     payload["sample_lines"] = sample_lines  # echoed for SPA preview
     return _ok(payload)
+
+
+# ─── Tags + regression suites (Phase 9) ─────────────────────────────
+
+# Tag string sanity — keep them short, lower-kebab-case so they sort
+# nicely in the SPA chip lists. Reject anything wild so two testers
+# can't accidentally create "regression-v1" + " Regression-V1 ".
+_TAG_MAX_LEN = 40
+_TAG_ALLOWED = set("abcdefghijklmnopqrstuvwxyz0123456789-_.")
+
+
+def _normalize_tag(raw: str) -> str:
+    """Lowercase + strip + reject illegal chars. Returns the cleaned
+    tag, or raises ValueError. Used by both /<id>/tags and the
+    regression-suite endpoint so the same canonicalization wins."""
+    t = (raw or "").strip().lower()
+    if not t:
+        raise ValueError("tag must not be empty")
+    if len(t) > _TAG_MAX_LEN:
+        raise ValueError(f"tag exceeds {_TAG_MAX_LEN} chars")
+    bad = [c for c in t if c not in _TAG_ALLOWED]
+    if bad:
+        raise ValueError(
+            f"tag contains illegal characters {sorted(set(bad))} — "
+            "use a-z 0-9 - _ ."
+        )
+    return t
+
+
+@bom_runs_bp.route("/tags", methods=["GET"])
+def list_tags():
+    """Return distinct tags + counts across all bom_runs.
+
+    Done in Python after a single full-table fetch. Same rationale as
+    the tag-filter on list_runs: cross-DB JSONB membership is awkward,
+    and bom_runs is staging-scale. The SPA only calls this when the
+    user opens the regression-suites page, so the cost is bounded.
+    """
+    try:
+        all_runs = BomRun.query.with_entities(BomRun.tags).all()
+        counts: dict[str, int] = {}
+        for (tags,) in all_runs:
+            for t in (tags or []):
+                if not isinstance(t, str):
+                    continue
+                counts[t] = counts.get(t, 0) + 1
+        # Sort alphabetically; ties broken by count desc — UI displays
+        # popular suites first within the same prefix.
+        items = [
+            {"tag": t, "count": c}
+            for t, c in sorted(counts.items(), key=lambda kv: (kv[0], -kv[1]))
+        ]
+        return _ok({"tags": items, "total": len(items)})
+    except Exception as exc:  # noqa: BLE001
+        logger.error("list_tags failed: %s", exc, exc_info=True)
+        return _err("Failed to list tags", 500)
+
+
+@bom_runs_bp.route("/<int:run_id>/tags", methods=["POST"])
+def update_tags(run_id: int):
+    """Add and / or remove tags on a single run.
+
+    Body: {"add": ["t1", "t2"], "remove": ["t3"]} — both arrays
+    optional, empty body is a no-op (returns the current state).
+
+    Returns the updated summary so the SPA can re-render its chip
+    list without a follow-up GET. Idempotent — adding a tag the run
+    already has is a no-op rather than an error.
+    """
+    run = BomRun.query.get(run_id)
+    if run is None:
+        return _err(f"Run {run_id} not found", 404)
+
+    body = request.get_json(silent=True) or {}
+    add_raw = body.get("add") or []
+    remove_raw = body.get("remove") or []
+    if not isinstance(add_raw, list) or not isinstance(remove_raw, list):
+        return _err("add and remove must be arrays of strings", 400)
+
+    try:
+        to_add = [_normalize_tag(t) for t in add_raw if t]
+        to_remove = [_normalize_tag(t) for t in remove_raw if t]
+    except ValueError as exc:
+        return _err(str(exc), 400)
+
+    current = list(run.tags or [])
+    # Drop removals first, then add (so add wins on a contradictory body)
+    current = [t for t in current if t not in to_remove]
+    for t in to_add:
+        if t not in current:
+            current.append(t)
+
+    # SQLAlchemy needs a new list assignment to flag the JSON column
+    # as dirty — in-place .append() doesn't trigger an UPDATE.
+    run.tags = current
+    try:
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.error("update_tags failed run_id=%s: %s", run_id, exc, exc_info=True)
+        return _err("Failed to save tags", 500)
+
+    return _ok(run.to_summary())
+
+
+@bom_runs_bp.route("/regression-suites/<path:tag>/run", methods=["POST"])
+def run_regression_suite(tag: str):
+    """Re-run every bom_run carrying ``tag`` against bom_service.generate,
+    using the parent's stored design_data + client_id, link the new
+    rows via regenerated_from_id, and tag them with the same suite tag
+    so the suite stays self-curating across runs.
+
+    Returns a per-member report:
+        {"tag": "...", "members": [{"parent_id":..., "child_id":...,
+                                    "status":"ok"|"error", "error":...}]}
+
+    Generation latency is 10-20s per RUP; on suites of 5+ this can be
+    minutes total. We keep it sync-blocking — the SPA shows a single
+    spinner and the DB has the canonical state when it returns.
+    Background-jobs is a Phase 11 stretch.
+    """
+    try:
+        suite_tag = _normalize_tag(tag)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+
+    parents = (
+        BomRun.query.order_by(BomRun.created_at.asc()).all()
+    )
+    parents = [p for p in parents if suite_tag in (p.tags or [])]
+    if not parents:
+        return _err(f"No runs tagged '{suite_tag}'", 404)
+
+    body = request.get_json(silent=True) or {}
+    new_job_suffix = (body.get("new_job_suffix") or "suite-rerun").strip() or "suite-rerun"
+
+    members = []
+    for parent in parents:
+        member: dict[str, Any] = {
+            "parent_id":   parent.id,
+            "parent_job":  parent.job_id,
+            "child_id":    None,
+            "status":      "ok",
+            "error":       None,
+            "item_count":  None,
+        }
+        if not parent.parsed_design_data:
+            member.update({
+                "status": "error",
+                "error":  "parent has no parsed_design_data — skipped",
+            })
+            members.append(member)
+            continue
+
+        new_job_id = f"{parent.job_id}-{new_job_suffix}-{parent.id}"
+        try:
+            bom = bom_service.generate(
+                client_id=parent.client_id,
+                job_id=new_job_id,
+                design_data=parent.parsed_design_data,
+                output_mode=parent.output_mode,
+                regenerated_from_id=parent.id,
+            )
+            child_id = bom.get("run_id")
+            member["child_id"] = child_id
+            member["item_count"] = bom.get("item_count")
+
+            # Carry the suite tag forward so the next regression-suite
+            # invocation picks up the freshly-generated child as a
+            # member too. Without this the suite would calcify to its
+            # original membership.
+            if child_id:
+                child_run = BomRun.query.get(child_id)
+                if child_run is not None:
+                    tags = list(child_run.tags or [])
+                    if suite_tag not in tags:
+                        tags.append(suite_tag)
+                        child_run.tags = tags
+                        db.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("regression-suite member failed parent=%s: %s",
+                           parent.id, exc)
+            member.update({"status": "error", "error": str(exc)})
+        members.append(member)
+
+    summary = {
+        "ok":     sum(1 for m in members if m["status"] == "ok"),
+        "errors": sum(1 for m in members if m["status"] == "error"),
+        "total":  len(members),
+    }
+    return _ok({"tag": suite_tag, "summary": summary, "members": members})
