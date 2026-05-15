@@ -9,7 +9,7 @@ from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
 from config import get_config, validate_config
-from extensions import db, migrate
+from extensions import db, migrate, configure_db
 
 
 # ===============================
@@ -64,11 +64,13 @@ def create_app():
     # Validate required env vars — fail fast
     validate_config(app)
 
-    # SQLAlchemy + Flask-Migrate — for the users + subscription_events
-    # tables that back the billing layer (added Apr 30 2026, see
-    # _repo-docs/SAAS_BILLING_DESIGN.md). Must be initialized before
-    # blueprint registration so model imports succeed.
-    db.init_app(app)
+    # SQLAlchemy + Flask-Migrate — for the users + subscription_events +
+    # bom_runs tables (billing layer + Phase 3 testing harness). Must be
+    # initialized before blueprint registration so model imports succeed.
+    # configure_db routes to Cloud SQL Connector when
+    # INSTANCE_CONNECTION_NAME is set, otherwise falls back to the
+    # SQLALCHEMY_DATABASE_URI in config (local dev / pytest).
+    configure_db(app)
     # Importing models registers them on db.metadata for migrations.
     with app.app_context():
         import models  # noqa: F401
