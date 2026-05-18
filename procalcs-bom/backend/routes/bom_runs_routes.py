@@ -31,7 +31,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy import or_
 
 from extensions import db
-from models import BomRun
+from models import BomRun, BomComparison
 from models.bom_run import REVIEWER_STATUSES
 from services import bom_service
 from services.bom_comparator import compare_bom
@@ -331,6 +331,25 @@ def compare_run(run_id: int):
 
     payload = report.to_dict()
     payload["run_id"] = run.id
+
+    # Day-2 — persist the comparison as an audit row. Best-effort:
+    # the comparison computed fine, the user should still get their
+    # report even if the DB write fails.
+    try:
+        comp = BomComparison.record(
+            bom_run_id      = run.id,
+            sample_filename = source_filename or "(pasted)",
+            report_dict     = payload,
+            created_by_email= _reviewer_email_from_request(),
+        )
+        db.session.commit()
+        payload["comparison_id"] = comp.id
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.warning(
+            "BomComparison persistence failed run_id=%s: %s — comparison still returned",
+            run_id, exc,
+        )
     payload["sample_filename"] = source_filename
     payload["sample_lines"] = sample_lines  # echoed for SPA preview
     return _ok(payload)
@@ -540,3 +559,121 @@ def run_regression_suite(tag: str):
         "total":       len(members),
     }
     return _ok({"tag": suite_tag, "summary": summary, "members": members})
+
+
+# ─── Missing-SKU backlog (Day-2 polish) ─────────────────────────────
+
+@bom_runs_bp.route("/missing-sku-backlog", methods=["GET"])
+def missing_sku_backlog():
+    """Aggregate every missing-SKU across all stored bom_comparisons,
+    grouped by SKU, sorted by demand (frequency × total qty).
+
+    Powers the SPA's "encode these next" backlog page. Lets Richard's
+    team prioritize catalog encoding by what's actually missing in
+    contractor sample BOMs — not by guesswork.
+
+    Response shape:
+        {
+          "total_comparisons": N,
+          "total_missing_skus_unique": M,
+          "items": [
+            {
+              "sku":              "drfg1712mi",
+              "sku_display":      "DRFg1712MI",
+              "description":      "Rectangular fiberglass duct, 17x12",
+              "occurrence_count": 12,     // showed up missing in 12 comparisons
+              "total_qty":        45.0,   // sum of sample_qty across those
+              "first_seen":       "2026-05-15T...",
+              "last_seen":        "2026-05-18T...",
+              "run_ids":          [1, 5, 12, ...]  // up to first 20
+            },
+            ...
+          ]
+        }
+
+    Filters: ?client_id=foo restricts to comparisons whose underlying
+    bom_run was for that contractor.
+    """
+    try:
+        client_id = (request.args.get("client_id") or "").strip()
+
+        # Pull all comparisons; tiny join to BomRun for client_id filter
+        # is fine at staging-scale (hundreds, not millions).
+        q = BomComparison.query
+        if client_id:
+            q = q.join(BomRun, BomRun.id == BomComparison.bom_run_id)\
+                 .filter(BomRun.client_id == client_id)
+        comparisons = q.order_by(BomComparison.created_at.asc()).all()
+
+        # Group missing SKUs across all rows
+        grouped: dict[str, dict[str, Any]] = {}
+        for comp in comparisons:
+            for m in (comp.missing_skus or []):
+                key = m.get("sku") or f"_nosku::{(m.get('description') or '').lower()}"
+                if not key.strip():
+                    continue
+                if key not in grouped:
+                    grouped[key] = {
+                        "sku":              m.get("sku"),
+                        "sku_display":      m.get("sku_display"),
+                        "description":      m.get("description"),
+                        "occurrence_count": 0,
+                        "total_qty":        0.0,
+                        "first_seen":       comp.created_at.isoformat() if comp.created_at else None,
+                        "last_seen":        comp.created_at.isoformat() if comp.created_at else None,
+                        "run_ids":          [],
+                    }
+                g = grouped[key]
+                g["occurrence_count"] += 1
+                try:
+                    g["total_qty"] += float(m.get("qty") or 0)
+                except (TypeError, ValueError):
+                    pass
+                if comp.bom_run_id not in g["run_ids"] and len(g["run_ids"]) < 20:
+                    g["run_ids"].append(comp.bom_run_id)
+                if comp.created_at:
+                    iso = comp.created_at.isoformat()
+                    g["last_seen"] = iso  # comparisons ordered asc, last wins
+                # Prefer the longest description we've seen so the SPA
+                # has the best-quality label.
+                d = m.get("description") or ""
+                if d and len(d) > len(g.get("description") or ""):
+                    g["description"] = d
+                # Same for sku_display — prefer the cased form
+                if (not g.get("sku_display")) and m.get("sku_display"):
+                    g["sku_display"] = m.get("sku_display")
+
+        # Sort: occurrence_count desc, then total_qty desc (high-demand
+        # items first). Ties broken alphabetically for stable ordering.
+        items = sorted(
+            grouped.values(),
+            key=lambda g: (-g["occurrence_count"], -g["total_qty"], g.get("sku") or ""),
+        )
+
+        return _ok({
+            "total_comparisons":         len(comparisons),
+            "total_missing_skus_unique": len(items),
+            "items":                     items,
+        })
+    except Exception as exc:  # noqa: BLE001
+        logger.error("missing_sku_backlog failed: %s", exc, exc_info=True)
+        return _err("Failed to build backlog", 500)
+
+
+@bom_runs_bp.route("/<int:run_id>/comparisons", methods=["GET"])
+def list_run_comparisons(run_id: int):
+    """List all persisted comparisons for a single run, newest first.
+    Useful for "show me every sample I've uploaded against run #5"."""
+    run = BomRun.query.get(run_id)
+    if run is None:
+        return _err(f"Run {run_id} not found", 404)
+    rows = (
+        BomComparison.query
+        .filter(BomComparison.bom_run_id == run_id)
+        .order_by(BomComparison.created_at.desc())
+        .all()
+    )
+    return _ok({
+        "run_id":      run_id,
+        "comparisons": [r.to_summary() for r in rows],
+    })

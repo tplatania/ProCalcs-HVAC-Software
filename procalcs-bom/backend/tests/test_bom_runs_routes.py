@@ -39,7 +39,7 @@ os.environ.setdefault('SERVICE_SHARED_SECRET', '')
 
 from app import create_app
 from extensions import db
-from models import BomRun
+from models import BomRun, BomComparison
 from services import bom_service, sku_catalog
 
 
@@ -606,3 +606,158 @@ class TestTagsAndSuites:
         resp = client.post(f"/api/v1/bom-runs/{run.id}/regenerate", json={})
         assert resp.status_code == 422
         assert "cannot regenerate" in resp.get_json()["error"]
+
+
+# ─── Phase 7+ persistence: BomComparison + missing-SKU backlog ─────
+
+class TestComparisonPersistence:
+    def _seed_run_with_bom(self, bom):
+        run = BomRun.record(
+            client_id="contractor-a",
+            job_id=f"job-{datetime.utcnow().timestamp()}",
+            output_mode="full",
+            parsed_design_data={"equipment": []},
+            generated_bom=bom,
+        )
+        db.session.commit()
+        return run
+
+    def test_compare_writes_bom_comparisons_row(self, app, client):
+        """A successful /compare must persist a row + return its id."""
+        run = self._seed_run_with_bom({
+            "line_items": [
+                {"sku": "MATCHED-1", "description": "Hanger", "quantity": 5, "unit": "EA"},
+            ],
+        })
+        resp = client.post(
+            f"/api/v1/bom-runs/{run.id}/compare",
+            json={"sample_lines": [
+                {"sku": "MATCHED-1", "description": "Hanger", "quantity": 5},
+                {"sku": "MISSING-A", "description": "Flex duct 6in", "quantity": 12},
+            ]},
+        )
+        assert resp.status_code == 200
+        d = resp.get_json()["data"]
+        assert "comparison_id" in d
+        rows = BomComparison.query.all()
+        assert len(rows) == 1
+        # The missing-SKUs list was projected from the report
+        missing = rows[0].missing_skus
+        assert len(missing) == 1
+        assert missing[0]["sku"] == "missing-a"
+        assert missing[0]["qty"] == 12
+        # And the metrics rollup persists
+        assert rows[0].metrics["matched"] == 1
+        assert rows[0].metrics["missing"] == 1
+
+    def test_compare_persists_filename_when_uploaded(self, app, client):
+        # Skip multipart for brevity; "(pasted)" path is what JSON body uses.
+        run = self._seed_run_with_bom({"line_items": []})
+        client.post(
+            f"/api/v1/bom-runs/{run.id}/compare",
+            json={"sample_lines": [{"sku": "A", "quantity": 1}]},
+        )
+        row = BomComparison.query.first()
+        assert row.sample_filename == "(pasted)"
+
+    def test_compare_still_returns_when_persistence_fails(self, app, client):
+        """If the DB write blows up the report still comes back to the
+        caller — Phase 7 contract says the comparison is the priority."""
+        run = self._seed_run_with_bom({"line_items": []})
+        with patch.object(
+            BomComparison, "record",
+            side_effect=RuntimeError("DB exploded"),
+        ):
+            resp = client.post(
+                f"/api/v1/bom-runs/{run.id}/compare",
+                json={"sample_lines": [{"sku": "A", "quantity": 1}]},
+            )
+        assert resp.status_code == 200
+        d = resp.get_json()["data"]
+        # Comparison body intact, just no comparison_id
+        assert "comparison_id" not in d
+        assert "metrics" in d
+        assert BomComparison.query.count() == 0
+
+
+class TestListRunComparisons:
+    def test_returns_comparisons_for_run(self, app, client):
+        run = BomRun.record(
+            client_id="c", job_id="j", output_mode="full",
+            parsed_design_data={}, generated_bom={"line_items": []},
+        )
+        db.session.commit()
+        for _ in range(3):
+            client.post(f"/api/v1/bom-runs/{run.id}/compare",
+                        json={"sample_lines": [{"sku": "X", "quantity": 1}]})
+        resp = client.get(f"/api/v1/bom-runs/{run.id}/comparisons")
+        assert resp.status_code == 200
+        d = resp.get_json()["data"]
+        assert d["run_id"] == run.id
+        assert len(d["comparisons"]) == 3
+
+    def test_404_for_missing_run(self, app, client):
+        resp = client.get("/api/v1/bom-runs/9999/comparisons")
+        assert resp.status_code == 404
+
+
+class TestMissingSkuBacklog:
+    def _seed_compare(self, client, *, contractor, sample_lines, gen_lines=None):
+        run = BomRun.record(
+            client_id=contractor, job_id=f"j-{datetime.utcnow().timestamp()}",
+            output_mode="full", parsed_design_data={},
+            generated_bom={"line_items": gen_lines or []},
+        )
+        db.session.commit()
+        client.post(f"/api/v1/bom-runs/{run.id}/compare",
+                    json={"sample_lines": sample_lines})
+        return run
+
+    def test_aggregates_missing_skus_across_comparisons(self, app, client):
+        # SKU "DUCT-6" missing in 3 comparisons, "REG-12" in 1
+        for _ in range(3):
+            self._seed_compare(client, contractor="c1", sample_lines=[
+                {"sku": "DUCT-6",  "description": "Flex 6in", "quantity": 10},
+                {"sku": "REG-12",  "description": "Wall reg", "quantity": 1} if _ == 0 else
+                {"sku": "ALSO-A",  "description": "x", "quantity": 1},
+            ])
+        resp = client.get("/api/v1/bom-runs/missing-sku-backlog")
+        assert resp.status_code == 200
+        d = resp.get_json()["data"]
+        # 3 distinct missing SKUs across 3 comparisons
+        skus = [it["sku"] for it in d["items"]]
+        assert "duct-6" in skus
+        assert "reg-12" in skus
+        # DUCT-6 should be top (3 occurrences vs 1 for the others)
+        assert d["items"][0]["sku"] == "duct-6"
+        assert d["items"][0]["occurrence_count"] == 3
+        assert d["items"][0]["total_qty"] == 30.0
+
+    def test_filters_by_client_id(self, app, client):
+        self._seed_compare(client, contractor="c1",
+                           sample_lines=[{"sku": "AAA", "quantity": 1}])
+        self._seed_compare(client, contractor="c2",
+                           sample_lines=[{"sku": "BBB", "quantity": 1}])
+        resp = client.get("/api/v1/bom-runs/missing-sku-backlog?client_id=c1")
+        items = resp.get_json()["data"]["items"]
+        skus = [it["sku"] for it in items]
+        assert "aaa" in skus
+        assert "bbb" not in skus
+
+    def test_empty_when_no_comparisons(self, app, client):
+        resp = client.get("/api/v1/bom-runs/missing-sku-backlog")
+        d = resp.get_json()["data"]
+        assert d["items"] == []
+        assert d["total_comparisons"] == 0
+
+    def test_caps_run_ids_at_20(self, app, client):
+        """When a SKU has been missing in 25 comparisons across 25 distinct
+        runs, the response keeps the list bounded at 20 to avoid bloat."""
+        for _ in range(25):
+            self._seed_compare(client, contractor="c1", sample_lines=[
+                {"sku": "OFTEN-MISSING", "description": "x", "quantity": 1},
+            ])
+        items = client.get("/api/v1/bom-runs/missing-sku-backlog").get_json()["data"]["items"]
+        top = items[0]
+        assert top["occurrence_count"] == 25
+        assert len(top["run_ids"]) == 20

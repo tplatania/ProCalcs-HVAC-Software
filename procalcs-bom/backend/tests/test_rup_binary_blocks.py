@@ -323,6 +323,89 @@ class TestBuildBinaryEnrichmentLines:
         assert "DREGINFO): 1" in joined
         assert "FITNG): 2" in joined
 
+    # ─── DUCT SYSTEM label (Day 2 / DUCTRUN-pivot enrichment) ──────
+
+    def test_emits_duct_system_label_from_first_duct_record(self):
+        """The DUCT umbrella block's first record carries the
+        contractor's chosen duct-system name. Multi-char UTF-16 strings
+        beyond a couple of short markers should surface as the system
+        label + sizing model."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        # Mimic Easy's DUCT #0: short marker + meaningful labels.
+        body = (
+            "PREF".encode("utf-16-le") + b"\x00\x00"
+            + "Flex/Flex Junc Boxes-KL".encode("utf-16-le") + b"\x00\x00"
+            + "Flex branch/trunks with junction boxes".encode("utf-16-le") + b"\x00\x00"
+            + "EqualFric".encode("utf-16-le") + b"\x00\x00"
+        )
+        bytes_ = _wrap("DUCT", body)
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        assert "DUCT SYSTEM" in joined
+        assert "Flex/Flex Junc Boxes-KL" in joined
+        # Sizing model should be picked up via the Fric/Equal heuristic.
+        assert "EqualFric" in joined
+
+    def test_skips_duct_system_when_no_meaningful_strings(self):
+        from utils.rup_parser import _build_binary_enrichment_lines
+        # Only the short LOC/RUN markers — no system label.
+        bytes_ = _wrap("DUCT", "LOC".encode("utf-16-le"))
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        assert "DUCT SYSTEM" not in joined
+
+    # ─── REGISTER SIZING totals (DREGINFO +0x24 CFM, +0x28 area) ───
+
+    def test_emits_register_sizing_totals(self):
+        """DREGINFO field offsets verified empirically against all 3
+        sample RUPs (Easy/Average/Edge) — see RUP_BINARY_LAYOUT.md."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+
+        def _dreginfo_record(cfm: float, area_sqin: float) -> bytes:
+            body = bytearray(64)
+            _struct.pack_into("<f", body, 0x24, cfm)
+            _struct.pack_into("<f", body, 0x28, area_sqin)
+            return bytes(body)
+
+        bytes_ = (
+            _wrap("DREGINFO", _dreginfo_record(400.0, 80.0)) +
+            _wrap("DREGINFO", _dreginfo_record(300.0, 75.0)) +
+            _wrap("DREGINFO", _dreginfo_record(400.0, 80.0))
+        )
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        assert "REGISTER SIZING" in joined
+        # 400 + 300 + 400 = 1,100 CFM
+        assert "1,100 CFM" in joined
+        # Per-register average = 1100 / 3 = 367 (rounded)
+        assert "avg 367 CFM" in joined
+        # Total face area: 80 + 75 + 80 = 235 sq.in
+        assert "235 sq.in" in joined
+
+    def test_register_sizing_ignores_zero_cfm_records(self):
+        """Records with 0 CFM (probably uninitialized or placeholder
+        rows) should be excluded from the total so the average isn't
+        skewed downward."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+
+        def _dreginfo_record(cfm: float, area_sqin: float) -> bytes:
+            body = bytearray(64)
+            _struct.pack_into("<f", body, 0x24, cfm)
+            _struct.pack_into("<f", body, 0x28, area_sqin)
+            return bytes(body)
+
+        bytes_ = (
+            _wrap("DREGINFO", _dreginfo_record(0.0, 0.0)) +
+            _wrap("DREGINFO", _dreginfo_record(400.0, 80.0)) +
+            _wrap("DREGINFO", _dreginfo_record(0.0, 0.0))
+        )
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        assert "REGISTER SIZING" in joined
+        # Only the 1 nonzero register counts toward the summary
+        assert "1 registers" in joined
+        assert "400 CFM" in joined
+
 
 class TestBuildRawContextBackwardsCompat:
     """Pre-Phase-1 callers (no file_bytes arg) must keep getting the

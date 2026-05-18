@@ -474,6 +474,11 @@ def _build_binary_enrichment_lines(
       EQUIPMENT PLACEMENT — count of ZEQUIP records (per-zone equipment)
       ROOMS (BALDUCT)    — real room names from BALDUCT records;
                            skipped when text_rooms already populated
+      DUCT SYSTEM        — contractor's chosen duct-system label
+                           from the DUCT umbrella block (e.g.
+                           "Flex branch/trunks with junction boxes")
+      REGISTER SIZING    — DREGINFO totals: register count, total
+                           airflow CFM, total face area sq.in
       DESIGN COMPLEXITY  — DUCTRUN/DREGINFO/FITNG counts
     """
     from collections import Counter
@@ -550,7 +555,95 @@ def _build_binary_enrichment_lines(
                 out.append(f"  {name}")
             out.append("")
 
-    # 4) Design complexity / scale signals — record counts for the
+    # 4) Duct system label — extracted from the DUCT umbrella block,
+    # first record carrying multi-character UTF-16 strings. Wrightsoft
+    # nests DUCTLOC (geometry) and DUCTRUN (segments) under DUCT;
+    # only the parent record carries the contractor's system-name
+    # label (e.g. "Flex branch/trunks with junction boxes",
+    # "RectTrunk/Flex Branch - Updated:") plus the sizing model
+    # ("EqualFric"). This is catalog-relevant: the system label is
+    # what the contractor's BOM aliases to (Flex vs Rigid vs Rectangular
+    # trunk-and-branch all source different SKU families).
+    try:
+        duct_bodies = _block_bodies(file_bytes, "DUCT")
+    except Exception:
+        duct_bodies = []
+    duct_system_label: Optional[str] = None
+    duct_sizing_model: Optional[str] = None
+    for body in duct_bodies[:8]:  # scan first few; usually it's body 0
+        strs = _utf16_strings_in_block(body, min_len=4)
+        # Skip 3-char child markers ('LOC', 'RUN', 'PREF', etc.)
+        meaningful = [s for s in strs if len(s) > 4]
+        if meaningful:
+            # Heuristic: first long string is the system label; an
+            # "EqualFric" / "ConstStatic" sibling is the sizing model
+            duct_system_label = meaningful[0]
+            for s in meaningful[1:]:
+                if any(k in s for k in ("Fric", "Static", "Equal", "Const")):
+                    duct_sizing_model = s
+                    break
+            break
+    if duct_system_label:
+        out.append("=== DUCT SYSTEM ===")
+        out.append(f"  System: {duct_system_label}")
+        if duct_sizing_model:
+            out.append(f"  Sizing model: {duct_sizing_model}")
+        out.append(
+            "  (This is the contractor's chosen duct system — it determines "
+            "which SKU family applies: flex vs rigid vs rectangular trunk.)"
+        )
+        out.append("")
+
+    # 5) Register sizing totals — DREGINFO carries per-register airflow
+    # and face area. Total CFM is a strong scale signal: an 8-AHU
+    # residence sums to ~64-68k CFM, a single-AHU ADU to ~8-10k. The
+    # AI can use the totals to sanity-check register-count line items
+    # and to estimate trunk sizing.
+    #
+    # Field interpretation (empirical, May 2026):
+    #   +0x24 float = airflow CFM per register (values cluster at
+    #                  300 / 400 across all 3 sample RUPs)
+    #   +0x28 float = face area sq.in per register (75 / 80)
+    # See _repo-docs/RUP_BINARY_LAYOUT.md for the dump that
+    # established this — Edge totals 66,700 CFM which checks out at
+    # ~8,300 CFM per AHU for 8 AHUs.
+    try:
+        dreg_bodies = _block_bodies(file_bytes, "DREGINFO")
+    except Exception:
+        dreg_bodies = []
+    if dreg_bodies:
+        try:
+            cfms = [
+                struct.unpack_from("<f", b, 0x24)[0]
+                for b in dreg_bodies
+                if len(b) >= 0x28
+            ]
+            areas = [
+                struct.unpack_from("<f", b, 0x28)[0]
+                for b in dreg_bodies
+                if len(b) >= 0x2C
+            ]
+        except Exception:
+            cfms, areas = [], []
+        nonzero_cfms = [c for c in cfms if c > 0.5]
+        if nonzero_cfms:
+            total_cfm  = sum(nonzero_cfms)
+            total_area = sum(a for a in areas if a > 0.5)
+            avg_cfm    = total_cfm / len(nonzero_cfms)
+            out.append("=== REGISTER SIZING ===")
+            out.append(
+                f"  {len(nonzero_cfms)} registers, total {total_cfm:,.0f} CFM "
+                f"(avg {avg_cfm:.0f} CFM/register)"
+            )
+            if total_area > 0:
+                out.append(f"  Total face area: {total_area:,.0f} sq.in")
+            out.append(
+                "  (Use total CFM to size trunk ducts and to sanity-check "
+                "register quantity lines.)"
+            )
+            out.append("")
+
+    # 6) Design complexity / scale signals — record counts for the
     # three big per-instance block types. Even without per-record
     # decode (deferred to Phase C/D), the magnitudes help the AI
     # reason about scale: 22 ducts vs 192 ducts is a different job.
