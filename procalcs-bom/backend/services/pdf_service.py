@@ -79,12 +79,17 @@ _jinja_env = Environment(
 
 def _format_currency(value: Any) -> str:
     """Jinja filter — format a number as $1,234.56, or '—' when
-    None/missing (cost-suppressed output modes)."""
+    None/missing (cost-suppressed output modes).
+
+    Catches Jinja2 UndefinedError too — without it, a template accessing
+    a missing dict key raises UndefinedError on `float(value)` and 500s
+    the whole PDF render. Better to render a dash than blow up the
+    document for one bad cell."""
     if value is None:
         return "—"
     try:
         return f"${float(value):,.2f}"
-    except (TypeError, ValueError):
+    except Exception:  # noqa: BLE001 — defensive: TypeError, ValueError, jinja2.UndefinedError
         return "—"
 
 
@@ -92,8 +97,8 @@ def _format_quantity(value: Any) -> str:
     """Trim trailing .0 on whole-number quantities."""
     try:
         f = float(value)
-    except (TypeError, ValueError):
-        return str(value)
+    except Exception:  # noqa: BLE001 — see _format_currency rationale
+        return "—"
     if f == int(f):
         return str(int(f))
     return f"{f:.2f}".rstrip("0").rstrip(".")

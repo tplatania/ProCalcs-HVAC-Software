@@ -326,9 +326,9 @@
         <td>{{ item.description or "(unnamed)" }}</td>
         <td class="num">{{ item.quantity | qty }}</td>
         <td>{{ item.unit or "EA" }}</td>
-        <td class="num">{{ (item.unit_price if item.unit_price is not none else item.unit_cost) | currency }}</td>
-        <td class="num">{% if item.markup_pct is not none %}{{ '%.0f' | format(item.markup_pct) }}%{% else %}—{% endif %}</td>
-        <td class="num">{{ (item.total_price if item.total_price is not none else item.total_cost) | currency }}</td>
+        <td class="num">{{ (item.get('unit_price') if item.get('unit_price') is not none else item.get('unit_cost')) | currency }}</td>
+        <td class="num">{% if item.get('markup_pct') is not none %}{{ '%.0f' | format(item.get('markup_pct')) }}%{% else %}—{% endif %}</td>
+        <td class="num">{{ (item.get('total_price') if item.get('total_price') is not none else item.get('total_cost')) | currency }}</td>
       </tr>
       {% endfor %}
     </tbody>
