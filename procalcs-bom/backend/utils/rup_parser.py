@@ -485,50 +485,85 @@ def _build_binary_enrichment_lines(
 
     out: List[str] = []
 
-    # 1) Equipment library names (the catalog of types Wrightsoft offers).
-    # Even though EQUIP is the LIBRARY (not placed instances — see the
-    # course-correction logged in RUP_BINARY_LAYOUT.md), the names
-    # themselves give the AI useful context: "this project's library
-    # contains 8 split AC entries, 8 furnace entries, 1 ASHP entry"
-    # implies the system mix being designed even if we can't yet count
-    # actual placements.
-    try:
-        equip_records = _parse_equip_blocks(file_bytes)
-    except Exception:
-        equip_records = []
-    if equip_records:
-        name_counts = Counter(e.get("raw_name", "") for e in equip_records if e.get("raw_name"))
-        if name_counts:
-            out.append(
-                f"=== EQUIPMENT LIBRARY ({sum(name_counts.values())} entries, "
-                f"{len(name_counts)} distinct types) ==="
-            )
-            for name, count in name_counts.most_common():
-                out.append(f"  {count}x {name}")
-            out.append(
-                "(Note: this is the equipment LIBRARY — the catalog of types "
-                "Wrightsoft offers in this project, not the count of placed "
-                "equipment. Actual placements are in ZEQUIP.)"
-            )
-            out.append("")
+    # ─────────────────────────────────────────────────────────────────
+    # SECTION ORDER MATTERS — the AI anchors on what it sees first.
+    #
+    # Pre-Day-3 we led with EQUIPMENT LIBRARY (the inflated catalog of
+    # equipment models the contractor has loaded — 21 split-AC entries,
+    # 21 furnaces, etc.) and the AI happily emitted 14x AHU / 14x
+    # condenser on McGinty (real answer: 3 systems). The library is
+    # available equipment templates, NOT placements.
+    #
+    # Day-3 fix: ZEQUIP placement count goes FIRST with strong
+    # "do not exceed" language. ECDUCTSYS named labels (when present)
+    # go SECOND so the AI sees real placed names ("FURNACE 1",
+    # "AHU - 1"). LIBRARY moves LAST + gets demoted to "menu of
+    # options, ignore for sizing".
+    # ─────────────────────────────────────────────────────────────────
 
-    # 2) Per-zone equipment placements. ZEQUIP records pair 1:1 with
-    # TDUCTSYS/ECDUCTSYS so the count = number of zones with placed
-    # equipment. Each record carries (tag, type) strings like
-    # ("PEAKCV", "PACKAGE") — Wrightsoft semantics undecoded until
-    # Path C ships, but the COUNT alone tells the AI scale.
+    # 1) AUTHORITATIVE placement count. ZEQUIP records pair 1:1 with
+    # zones that have equipment placed in them; the count is a hard
+    # upper bound on how many equipment line items the BOM can
+    # legitimately call out.
     try:
         zeq_count = len(_block_bodies(file_bytes, "ZEQUIP"))
     except Exception:
         zeq_count = 0
     if zeq_count:
         out.append(
-            f"=== EQUIPMENT PLACEMENT ({zeq_count} zone-equipment records) ==="
+            f"=== EQUIPMENT PLACEMENT (authoritative: {zeq_count} zone records) ==="
         )
         out.append(
-            f"  {zeq_count} ZEQUIP records detected — one per zone where "
-            "equipment is placed. (Wrightsoft uses 'PEAKCV/PACKAGE' "
-            "internal labels here.)"
+            f"  This project has {zeq_count} ZEQUIP record(s) = "
+            f"{zeq_count} zones that have equipment placed in them."
+        )
+        out.append(
+            "  CRITICAL: zones != equipment units. In residential HVAC, one "
+            "AHU + one condenser typically serves 4-10 zones. A 28-zone "
+            "project almost always has 2-4 systems, not 28. To estimate "
+            "the number of systems, look at the NAMED EQUIPMENT section "
+            "below — distinct labels there are the truth. Total emitted "
+            "equipment line items (AHU + condenser + furnace + coil + "
+            "heat-kit + ERV + humidifier combined) MUST NOT exceed "
+            f"{zeq_count} as a HARD ceiling, and will usually be far "
+            "lower."
+        )
+        out.append("")
+
+    # 2) Named equipment from ECDUCTSYS — when Wrightsoft labels a
+    # system explicitly (e.g. "FURNACE 1", "AHU - 1", "Entire House"),
+    # the label lives in the ECDUCTSYS block which pairs 1:1 with
+    # ZEQUIP. A subset of records carry labels; the rest are sub-zones
+    # that roll up to the most recent named record (pending Richard's
+    # confirmation Day-3 — see PHASE_10_ZEQUIP_QA.md). Empirically
+    # validated across all 4 sample fixtures.
+    try:
+        ec_bodies = _block_bodies(file_bytes, "ECDUCTSYS")
+    except Exception:
+        ec_bodies = []
+    named_labels: List[str] = []
+    for body in ec_bodies:
+        strs = _utf16_strings_in_block(body, min_len=3)
+        # Records often repeat the label 2-3 times; dedupe within record
+        unique = []
+        for s in strs:
+            if s not in unique:
+                unique.append(s)
+        if unique:
+            # First string is the system / equipment label
+            named_labels.append(unique[0])
+    if named_labels:
+        label_counts = Counter(named_labels)
+        out.append(
+            f"=== NAMED EQUIPMENT ({len(named_labels)} of {len(ec_bodies)} "
+            f"zones explicitly labeled) ==="
+        )
+        for label, count in label_counts.most_common():
+            out.append(f"  {count}x labeled '{label}'")
+        out.append(
+            "  (These are the explicit equipment labels Wrightsoft "
+            "attached to specific zones. Unlabeled zones inherit from "
+            "the most recent labeled system.)"
         )
         out.append("")
 
@@ -666,6 +701,33 @@ def _build_binary_enrichment_lines(
             "quantities when structured arrays are empty.)"
         )
         out.append("")
+
+    # 7) LAST — equipment library. DEMOTED from its old Day-1 position
+    # at the top of the prompt because the AI was anchoring on it
+    # ("21x Split AC available, so emit 14 AHU lines"). This is the
+    # menu of equipment models the contractor has loaded into the
+    # project, not the count of placed equipment. Kept in the prompt
+    # at all only because the brand/model spread is useful catalog-
+    # matching signal (e.g. "contractor uses Goodman split-ACs").
+    try:
+        equip_records = _parse_equip_blocks(file_bytes)
+    except Exception:
+        equip_records = []
+    if equip_records:
+        name_counts = Counter(e.get("raw_name", "") for e in equip_records if e.get("raw_name"))
+        if name_counts:
+            out.append(
+                f"=== AVAILABLE EQUIPMENT MODELS ({sum(name_counts.values())} entries) ==="
+            )
+            for name, count in name_counts.most_common():
+                out.append(f"  {count} model(s): {name}")
+            out.append(
+                "  IMPORTANT: This is the project's available-equipment "
+                "MENU — not what's installed. Do NOT use these counts to "
+                "size the BOM. The authoritative placement count is the "
+                "EQUIPMENT PLACEMENT section at the top of this context."
+            )
+            out.append("")
 
     return out
 

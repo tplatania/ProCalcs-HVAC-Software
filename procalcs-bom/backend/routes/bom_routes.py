@@ -297,3 +297,127 @@ def rules_preview():
             "data": None,
             "error": "Rules-preview failed. Please try again.",
         }), 500
+
+
+# ===============================
+# POST — Inspect .rup binary blocks (Day-3 diagnostic)
+# ===============================
+#
+# Surfaces the ZEQUIP ↔ ECDUCTSYS row-by-row pairing so we can match
+# what's in a Wrightsoft project against what the binary parser sees
+# — built specifically to slot Richard's incoming McGinty screenshot
+# against the 28 ZEQUIP records. Tester uploads a .rup, gets back a
+# table-shaped JSON ready for SPA display.
+
+@bom_bp.route('/rup-inspect', methods=['POST'])
+def rup_inspect():
+    """Diagnostic: decode the equipment-related binary blocks in a
+    .rup upload and return them as a table. Powers the Run-Inspect
+    SPA page used to cross-reference Wrightsoft UI screenshots
+    against our parser's view of the same project.
+
+    Response:
+        {
+          "success": true,
+          "data": {
+            "source_file":  "McGinty Residence.rup",
+            "summary": {
+              "zequip_total":     28,
+              "ecductsys_total":  28,
+              "labeled_count":    4,
+              "label_distribution": {"FURNACE 1": 4}
+            },
+            "rows": [
+              {"index": 0, "zequip_record_id": 2046,
+               "ecductsys_label": "FURNACE 1"},
+              ...
+            ]
+          }
+        }
+    """
+    import struct
+    from collections import Counter
+    from utils.rup_parser import _block_bodies, _utf16_strings_in_block
+
+    try:
+        file_bytes = b''
+        source_name = 'uploaded.rup'
+        if 'file' in request.files:
+            upload = request.files['file']
+            source_name = upload.filename or source_name
+            file_bytes = upload.read()
+        elif request.data:
+            file_bytes = request.data
+            if request.headers.get('X-Filename'):
+                source_name = request.headers['X-Filename']
+
+        if not file_bytes:
+            return jsonify({
+                "success": False, "data": None,
+                "error": "No .rup file provided.",
+            }), 400
+        if len(file_bytes) > MAX_RUP_BYTES:
+            return jsonify({
+                "success": False, "data": None,
+                "error": f".rup file exceeds {MAX_RUP_BYTES // 1024 // 1024} MB limit.",
+            }), 413
+        if not file_bytes.startswith(b'.\x00W\x00S'):
+            return jsonify({
+                "success": False, "data": None,
+                "error": "File does not look like a Wrightsoft .rup project file.",
+            }), 400
+
+        # Decode ZEQUIP records → list of {index, record_id}
+        zequip_bodies = _block_bodies(file_bytes, "ZEQUIP")
+        zequip_meta = []
+        for i, body in enumerate(zequip_bodies):
+            try:
+                rid = struct.unpack_from("<I", body, 4)[0] if len(body) >= 8 else None
+            except Exception:
+                rid = None
+            zequip_meta.append({"index": i, "record_id": rid})
+
+        # Decode ECDUCTSYS labels (first UTF-16 string per record, or None)
+        ec_bodies = _block_bodies(file_bytes, "ECDUCTSYS")
+        ec_labels = []
+        for body in ec_bodies:
+            strs = _utf16_strings_in_block(body, min_len=3)
+            unique = []
+            for s in strs:
+                if s not in unique:
+                    unique.append(s)
+            ec_labels.append(unique[0] if unique else None)
+
+        # Pair by index (1:1 in every project sampled — Easy/Avg/Edge/McGinty)
+        rows = []
+        for i, zm in enumerate(zequip_meta):
+            label = ec_labels[i] if i < len(ec_labels) else None
+            rows.append({
+                "index":            i,
+                "zequip_record_id": zm["record_id"],
+                "ecductsys_label":  label,
+            })
+
+        label_distribution = Counter(l for l in ec_labels if l)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "source_file":      source_name,
+                "summary": {
+                    "zequip_total":       len(zequip_bodies),
+                    "ecductsys_total":    len(ec_bodies),
+                    "labeled_count":      sum(1 for l in ec_labels if l),
+                    "label_distribution": dict(label_distribution),
+                },
+                "rows": rows,
+            },
+            "error": None,
+        }), 200
+
+    except Exception as e:  # noqa: BLE001
+        logger.error("rup_inspect failed: %s", e, exc_info=True)
+        return jsonify({
+            "success": False, "data": None,
+            "error": "RUP inspection failed.",
+        }), 500

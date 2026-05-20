@@ -243,7 +243,12 @@ class TestBuildBinaryEnrichmentLines:
         # Random bytes with no recognized blocks
         assert _build_binary_enrichment_lines(b"\x00" * 1024, [], []) == []
 
-    def test_emits_equipment_library_section(self):
+    def test_emits_available_equipment_models_section(self):
+        """Day-3: EQUIPMENT LIBRARY renamed to AVAILABLE EQUIPMENT
+        MODELS and demoted to the end of the prompt with a 'do not
+        use for sizing' warning. The AI was over-anchoring on it,
+        emitting 14× AHU lines on McGinty (21 split-AC library
+        entries → 14 emitted lines)."""
         from utils.rup_parser import _build_binary_enrichment_lines
         bytes_ = (
             _wrap("EQUIP", _named_equip_record("Split AC"))
@@ -252,14 +257,13 @@ class TestBuildBinaryEnrichmentLines:
         )
         lines = _build_binary_enrichment_lines(bytes_, [], [])
         joined = "\n".join(lines)
-        assert "EQUIPMENT LIBRARY" in joined
-        assert "2x Split AC" in joined
-        assert "1x Gas furnace" in joined
-        # Note about library-vs-instance must be present so the AI
-        # doesn't double-count.
-        assert "library" in joined.lower()
+        assert "AVAILABLE EQUIPMENT MODELS" in joined
+        assert "2 model(s): Split AC" in joined
+        assert "1 model(s): Gas furnace" in joined
+        # The strong "do not use for sizing" warning must be present.
+        assert "Do NOT use these counts to size the BOM" in joined
 
-    def test_emits_zequip_placement_count(self):
+    def test_emits_zequip_placement_count_with_hard_cap_warning(self):
         from utils.rup_parser import _build_binary_enrichment_lines
         bytes_ = (
             _wrap("ZEQUIP", b"\x00" * 32) +
@@ -269,7 +273,54 @@ class TestBuildBinaryEnrichmentLines:
         lines = _build_binary_enrichment_lines(bytes_, [], [])
         joined = "\n".join(lines)
         assert "EQUIPMENT PLACEMENT" in joined
-        assert "3 zone-equipment" in joined or "3 ZEQUIP" in joined
+        assert "authoritative: 3 zone records" in joined
+        # Day-3 cap language must be present so the AI doesn't read
+        # "3 zones" as "3 AHUs allowed". Hard ceiling + "zones != units"
+        # framing is the regression-guard.
+        assert "MUST NOT exceed 3" in joined
+        assert "zones != equipment units" in joined
+
+    def test_placement_section_precedes_library_section(self):
+        """Day-3 ordering regression-guard. The AI anchors on the FIRST
+        equipment-related section it sees in the prompt — if LIBRARY
+        comes first, it inflates counts. PLACEMENT must precede
+        AVAILABLE EQUIPMENT MODELS in the output stream."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        bytes_ = (
+            _wrap("EQUIP", _named_equip_record("Split AC")) +
+            _wrap("ZEQUIP", b"\x00" * 32)
+        )
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        placement_idx = joined.find("EQUIPMENT PLACEMENT")
+        library_idx   = joined.find("AVAILABLE EQUIPMENT MODELS")
+        assert placement_idx >= 0 and library_idx >= 0
+        assert placement_idx < library_idx, (
+            "EQUIPMENT PLACEMENT must come before AVAILABLE EQUIPMENT MODELS "
+            "in the prompt so the AI sees the authoritative count first."
+        )
+
+    def test_emits_named_equipment_from_ecductsys(self):
+        """Day-3: ECDUCTSYS carries equipment labels like 'FURNACE 1'
+        / 'AHU - 1' in a subset of records. Pulling them into the
+        prompt gives the AI ground-truth equipment names."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        bytes_ = (
+            # 2 ECDUCTSYS records carrying "FURNACE 1" (repeated 3x
+            # within each record, matching real-world Wrightsoft layout)
+            _wrap("ECDUCTSYS",
+                  ("FURNACE 1".encode("utf-16-le") + b"\x00\x00") * 3) +
+            _wrap("ECDUCTSYS",
+                  ("FURNACE 1".encode("utf-16-le") + b"\x00\x00") * 3) +
+            # 1 ECDUCTSYS record with "AHU - 1"
+            _wrap("ECDUCTSYS",
+                  ("AHU - 1".encode("utf-16-le") + b"\x00\x00") * 3)
+        )
+        lines = _build_binary_enrichment_lines(bytes_, [], [])
+        joined = "\n".join(lines)
+        assert "NAMED EQUIPMENT" in joined
+        assert "2x labeled 'FURNACE 1'" in joined
+        assert "1x labeled 'AHU - 1'" in joined
 
     def test_emits_balduct_room_names_when_text_rooms_empty(self):
         from utils.rup_parser import _build_binary_enrichment_lines

@@ -511,9 +511,15 @@ def _call_ai_for_quantities(
         client = anthropic.Anthropic(api_key=api_key)
         prompt = _build_ai_prompt(design_data, profile, claimed_lines=claimed_lines)
 
+        # temperature=0 — same RUP → same BOM, every time. Without this
+        # the model samples and the two regenerate-from-parent runs
+        # Phase 11's auto-detect was correctly flagging as "regression"
+        # were just sampling noise. Better to be deterministic and
+        # surface real drift only on code/prompt changes.
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
 
