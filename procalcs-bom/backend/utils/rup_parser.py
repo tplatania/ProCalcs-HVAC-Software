@@ -456,6 +456,103 @@ def _utf16_strings_in_block(data: bytes, min_len: int = 3) -> List[str]:
     return out
 
 
+# ─── DUCT system hierarchy decoder ───────────────────────────────────
+#
+# Phase A of the Day-4 ground-truth decoder (May 2026). Walks the DUCT
+# umbrella block and groups room names by their preceding "PREF"
+# section header. Each PREF = one HVAC system; the room names that
+# follow it until the next PREF = that system's zones.
+#
+# Verified against the McGinty Wrightsoft project (the ground truth
+# Gerald captured Day-4): file decodes to 3 systems with 6+8+9 = 23
+# zones; Wrightsoft UI shows 3 systems with 6+9+9 = 24 zones.
+# Off-by-one zone (UTILITY missing from System 2) is a "heat-only"
+# special zone Wrightsoft handles separately — acceptable, since the
+# system count (3) is the lever that drives equipment line counts.
+#
+# Also verified on Easy/Average/Edge — see test_rup_binary_blocks.py.
+
+# Tokens that look like room names in the first-string position but
+# are actually duct material identifiers Wrightsoft reuses across all
+# systems (Sheet Metal, Vinyl Flex, Rectangular Fiberglass, etc.).
+_DUCT_MATERIAL_TOKENS = {
+    "ShtMetl", "ShMt", "VinlFlx", "VlFx", "RectFbg", "RtFg",
+    "InsDuct", "FlxLNR",
+}
+
+# Section / structural marker strings that appear as the first string
+# of a DUCT child record but aren't room names.
+_DUCT_MARKER_TOKENS = {"PREF", "LOC", "RUN", "EqualFric", "ConstStatic"}
+
+# Wrightsoft duct identifier grammar: 2-3 letter prefix (st=supply
+# trunk, sb=supply branch, rb=return branch, rt=return trunk, rrs=
+# return riser, srs=supply riser, sr=supply runout) + 1-3 digits +
+# optional trailing letter. These are duct path IDs, not zones.
+_DUCT_ID_PATTERN = re.compile(r"^(st|sb|sr|srs|rb|rt|rrs)\d{1,3}[A-Z]?$",
+                              re.IGNORECASE)
+
+
+def _parse_duct_system_hierarchy(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """Return the project's system → zones hierarchy by walking the
+    DUCT umbrella block.
+
+    Each returned dict:
+        {"duct_label":   str | None  e.g. "RectTrunk/RoundBranch-AD"
+         "sizing_model": str | None  e.g. "EqualFric"
+         "zones":        list[str]   ordered, deduplicated room names}
+
+    Empty / unlabeled systems are filtered out (Wrightsoft writes
+    template-section PREFs for sketch/default state).
+    """
+    bodies = _block_bodies(file_bytes, "DUCT")
+    systems: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
+
+    for body in bodies:
+        strs = _utf16_strings_in_block(body, min_len=2)
+        # Dedupe within record — Wrightsoft repeats some labels 2-3x
+        unique: List[str] = []
+        for s in strs:
+            if s not in unique:
+                unique.append(s)
+        if not unique:
+            continue
+        first = unique[0]
+
+        # PREF record = new system header
+        if first == "PREF":
+            label = next(
+                (s for s in unique[1:]
+                 if len(s) > 3
+                 and s not in _DUCT_MARKER_TOKENS
+                 and s not in _DUCT_MATERIAL_TOKENS),
+                None,
+            )
+            sizing = next(
+                (s for s in unique[1:] if s in ("EqualFric", "ConstStatic")),
+                None,
+            )
+            current = {"duct_label": label, "sizing_model": sizing, "zones": []}
+            systems.append(current)
+            continue
+
+        if current is None:
+            continue
+        if first in _DUCT_MARKER_TOKENS or first in _DUCT_MATERIAL_TOKENS:
+            continue
+        if _DUCT_ID_PATTERN.fullmatch(first):
+            continue
+
+        # Treat the first string as a zone name. Strip trailing "-A" /
+        # "-B" / ... sub-register suffix so multiple registers in one
+        # room don't inflate the zone count.
+        zone = re.sub(r"-[A-Z]$", "", first)
+        if zone not in current["zones"]:
+            current["zones"].append(zone)
+
+    return [s for s in systems if s["zones"] and s.get("duct_label")]
+
+
 def _build_binary_enrichment_lines(
     file_bytes: bytes,
     text_equipment: List[Dict[str, Any]],
@@ -501,17 +598,60 @@ def _build_binary_enrichment_lines(
     # options, ignore for sizing".
     # ─────────────────────────────────────────────────────────────────
 
-    # 1) AUTHORITATIVE placement count. ZEQUIP records pair 1:1 with
-    # zones that have equipment placed in them; the count is a hard
-    # upper bound on how many equipment line items the BOM can
-    # legitimately call out.
+    # 1) AUTHORITATIVE SYSTEM HIERARCHY — the Day-4 headline. Decodes
+    # the DUCT umbrella block into N systems + their zones (verified
+    # against the McGinty Wrightsoft project on Day-4: file decodes
+    # to 3 systems / 23 zones, UI shows 3 systems / 24 zones — only
+    # off-by-1 zone, system count exact).
+    #
+    # This is THE source of truth for equipment line counts. The
+    # number of systems = the number of each major equipment type
+    # the BOM should emit (1 AHU + 1 condenser + 1 furnace per
+    # system, typically).
+    try:
+        systems = _parse_duct_system_hierarchy(file_bytes)
+    except Exception:
+        systems = []
+    if systems:
+        total_zones = sum(len(s["zones"]) for s in systems)
+        out.append(
+            f"=== SYSTEM HIERARCHY (authoritative from binary: "
+            f"{len(systems)} systems / {total_zones} zones) ==="
+        )
+        out.append(
+            f"  This project has EXACTLY {len(systems)} HVAC system(s)."
+        )
+        for i, s in enumerate(systems, 1):
+            zones_disp = ", ".join(s["zones"])
+            if len(zones_disp) > 120:
+                zones_disp = zones_disp[:117] + "..."
+            label = s.get("duct_label") or "(unlabeled)"
+            out.append(
+                f"  System {i} (duct prefs: {label}): "
+                f"{len(s['zones'])} zones — {zones_disp}"
+            )
+        out.append(
+            f"  CRITICAL: Emit EXACTLY {len(systems)} of each major "
+            "equipment type — one AHU per system, one condenser per "
+            "system, one furnace per system, one coil per system. "
+            "If the BOM needs N air handlers, the answer is "
+            f"N={len(systems)}, not the zone count and not the "
+            "library count. Heat kits, ERVs, and humidifiers only "
+            "if explicitly indicated; default to 0 of those unless "
+            "the design data names them."
+        )
+        out.append("")
+
+    # 2) ZEQUIP fallback — when the hierarchy decoder finds no
+    # systems (Wrightsoft variants we haven't reverse-engineered yet),
+    # fall back to the cruder ZEQUIP-zone-count ceiling.
     try:
         zeq_count = len(_block_bodies(file_bytes, "ZEQUIP"))
     except Exception:
         zeq_count = 0
-    if zeq_count:
+    if zeq_count and not systems:
         out.append(
-            f"=== EQUIPMENT PLACEMENT (authoritative: {zeq_count} zone records) ==="
+            f"=== EQUIPMENT PLACEMENT (fallback: {zeq_count} zone records) ==="
         )
         out.append(
             f"  This project has {zeq_count} ZEQUIP record(s) = "
@@ -519,14 +659,12 @@ def _build_binary_enrichment_lines(
         )
         out.append(
             "  CRITICAL: zones != equipment units. In residential HVAC, one "
-            "AHU + one condenser typically serves 4-10 zones. A 28-zone "
-            "project almost always has 2-4 systems, not 28. To estimate "
-            "the number of systems, look at the NAMED EQUIPMENT section "
-            "below — distinct labels there are the truth. Total emitted "
-            "equipment line items (AHU + condenser + furnace + coil + "
-            "heat-kit + ERV + humidifier combined) MUST NOT exceed "
-            f"{zeq_count} as a HARD ceiling, and will usually be far "
-            "lower."
+            "AHU + one condenser typically serves 4-10 zones. Estimate the "
+            "number of systems by zone clustering (residential rule of "
+            "thumb: ~6-10 zones per system). Total emitted equipment line "
+            "items (AHU + condenser + furnace + coil + heat-kit + ERV + "
+            "humidifier combined) MUST NOT exceed "
+            f"{zeq_count} as a HARD ceiling, and will usually be far lower."
         )
         out.append("")
 

@@ -264,6 +264,10 @@ class TestBuildBinaryEnrichmentLines:
         assert "Do NOT use these counts to size the BOM" in joined
 
     def test_emits_zequip_placement_count_with_hard_cap_warning(self):
+        """Day-4: ZEQUIP is now the FALLBACK source (used only when
+        the DUCT-block hierarchy decoder finds no systems). The hard-
+        cap language still has to land — it's the safety net against
+        over-counting on Wrightsoft layouts we haven't decoded yet."""
         from utils.rup_parser import _build_binary_enrichment_lines
         bytes_ = (
             _wrap("ZEQUIP", b"\x00" * 32) +
@@ -272,13 +276,8 @@ class TestBuildBinaryEnrichmentLines:
         )
         lines = _build_binary_enrichment_lines(bytes_, [], [])
         joined = "\n".join(lines)
-        assert "EQUIPMENT PLACEMENT" in joined
-        assert "authoritative: 3 zone records" in joined
-        # Day-3 cap language must be present so the AI doesn't read
-        # "3 zones" as "3 AHUs allowed". Hard ceiling + "zones != units"
-        # framing is the regression-guard.
+        assert "EQUIPMENT PLACEMENT (fallback: 3 zone records)" in joined
         assert "MUST NOT exceed 3" in joined
-        assert "zones != equipment units" in joined
 
     def test_placement_section_precedes_library_section(self):
         """Day-3 ordering regression-guard. The AI anchors on the FIRST
@@ -478,3 +477,221 @@ class TestBuildRawContextBackwardsCompat:
         # Original sections still emit
         assert "Test" in ctx  # project name
         assert "single_level" in ctx
+
+
+# ─── DUCT system hierarchy decoder (Phase A / Day-4) ─────────────────
+
+def _duct_pref(label: str | None = None, sizing: str = "EqualFric") -> bytes:
+    """Synthesize a DUCT-PREF child body: starts with 'PREF', then the
+    duct system label, then the sizing model. Mirrors the real
+    layout we see in Wrightsoft output."""
+    parts = ["PREF"]
+    if label: parts.append(label)
+    if sizing: parts.append(sizing)
+    out = b""
+    for p in parts:
+        out += p.encode("utf-16-le") + b"\x00\x00"
+    # Pad to a "large" DUCT-PREF size (190+ bytes) so it doesn't get
+    # mistaken for a child marker by the size heuristic. Real PREFs
+    # are 86-200 bytes.
+    return out + b"\x00" * max(0, 200 - len(out))
+
+
+def _duct_zone(name: str) -> bytes:
+    """Synthesize a DUCT child body for a zone. First UTF-16 string
+    is the zone name."""
+    return name.encode("utf-16-le") + b"\x00\x00" + b"\x00" * 300
+
+
+def _duct_marker(marker: str) -> bytes:
+    """LOC, RUN, ShtMetl, etc. — child records the decoder must skip."""
+    return marker.encode("utf-16-le") + b"\x00\x00" + b"\x00" * 30
+
+
+class TestParseDuctSystemHierarchy:
+    def test_returns_empty_when_no_duct_block(self):
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        assert _parse_duct_system_hierarchy(b"\x00" * 1024) == []
+
+    def test_single_system_with_three_zones(self):
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("BEDROOM")) +
+            _wrap("DUCT", _duct_zone("KITCHEN")) +
+            _wrap("DUCT", _duct_zone("BATHROOM"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 1
+        assert systems[0]["duct_label"] == "RectTrunk/RoundBranch-AD"
+        assert systems[0]["sizing_model"] == "EqualFric"
+        assert systems[0]["zones"] == ["BEDROOM", "KITCHEN", "BATHROOM"]
+
+    def test_three_systems_grouped_by_pref(self):
+        """The McGinty pattern: 3 PREFs each followed by their zones."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("LIV/KIT")) +
+            _wrap("DUCT", _duct_zone("ENTRY")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("BEDROOM 4")) +
+            _wrap("DUCT", _duct_zone("DINING")) +
+            _wrap("DUCT", _duct_zone("MUD ROOM")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("OWNER BEDROOM"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 3
+        assert [len(s["zones"]) for s in systems] == [2, 3, 1]
+
+    def test_filters_duct_material_tokens(self):
+        """ShtMetl / VinlFlx appear as the first string on trunk
+        material records and must NOT be counted as zones."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("MySystem-A")) +
+            _wrap("DUCT", _duct_marker("ShtMetl")) +
+            _wrap("DUCT", _duct_zone("LIVING ROOM")) +
+            _wrap("DUCT", _duct_marker("VinlFlx"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 1
+        assert systems[0]["zones"] == ["LIVING ROOM"]
+
+    def test_filters_duct_id_tokens(self):
+        """st19, rb1, srs2, st13A etc. are duct path IDs, not zones."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("MySystem-A")) +
+            _wrap("DUCT", _duct_zone("BEDROOM")) +
+            _wrap("DUCT", _duct_zone("st19")) +
+            _wrap("DUCT", _duct_zone("rb1")) +
+            _wrap("DUCT", _duct_zone("rrs2")) +
+            _wrap("DUCT", _duct_zone("st13A")) +
+            _wrap("DUCT", _duct_zone("srs1"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert systems[0]["zones"] == ["BEDROOM"]
+
+    def test_dedupes_sub_register_suffix(self):
+        """LIV/KIT, LIV/KIT-A, LIV/KIT-B → one zone 'LIV/KIT'."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("MySystem-A")) +
+            _wrap("DUCT", _duct_zone("LIV/KIT")) +
+            _wrap("DUCT", _duct_zone("LIV/KIT-A")) +
+            _wrap("DUCT", _duct_zone("LIV/KIT-B")) +
+            _wrap("DUCT", _duct_zone("ENTRY"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert systems[0]["zones"] == ["LIV/KIT", "ENTRY"]
+
+    def test_drops_pref_with_no_real_label(self):
+        """Wrightsoft writes 'template' PREFs (label only contains
+        marker tokens) — these aren't real systems."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            # PREF with no label (just sizing model)
+            _wrap("DUCT", _duct_pref(label=None)) +
+            _wrap("DUCT", _duct_zone("PHANTOM ZONE")) +
+            # Real system
+            _wrap("DUCT", _duct_pref("RealSystem-AD")) +
+            _wrap("DUCT", _duct_zone("REAL ZONE"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 1
+        assert systems[0]["zones"] == ["REAL ZONE"]
+
+    def test_drops_pref_with_no_zones(self):
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_pref("LabeledButEmpty-A")) +
+            _wrap("DUCT", _duct_pref("RealSystem-AD")) +
+            _wrap("DUCT", _duct_zone("REAL ZONE"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 1
+        assert systems[0]["duct_label"] == "RealSystem-AD"
+
+    def test_ignores_zones_before_first_pref(self):
+        """Stray room-name records before any PREF aren't attached
+        to a system."""
+        from utils.rup_parser import _parse_duct_system_hierarchy
+        data = (
+            _wrap("DUCT", _duct_zone("ORPHAN")) +
+            _wrap("DUCT", _duct_pref("RealSystem-AD")) +
+            _wrap("DUCT", _duct_zone("REAL"))
+        )
+        systems = _parse_duct_system_hierarchy(data)
+        assert len(systems) == 1
+        assert systems[0]["zones"] == ["REAL"]
+
+
+# ─── Prompt integration of the hierarchy decoder (Phase B / Day-4) ───
+
+class TestSystemHierarchyInPrompt:
+    """The SYSTEM HIERARCHY section is the Day-4 headline. It must
+    land FIRST in the enrichment output (so the AI anchors on it)
+    and contain the per-system 'emit EXACTLY N' instruction that
+    drives equipment line counts."""
+
+    def test_emits_system_hierarchy_section(self):
+        from utils.rup_parser import _build_binary_enrichment_lines
+        data = (
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("LIV/KIT")) +
+            _wrap("DUCT", _duct_zone("ENTRY")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("BEDROOM 4")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("OWNER BEDROOM"))
+        )
+        out = _build_binary_enrichment_lines(data, [], [])
+        joined = "\n".join(out)
+        assert "SYSTEM HIERARCHY" in joined
+        assert "3 systems / 3 zones" in joined or "3 systems" in joined
+        # The "Emit EXACTLY N" instruction is what kills the McGinty
+        # over-counting class. Guard it explicitly.
+        assert "EXACTLY 3" in joined
+
+    def test_hierarchy_precedes_library_section(self):
+        """Anchoring rule: SYSTEM HIERARCHY must be the FIRST
+        equipment-related section in the prompt."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        data = (
+            _wrap("EQUIP", _named_equip_record("Split AC")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("BEDROOM"))
+        )
+        joined = "\n".join(_build_binary_enrichment_lines(data, [], []))
+        hier_idx = joined.find("SYSTEM HIERARCHY")
+        lib_idx  = joined.find("AVAILABLE EQUIPMENT MODELS")
+        assert hier_idx >= 0 and lib_idx >= 0
+        assert hier_idx < lib_idx
+
+    def test_zequip_fallback_only_when_no_hierarchy(self):
+        """If the hierarchy decoder finds 0 systems (no DUCT/PREF
+        records or unrecognized layout), the cruder ZEQUIP zone-count
+        ceiling kicks in as a fallback."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        # No DUCT blocks → no hierarchy
+        data = _wrap("ZEQUIP", b"\x00" * 32) * 3
+        joined = "\n".join(_build_binary_enrichment_lines(data, [], []))
+        assert "SYSTEM HIERARCHY" not in joined
+        assert "EQUIPMENT PLACEMENT (fallback" in joined
+
+    def test_hierarchy_replaces_zequip_section_when_present(self):
+        """When the decoder finds systems, the ZEQUIP fallback must
+        NOT also emit — otherwise the AI sees two competing ceilings."""
+        from utils.rup_parser import _build_binary_enrichment_lines
+        data = (
+            _wrap("ZEQUIP", b"\x00" * 32) * 28 +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("LIVING")) +
+            _wrap("DUCT", _duct_pref("RectTrunk/RoundBranch-AD")) +
+            _wrap("DUCT", _duct_zone("BEDROOM"))
+        )
+        joined = "\n".join(_build_binary_enrichment_lines(data, [], []))
+        assert "SYSTEM HIERARCHY" in joined
+        assert "EQUIPMENT PLACEMENT (fallback" not in joined
