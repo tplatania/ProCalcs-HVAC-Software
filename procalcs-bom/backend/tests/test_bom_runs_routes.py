@@ -537,10 +537,12 @@ class TestTagsAndSuites:
             assert d["tag"] == "regression-v1"
             assert d["summary"]["ok"] == 2
             assert d["summary"]["errors"] == 0
-            # Each member produced a child
+            # Each member produced a child + carries the parent's
+            # creator-email field expected by the SPA (Day-5 chip).
             for m in d["members"]:
                 assert m["status"] == "ok"
                 assert m["child_id"] is not None
+                assert "parent_created_by_email" in m
             # Children inherit the suite tag (so the next suite-run picks them up too)
             children = (
                 BomRun.query.filter(BomRun.regenerated_from_id.isnot(None)).all()
@@ -556,6 +558,39 @@ class TestTagsAndSuites:
     def test_run_suite_404_when_no_members(self, app, client):
         resp = client.post("/api/v1/bom-runs/regression-suites/no-such-tag/run", json={})
         assert resp.status_code == 404
+
+    def test_run_suite_member_carries_parent_created_by_email(self, app, client, profile_dict, design_data):
+        """Day-5: the suite-result table chips parent identity. Each
+        member must surface the parent run's creator email so the SPA
+        can render <UserChip email={m.parent_created_by_email}/>."""
+        for p in self._patches(profile_dict): p.start()
+        try:
+            # Seed two runs from distinct testers
+            r1 = BomRun.record(
+                client_id="test-contractor", job_id="p1", output_mode="full",
+                parsed_design_data={"equipment": []},
+                generated_bom={"item_count": 0, "totals": {}},
+                created_by_email="richard@procalcs.net",
+                tags=["regression-v1"],
+            )
+            r2 = BomRun.record(
+                client_id="test-contractor", job_id="p2", output_mode="full",
+                parsed_design_data={"equipment": []},
+                generated_bom={"item_count": 0, "totals": {}},
+                created_by_email="tom@procalcs.net",
+                tags=["regression-v1"],
+            )
+            db.session.commit()
+
+            resp = client.post("/api/v1/bom-runs/regression-suites/regression-v1/run", json={})
+            d = resp.get_json()["data"]
+            by_parent = {m["parent_id"]: m for m in d["members"]}
+            assert by_parent[r1.id]["parent_created_by_email"] == "richard@procalcs.net"
+            assert by_parent[r2.id]["parent_created_by_email"] == "tom@procalcs.net"
+        finally:
+            for p in self._patches(profile_dict):
+                try: p.stop()
+                except Exception: pass
 
     def test_run_suite_includes_diff_and_regression_flag(self, app, client, profile_dict, design_data):
         """Phase 11 — every suite member should carry parent vs child
@@ -749,6 +784,37 @@ class TestMissingSkuBacklog:
         d = resp.get_json()["data"]
         assert d["items"] == []
         assert d["total_comparisons"] == 0
+
+    def test_aggregates_contributors_per_sku(self, app, client):
+        """Day-5: each backlog item carries a `contributors` list of
+        DISTINCT uploader emails. Powers the per-row UserChip column
+        on the SPA SKU Backlog page — lets prioritization weigh '3
+        testers all hit this' over '1 tester hit it 3 times'."""
+        # Two distinct testers, both flagging the same SKU once each
+        for email in ("richard@procalcs.net", "tom@procalcs.net"):
+            self._seed_compare(client, contractor="c1", sample_lines=[
+                {"sku": "FLEX-6", "description": "Flex 6in", "quantity": 5},
+            ])
+            # _seed_compare doesn't set the user header, so stamp the
+            # most recent comparison row directly. Same shape as if the
+            # middleware had set it via X-Procalcs-User-Email.
+            last = BomComparison.query.order_by(BomComparison.id.desc()).first()
+            last.created_by_email = email
+            db.session.commit()
+        # Third comparison from richard again — should NOT inflate
+        # contributor count (distinct emails only)
+        self._seed_compare(client, contractor="c1", sample_lines=[
+            {"sku": "FLEX-6", "description": "Flex 6in", "quantity": 3},
+        ])
+        last = BomComparison.query.order_by(BomComparison.id.desc()).first()
+        last.created_by_email = "richard@procalcs.net"
+        db.session.commit()
+
+        items = client.get("/api/v1/bom-runs/missing-sku-backlog").get_json()["data"]["items"]
+        flex = next(i for i in items if i["sku"] == "flex-6")
+        assert flex["occurrence_count"] == 3
+        contributors = set(flex.get("contributors") or [])
+        assert contributors == {"richard@procalcs.net", "tom@procalcs.net"}
 
     def test_caps_run_ids_at_20(self, app, client):
         """When a SKU has been missing in 25 comparisons across 25 distinct
