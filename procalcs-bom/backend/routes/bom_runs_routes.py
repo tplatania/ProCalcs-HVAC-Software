@@ -492,12 +492,13 @@ def run_regression_suite(tag: str):
     members = []
     for parent in parents:
         member: dict[str, Any] = {
-            "parent_id":   parent.id,
-            "parent_job":  parent.job_id,
-            "child_id":    None,
-            "status":      "ok",
-            "error":       None,
-            "item_count":  None,
+            "parent_id":               parent.id,
+            "parent_job":              parent.job_id,
+            "parent_created_by_email": parent.created_by_email,
+            "child_id":                None,
+            "status":                  "ok",
+            "error":                   None,
+            "item_count":              None,
         }
         if not parent.parsed_design_data:
             member.update({
@@ -622,6 +623,10 @@ def missing_sku_backlog():
                         "first_seen":       comp.created_at.isoformat() if comp.created_at else None,
                         "last_seen":        comp.created_at.isoformat() if comp.created_at else None,
                         "run_ids":          [],
+                        # Day-5: track who's been flagging this SKU as
+                        # missing — useful for prioritization ("3 testers
+                        # all hit this" vs "one tester hit this 3 times").
+                        "contributors":     [],
                     }
                 g = grouped[key]
                 g["occurrence_count"] += 1
@@ -631,6 +636,8 @@ def missing_sku_backlog():
                     pass
                 if comp.bom_run_id not in g["run_ids"] and len(g["run_ids"]) < 20:
                     g["run_ids"].append(comp.bom_run_id)
+                if comp.created_by_email and comp.created_by_email not in g["contributors"]:
+                    g["contributors"].append(comp.created_by_email)
                 if comp.created_at:
                     iso = comp.created_at.isoformat()
                     g["last_seen"] = iso  # comparisons ordered asc, last wins
