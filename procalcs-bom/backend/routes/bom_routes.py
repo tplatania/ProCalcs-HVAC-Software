@@ -6,10 +6,16 @@ Follows ProCalcs Design Standards v2.0
 """
 
 import logging
-from flask import Blueprint, jsonify, request, Response
+from flask import Blueprint, jsonify, request, Response, g
 from services.bom_service import generate
+from services.bom_from_wrightsoft import (
+    build_bom_from_wrightsoft_lines,
+    parse_wrightsoft_bom_rows,
+)
 from services.pdf_service import render_bom_pdf
 from services.materials_rules import generate_rule_lines, compute_scope, summarize_scope
+from services.profile_service import get_profile_by_id
+from models.client_profile import ClientProfile
 from utils.validators import validate_bom_request
 from utils.rup_parser import parse_rup_bytes
 
@@ -421,3 +427,121 @@ def rup_inspect():
             "success": False, "data": None,
             "error": "RUP inspection failed.",
         }), 500
+
+
+# ===============================
+# POST — Build BOM from Wrightsoft's own generic-parts export
+# ===============================
+#
+# Day-9 endpoint addressing Tom's "use the produced information"
+# question. Two input modes:
+#
+#   a) multipart upload of a Wrightsoft BOM export (.csv / .xls /
+#      .xlsx) — parsed via parse_wrightsoft_bom_rows
+#   b) JSON body {"client_id": "...",
+#                 "job_id": "...",
+#                 "lines": [{"generic_id": "PEX0750", "quantity": 100,
+#                            "description": "..."}, ...]} — for
+#      automated harnesses or curl smoke tests
+#
+# Either way, each line goes through wrightsoft_catalog's mapping
+# table (mapped_parts.csv) to translate generic_id → contractor's
+# manufacturer SKU, then through the same pricing/markup helpers
+# /generate uses. Output matches /generate's response shape so the
+# downstream PDF + Run History + comparator pipeline works unchanged.
+
+@bom_bp.route('/from-wrightsoft', methods=['POST'])
+def bom_from_wrightsoft():
+    """Build a BOM from Wrightsoft's own generic-parts output.
+
+    Multipart: 'file' field with Wrightsoft CSV/XLS export +
+               'client_id' + 'job_id' form fields.
+    JSON:      {"client_id": str, "job_id": str,
+                "lines": [{"generic_id": str, "quantity": float,
+                           "description": str?}],
+                "output_mode": str?}
+    """
+    try:
+        # ── Multipart upload branch ───────────────────────────────────
+        if 'file' in request.files:
+            upload = request.files['file']
+            file_bytes = upload.read()
+            if not file_bytes:
+                return jsonify({"success": False, "data": None,
+                                "error": "Empty file upload"}), 400
+            client_id = (request.form.get('client_id') or '').strip()
+            job_id    = (request.form.get('job_id') or '').strip()
+            output_mode = (request.form.get('output_mode') or 'full').strip() or 'full'
+            try:
+                lines = parse_wrightsoft_bom_rows(
+                    file_bytes, filename=upload.filename or "",
+                )
+            except ValueError as exc:
+                return jsonify({"success": False, "data": None,
+                                "error": str(exc)}), 400
+        else:
+            # ── JSON body branch ──────────────────────────────────────
+            body = request.get_json(silent=True) or {}
+            client_id = (body.get('client_id') or '').strip()
+            job_id    = (body.get('job_id') or '').strip()
+            output_mode = (body.get('output_mode') or 'full').strip() or 'full'
+            lines = body.get('lines') or []
+            if not isinstance(lines, list):
+                return jsonify({"success": False, "data": None,
+                                "error": "'lines' must be a list"}), 400
+
+        if not client_id or not job_id:
+            return jsonify({"success": False, "data": None,
+                            "error": "client_id and job_id are required"}), 400
+
+        # ── Resolve contractor profile ────────────────────────────────
+        profile_data = get_profile_by_id(client_id)
+        if not profile_data:
+            return jsonify({"success": False, "data": None,
+                            "error": f"No profile found for client_id '{client_id}'"}), 404
+        profile = ClientProfile.from_dict(profile_data)
+
+        # ── Build BOM through the mapping pipeline ────────────────────
+        bom = build_bom_from_wrightsoft_lines(
+            lines=lines,
+            profile=profile,
+            job_id=job_id,
+            output_mode=output_mode,
+        )
+
+        # ── Persist as a bom_run so the BOM shows up in Run History
+        # next to /generate output. Best-effort: a DB failure must
+        # NOT swallow the successful BOM result — same contract as
+        # services.bom_service.generate.
+        try:
+            from models import BomRun
+            from extensions import db
+            from flask import has_request_context
+            created_by_email = None
+            if has_request_context():
+                user = getattr(g, "current_user", None)
+                if user is not None:
+                    created_by_email = getattr(user, "email", None)
+            run = BomRun.record(
+                client_id=client_id,
+                job_id=job_id,
+                output_mode=output_mode,
+                parsed_design_data={
+                    "source_pipeline": "wrightsoft_bom",
+                    "wrightsoft_lines": lines,
+                },
+                generated_bom=bom,
+                created_by_email=created_by_email,
+            )
+            db.session.commit()
+            bom["run_id"] = run.id
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Wrightsoft-BOM persistence failed for job %s — %s",
+                           job_id, exc)
+
+        return jsonify({"success": True, "data": bom, "error": None}), 200
+
+    except Exception as e:
+        logger.error("bom_from_wrightsoft failed: %s", e, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to build BOM from Wrightsoft input."}), 500
