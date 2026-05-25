@@ -614,6 +614,33 @@ class TestParseDuctSystemHierarchy:
         assert len(systems) == 1
         assert systems[0]["duct_label"] == "RealSystem-AD"
 
+    def test_infer_dominant_brand_returns_clear_winner(self):
+        """One brand mentioned 5x, runner-up mentioned 1x → dominant."""
+        from utils.rup_parser import _infer_dominant_brand
+        text = ("Trane " * 5 + "Carrier ").encode("utf-16-le")
+        assert _infer_dominant_brand(text) == "Trane"
+
+    def test_infer_dominant_brand_returns_none_for_multi_brand(self):
+        """Multiple brands all close in count → it's a Wrightsoft
+        default list, not a contractor selection. Return None so the
+        contractor profile's catalog default wins."""
+        from utils.rup_parser import _infer_dominant_brand
+        text = (
+            "Trane Carrier Carrier Goodman Lennox Bryant Rheem Daikin "
+        ).encode("utf-16-le")
+        # Carrier=2 vs runner-up Trane=1 → only 1 gap, below threshold
+        assert _infer_dominant_brand(text) is None
+
+    def test_infer_dominant_brand_requires_three_plus_mentions(self):
+        from utils.rup_parser import _infer_dominant_brand
+        # Trane only mentioned twice → too weak to be a real signal
+        text = ("Trane Trane Carrier ").encode("utf-16-le")
+        assert _infer_dominant_brand(text) is None
+
+    def test_infer_dominant_brand_handles_no_brands(self):
+        from utils.rup_parser import _infer_dominant_brand
+        assert _infer_dominant_brand(b"\x00" * 1024) is None
+
     def test_infer_equipment_composition_furnace_based(self):
         from utils.rup_parser import _infer_equipment_composition
         c = _infer_equipment_composition(["FURNACE 1", "FURNACE 2"])

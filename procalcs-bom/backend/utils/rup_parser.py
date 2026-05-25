@@ -572,6 +572,47 @@ def _parse_duct_system_hierarchy(file_bytes: bytes) -> List[Dict[str, Any]]:
 #     the file (these aren't duct dimensions, they're Wrightsoft UI
 #     layout coordinates).
 
+# Known HVAC brands the contractor might pick from. Detected by simple
+# count-in-file scan; only inferred when one brand dominates.
+_HVAC_BRANDS = (
+    "Carrier", "Goodman", "Lennox", "Trane", "Rheem", "Bryant",
+    "Mitsubishi", "Daikin", "York", "Amana", "Heil", "Maytag",
+    "American Standard", "Ruud", "Payne",
+)
+
+
+def _infer_dominant_brand(file_bytes: bytes) -> Optional[str]:
+    """Day-8 — surface the contractor's actual equipment brand when one
+    is dominant in the project file.
+
+    Returns the brand name if a single brand has ≥3 mentions AND beats
+    the runner-up by ≥3 (i.e. clear signal, not noise). Returns None
+    otherwise (multi-brand projects, or no dominant brand detected) so
+    the AI falls back to the contractor profile's default brand.
+
+    Validated empirically:
+      Edge:    Trane(7) → "Trane"
+      McGinty: Bryant(7) → "Bryant"
+      Easy:    Trane(3) → "Trane"
+      Average: 8 brands tied at 1-2 → None (Wrightsoft default list,
+               not a real contractor preference)
+    """
+    try:
+        text = file_bytes.decode("utf-16-le", errors="replace")
+    except Exception:
+        return None
+    counts = [(b, text.count(b)) for b in _HVAC_BRANDS]
+    counts = [(b, n) for b, n in counts if n > 0]
+    if not counts:
+        return None
+    counts.sort(key=lambda x: -x[1])
+    top_brand, top_n = counts[0]
+    runner_up = counts[1][1] if len(counts) > 1 else 0
+    if top_n >= 3 and (top_n - runner_up) >= 3:
+        return top_brand
+    return None
+
+
 _NXM_RE = re.compile(r'\b(\d{1,2})\s*[xX]\s*(\d{1,2})\b')
 
 def _extract_rectangular_duct_dims(file_bytes: bytes) -> List[tuple]:
@@ -808,18 +849,51 @@ def _build_binary_enrichment_lines(
         )
         out.append("")
 
-    # ─── RECTANGULAR DUCT SIZES (Day-7 Phase D, partial) ─────────────
+    # ─── EQUIPMENT BRAND (Day-8) ─────────────────────────────────────
+    # Surface the contractor's actual brand preference when the file
+    # clearly favors one. Closes Richard's Round-2 "wrong manufacturer"
+    # complaint partway — at least the AI gets the brand right when
+    # the file signal is unambiguous.
+    dominant_brand = _infer_dominant_brand(file_bytes)
+    if dominant_brand:
+        out.append("=== EQUIPMENT BRAND (inferred from file) ===")
+        out.append(
+            f"  Project favors brand: {dominant_brand}. When emitting "
+            "AHU / Condenser / Furnace / Heat Pump lines, prefer this "
+            "brand over the contractor profile's catalog default. "
+            "Other brands may appear in default lists — those are "
+            "Wrightsoft templates, not contractor selections."
+        )
+        out.append("")
+
+    # ─── RECTANGULAR DUCT + GRILLE SIZES (Day-7/8) ──────────────────
     # Distinct (width × height) rectangular dimensions extracted from
-    # the file. Closes Richard's Round-3 "rectangular ducts missing"
-    # gap by giving the AI explicit notice of WHICH sizes are present.
-    # Doesn't yet provide per-segment LF — that needs the deeper
-    # decoder still on the punch list. But this alone moves the AI
-    # from "skipped" to "emitted with a quantity estimate".
+    # the file. The same NxM extractor catches rectangular duct
+    # cross-sections AND register/grille face dimensions — they share
+    # the same string format in the binary, no way to distinguish
+    # from raw text alone. So the prompt asks for BOM lines covering
+    # both purposes.
+    #
+    # Closes Richard's Round-3 complaints:
+    #   - "Multiple rectangular ductwork missing in the BOM report"
+    #   - "Grille sizes and count do not match the rup file"
+    #
+    # Per-segment LF (Richard: "6-in flex duct total is not 480 ft")
+    # is NOT yet decoded — DUCTRUN +0x0c was previously hypothesized
+    # as length but Day-7 investigation confirmed it's airflow (CFM)
+    # not length. Per-segment LF likely requires walking DUCTLOC
+    # coordinate pairs and computing Euclidean distance — separate
+    # multi-day decoder still on the punch list.
     rect_dims = _extract_rectangular_duct_dims(file_bytes)
     if rect_dims:
         out.append(
-            f"=== RECTANGULAR DUCT SIZES ({len(rect_dims)} distinct, "
+            f"=== RECTANGULAR DIMENSIONS ({len(rect_dims)} distinct, "
             "extracted from binary) ==="
+        )
+        out.append(
+            "  These dimensions cover BOTH rectangular duct cross-"
+            "sections AND register/grille face sizes — Wrightsoft "
+            "stores them in the same NxM format."
         )
         dim_strs = ", ".join(
             f"{w}×{h} ({n}×)" for (w, h), n in rect_dims[:25]
@@ -828,12 +902,13 @@ def _build_binary_enrichment_lines(
             dim_strs += f", ... (+{len(rect_dims) - 25} more)"
         out.append(f"  Sizes present: {dim_strs}")
         out.append(
-            "  CRITICAL: Emit a rectangular-duct BOM line for EACH "
-            "distinct size listed above. Estimate linear footage per "
-            "size from the project's total duct count and zone "
-            "distribution if no per-segment length is available. "
-            "Missing any of these sizes from the BOM is a failure "
-            "mode — contractor reports flag this explicitly."
+            "  CRITICAL: Emit a separate BOM line for EACH distinct "
+            "size for both ductwork and registers/grilles. Estimate "
+            "linear footage per duct size and unit count per grille "
+            "size from the project's total counts and zone "
+            "distribution. Missing any of these sizes from the BOM "
+            "is a failure mode — contractor reports flag this "
+            "explicitly."
         )
         out.append("")
 
