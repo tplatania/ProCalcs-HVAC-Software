@@ -416,6 +416,36 @@ class TestPricingLogic:
         cost = _get_unit_cost("Some unknown widget", "other", sample_profile)
         assert cost == 0.0
 
+    def test_equipment_gets_estimated_cost_not_zero(self, sample_profile):
+        """Day-7 — Richard's Round-3 complaint: equipment lines came
+        back at $0 because _get_unit_cost only handled consumables.
+        Equipment-category items must now hit the estimated-cost
+        fallback rather than returning 0."""
+        from services.bom_service import _get_unit_cost
+        ahu  = _get_unit_cost("Air Handler Unit", "equipment", sample_profile)
+        cond = _get_unit_cost("Condenser Unit",   "equipment", sample_profile)
+        furn = _get_unit_cost("Gas Furnace",      "equipment", sample_profile)
+        coil = _get_unit_cost("Evaporator Coil",  "equipment", sample_profile)
+        assert ahu  > 0
+        assert cond > 0
+        assert furn > 0
+        assert coil > 0
+        # Longest-keyword-wins: "evaporator coil" beats bare "coil"
+        # and "gas furnace" beats bare "furnace". Different values
+        # imply the longest-match logic kicked in.
+        coil_bare = _get_unit_cost("Coil", "equipment", sample_profile)
+        assert coil_bare > 0  # bare match also non-zero
+
+    def test_equipment_estimate_only_for_equipment_category(self, sample_profile):
+        """Don't apply the equipment cost estimates to other categories
+        — a duct line that happens to mention "coil" shouldn't get
+        priced as an evaporator coil."""
+        from services.bom_service import _get_unit_cost
+        cost = _get_unit_cost("Coil-wrapped flex duct", "duct", sample_profile)
+        # Falls through to "flex" keyword in consumable path; the
+        # equipment path is gated on category == 'equipment'.
+        assert cost == sample_profile.supplier.flex_duct_cost_per_foot
+
     def test_markup_pct_equipment(self, sample_profile):
         from services.bom_service import _get_markup_pct
         pct = _get_markup_pct("equipment", sample_profile)

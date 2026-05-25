@@ -614,6 +614,88 @@ class TestParseDuctSystemHierarchy:
         assert len(systems) == 1
         assert systems[0]["duct_label"] == "RealSystem-AD"
 
+    def test_infer_equipment_composition_furnace_based(self):
+        from utils.rup_parser import _infer_equipment_composition
+        c = _infer_equipment_composition(["FURNACE 1", "FURNACE 2"])
+        assert "furnace-based" in c["label"]
+        assert any("Furnace" in s for s in c["per_system"])
+        assert any("Evaporator Coil" in s for s in c["per_system"])
+        assert c["excluded"] == []
+
+    def test_infer_equipment_composition_ahu_only(self):
+        """Edge case — AHU-only project must NOT emit phantom furnaces
+        or phantom separate coils."""
+        from utils.rup_parser import _infer_equipment_composition
+        c = _infer_equipment_composition(["AHU - 1", "AHU - 2", "AHU - 3 Attic"])
+        assert "AHU-only" in c["label"] or "AHU" in c["label"]
+        assert not any("Furnace" in s for s in c["per_system"])
+        # Coil only as integrated, not as separate line
+        assert all("separate" not in s.lower() for s in c["per_system"])
+        excluded = " ".join(c["excluded"]).lower()
+        assert "furnace" in excluded
+        assert "evaporator" in excluded or "coil" in excluded
+
+    def test_infer_equipment_composition_unknown_label_safe_default(self):
+        from utils.rup_parser import _infer_equipment_composition
+        c = _infer_equipment_composition(["Entire House"])
+        assert "default" in c["label"].lower() or "unknown" in c["label"].lower()
+        # Safe default = AHU + condenser, no phantom furnace/coil
+        assert any("AHU" in s for s in c["per_system"])
+        assert any("Condenser" in s for s in c["per_system"])
+        assert not any("Furnace" in s for s in c["per_system"])
+
+    def test_extract_rectangular_duct_dims_returns_plausible_sizes(self):
+        """Day-7 Phase D — file scan for distinct NxM rectangular duct
+        sizes, filtered to HVAC-plausible ranges + capped frequency."""
+        from utils.rup_parser import _extract_rectangular_duct_dims
+        # Synthesize content with 3 real duct sizes + a Wrightsoft UI
+        # layout artifact ("14x3" repeated 100 times — must be excluded
+        # by the > 50 cap).
+        text = (
+            "12x10 " * 3 + "16x12 " * 2 + "6x8 " * 1 +
+            "14x3 " * 100  # artifact — should be filtered
+        ).encode("utf-16-le")
+        dims = _extract_rectangular_duct_dims(text)
+        sizes = [(w, h) for (w, h), _ in dims]
+        assert (12, 10) in sizes
+        assert (16, 12) in sizes
+        assert (6, 8) in sizes
+        # Artifact filtered
+        assert (14, 3) not in sizes
+        # Top by frequency, ties broken by area
+        assert dims[0][0] == (12, 10)
+        assert dims[0][1] == 3
+
+    def test_extract_rectangular_duct_dims_excludes_out_of_range(self):
+        """Sizes outside HVAC residential range are noise, not duct
+        dimensions."""
+        from utils.rup_parser import _extract_rectangular_duct_dims
+        text = (
+            "60x80 100x200 1x2 3x4 50x40 12x10 "
+        ).encode("utf-16-le")
+        sizes = [(w, h) for (w, h), _ in _extract_rectangular_duct_dims(text)]
+        # In-range
+        assert (12, 10) in sizes
+        # Out of range (height too small)
+        assert (1, 2) not in sizes
+        # Out of range (width too small at 3, but height in range)
+        assert (3, 4) not in sizes
+        # Way too large
+        assert (60, 80) not in sizes
+        assert (100, 200) not in sizes
+
+    def test_extract_rectangular_duct_dims_empty_on_garbage_bytes(self):
+        from utils.rup_parser import _extract_rectangular_duct_dims
+        assert _extract_rectangular_duct_dims(b"\x00" * 1024) == []
+
+    def test_infer_equipment_composition_empty_labels_safe_default(self):
+        from utils.rup_parser import _infer_equipment_composition
+        c = _infer_equipment_composition([])
+        assert any("AHU" in s for s in c["per_system"])
+        # Safe default also excludes phantom types so we don't emit
+        # things we can't confirm
+        assert c["excluded"]
+
     def test_ignores_zones_before_first_pref(self):
         """Stray room-name records before any PREF aren't attached
         to a system."""

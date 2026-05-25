@@ -553,6 +553,145 @@ def _parse_duct_system_hierarchy(file_bytes: bytes) -> List[Dict[str, Any]]:
     return [s for s in systems if s["zones"] and s.get("duct_label")]
 
 
+# ─── Rectangular duct dimensions (Day-7 Phase D, partial) ─────────────
+#
+# Richard's Round-3 complaint: "Multiple rectangular ductwork missing
+# in the BOM report. For example 6x10, 10x16, 10x12, 15x21, 16x14, 6x14,
+# 6x18, 6x8, 10x10 and many more."
+#
+# Per-segment binary decoding is a multi-day investigation. The lighter-
+# weight fix that closes the immediate gap: scan the file for distinct
+# rectangular-dimension strings ("NxM") and surface them to the AI in
+# the prompt. The AI then emits BOM lines for sizes it would otherwise
+# skip entirely.
+#
+# Filtered to plausible HVAC duct dimensions only:
+#   * width 4-36 inches (residential trunk + branch range)
+#   * height 3-30 inches
+#   * skip the giant "14x3" / "10x9" page-header artifacts that flood
+#     the file (these aren't duct dimensions, they're Wrightsoft UI
+#     layout coordinates).
+
+_NXM_RE = re.compile(r'\b(\d{1,2})\s*[xX]\s*(\d{1,2})\b')
+
+def _extract_rectangular_duct_dims(file_bytes: bytes) -> List[tuple]:
+    """Return distinct (w, h) duct dimensions in the file, ordered by
+    descending frequency then by w * h. Empty list if none plausible
+    found.
+
+    Heuristic filters:
+      - 4 ≤ w ≤ 36 AND 3 ≤ h ≤ 30  (HVAC residential range)
+      - drop the "14x3" / "10x9" / "60x3" page-header / layout
+        artifacts that appear 100+ times each (a real duct size
+        rarely exceeds 8-10 occurrences across one project)
+    """
+    from collections import Counter
+    try:
+        text = file_bytes.decode("utf-16-le", errors="replace")
+    except Exception:
+        return []
+    ctr: Counter = Counter()
+    for w, h in _NXM_RE.findall(text):
+        w, h = int(w), int(h)
+        if 4 <= w <= 36 and 3 <= h <= 30:
+            ctr[(w, h)] += 1
+    # Drop artifacts that occur > 50 times — real duct sizes don't
+    # repeat that much in a single project.
+    plausible = {k: v for k, v in ctr.items() if v <= 50}
+    # Sort: most frequent first, ties broken by area
+    return sorted(
+        plausible.items(),
+        key=lambda kv: (-kv[1], -(kv[0][0] * kv[0][1])),
+    )
+
+
+def _infer_equipment_composition(ecductsys_labels: List[str]) -> Dict[str, Any]:
+    """Day-7 — infer what equipment types each system contains, based
+    on the names Wrightsoft attached to its systems.
+
+    Different system types have different equipment compositions:
+
+      Furnace-based (gas/oil):   Furnace + Evap Coil + Condenser + AHU
+                                 (the McGinty case)
+      AHU heat-pump:             AHU + Condenser
+                                 (the Edge case — coil is built into the
+                                 AHU, NOT a separate line item; no furnace)
+      Heat pump:                 Air Handler + Heat Pump
+      Unknown / unlabeled:       Safe default = AHU + Condenser
+
+    Returns:
+        {
+          "label":      str  — short tag for the prompt ("furnace-based",
+                              "AHU-only", etc.)
+          "per_system": list[str] — equipment types to emit per system
+          "excluded":   list[str] — types to explicitly NOT emit, with
+                                    rationale (kills phantom-emission
+                                    failure class on Edge-style projects)
+        }
+    """
+    # Normalize labels — uppercase, strip whitespace
+    labels = [l.upper().strip() for l in (ecductsys_labels or [])]
+
+    has_furnace = any("FURNACE" in l for l in labels)
+    has_ahu     = any(("AHU" in l) or ("AIR HANDLER" in l) for l in labels)
+    has_hp      = any(("HEAT PUMP" in l) or l.startswith("HP")
+                      or " HP" in l for l in labels)
+
+    # Furnace-based — has separate evap coil
+    if has_furnace:
+        return {
+            "label":      "furnace-based (gas/oil + AHU + coil + condenser)",
+            "per_system": [
+                "1× Gas Furnace",
+                "1× Air Handler Unit (AHU)",
+                "1× Evaporator Coil (separate from AHU)",
+                "1× Condenser Unit",
+            ],
+            "excluded": [],
+        }
+
+    # AHU heat-pump-coil-integrated — Edge case
+    if has_ahu and not has_furnace:
+        return {
+            "label":      "AHU-only with integrated coil (heat-pump-style)",
+            "per_system": [
+                "1× Air Handler Unit (AHU) with integrated evaporator coil",
+                "1× Condenser Unit",
+            ],
+            "excluded": [
+                "Gas Furnace (project has no furnaces)",
+                "separate Evaporator Coil (it's integrated into the AHU)",
+            ],
+        }
+
+    # Heat pump with named "HP" label
+    if has_hp:
+        return {
+            "label":      "heat-pump-based",
+            "per_system": [
+                "1× Air Handler Unit (AHU)",
+                "1× Heat Pump (outdoor unit)",
+            ],
+            "excluded": [
+                "Gas Furnace (project is heat-pump-based)",
+                "separate Condenser (the heat pump unit IS the condenser)",
+            ],
+        }
+
+    # Safe fallback when no useful labels found
+    return {
+        "label":      "unknown — using safe default (AHU + condenser)",
+        "per_system": [
+            "1× Air Handler Unit (AHU)",
+            "1× Condenser Unit",
+        ],
+        "excluded": [
+            "Gas Furnace (unconfirmed — only emit if design data explicitly lists one)",
+            "separate Evaporator Coil (unconfirmed — only emit if explicitly listed)",
+        ],
+    }
+
+
 def _build_binary_enrichment_lines(
     file_bytes: bytes,
     text_equipment: List[Dict[str, Any]],
@@ -614,6 +753,25 @@ def _build_binary_enrichment_lines(
         systems = []
     if systems:
         total_zones = sum(len(s["zones"]) for s in systems)
+        # Day-7 — infer equipment COMPOSITION (not just count) from
+        # ECDUCTSYS labels. Day-4 dictated "1 furnace + 1 coil + 1 AHU
+        # + 1 condenser per system" for every project, which produced
+        # phantom Gas Furnaces and phantom separate Evap Coils on
+        # AHU-only / heat-pump-coil-integrated projects (Edge case).
+        # Inferred composition kills that regression class.
+        try:
+            ec_bodies = _block_bodies(file_bytes, "ECDUCTSYS")
+        except Exception:
+            ec_bodies = []
+        labels: List[str] = []
+        for body in ec_bodies:
+            strs = _utf16_strings_in_block(body, min_len=3)
+            for s in strs:
+                if s and s not in labels:
+                    labels.append(s)
+                    break
+        composition = _infer_equipment_composition(labels)
+
         out.append(
             f"=== SYSTEM HIERARCHY (authoritative from binary: "
             f"{len(systems)} systems / {total_zones} zones) ==="
@@ -630,15 +788,48 @@ def _build_binary_enrichment_lines(
                 f"  System {i} (duct prefs: {label}): "
                 f"{len(s['zones'])} zones — {zones_disp}"
             )
+        # Composition-driven equipment instruction
+        equip_list = ", ".join(composition["per_system"])
+        excluded = composition.get("excluded") or []
         out.append(
-            f"  CRITICAL: Emit EXACTLY {len(systems)} of each major "
-            "equipment type — one AHU per system, one condenser per "
-            "system, one furnace per system, one coil per system. "
-            "If the BOM needs N air handlers, the answer is "
-            f"N={len(systems)}, not the zone count and not the "
-            "library count. Heat kits, ERVs, and humidifiers only "
-            "if explicitly indicated; default to 0 of those unless "
-            "the design data names them."
+            f"  PROJECT EQUIPMENT TYPE: {composition['label']} "
+            f"(inferred from ECDUCTSYS labels: {labels[:4] or ['(none — using safe default)']})"
+        )
+        out.append(
+            f"  CRITICAL — emit per system: {equip_list}. "
+            f"Total = exactly {len(systems)} of each listed type. "
+            f"DO NOT emit: {', '.join(excluded) if excluded else '(none excluded)'}. "
+            "Heat kits, ERVs, and humidifiers only if explicitly indicated "
+            "in the design data; default to 0 of those."
+        )
+        out.append("")
+
+    # ─── RECTANGULAR DUCT SIZES (Day-7 Phase D, partial) ─────────────
+    # Distinct (width × height) rectangular dimensions extracted from
+    # the file. Closes Richard's Round-3 "rectangular ducts missing"
+    # gap by giving the AI explicit notice of WHICH sizes are present.
+    # Doesn't yet provide per-segment LF — that needs the deeper
+    # decoder still on the punch list. But this alone moves the AI
+    # from "skipped" to "emitted with a quantity estimate".
+    rect_dims = _extract_rectangular_duct_dims(file_bytes)
+    if rect_dims:
+        out.append(
+            f"=== RECTANGULAR DUCT SIZES ({len(rect_dims)} distinct, "
+            "extracted from binary) ==="
+        )
+        dim_strs = ", ".join(
+            f"{w}×{h} ({n}×)" for (w, h), n in rect_dims[:25]
+        )
+        if len(rect_dims) > 25:
+            dim_strs += f", ... (+{len(rect_dims) - 25} more)"
+        out.append(f"  Sizes present: {dim_strs}")
+        out.append(
+            "  CRITICAL: Emit a rectangular-duct BOM line for EACH "
+            "distinct size listed above. Estimate linear footage per "
+            "size from the project's total duct count and zone "
+            "distribution if no per-segment length is available. "
+            "Missing any of these sizes from the BOM is a failure "
+            "mode — contractor reports flag this explicitly."
         )
         out.append("")
 

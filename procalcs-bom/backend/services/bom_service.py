@@ -550,10 +550,38 @@ def _call_ai_for_quantities(
 # Pricing — Python does all math
 # ===============================
 
+_EQUIPMENT_ESTIMATED_COSTS: dict[str, float] = {
+    # Conservative industry estimates so equipment lines stop emitting
+    # at $0 when neither the catalog SKU nor the SupplierInfo has a
+    # configured price. These are placeholders the contractor will
+    # override during proposal review; they're flagged "estimated" in
+    # the description (see _apply_pricing) so designers know not to
+    # treat them as fixed quotes.
+    "air handler":     2500.0,
+    "ahu":             2500.0,
+    "condenser":       3000.0,
+    "gas furnace":     1800.0,
+    "furnace":         1800.0,
+    "evaporator coil": 700.0,
+    "coil":            700.0,
+    "heat kit":        250.0,
+    "heat pump":       4500.0,
+    "erv":             1500.0,
+    "hrv":             1500.0,
+    "humidifier":      400.0,
+}
+
+
 def _get_unit_cost(description: str, category: str, profile: ClientProfile) -> float:
     """
     Look up the unit cost for an item from the client profile.
     Falls back to 0.0 if not configured — never crashes.
+
+    Day-7 — equipment-category items get a conservative estimated
+    cost when neither catalog SKU nor SupplierInfo has a configured
+    price. Without this, equipment line items came back $0 on every
+    BOM (Richard Round-3 complaint: "No Unit cost for the equipment.
+    These are the most expensive pieces of equipment here.").
     """
     desc_lower = description.lower()
     s = profile.supplier  # shorthand
@@ -574,6 +602,18 @@ def _get_unit_cost(description: str, category: str, profile: ClientProfile) -> f
     # Rectangular duct by sq ft
     if category == 'duct' and 'rect' in desc_lower:
         return float(s.rect_duct_cost_per_sqft or 0.0)
+
+    # Equipment estimated-cost fallback. Matched by keyword on
+    # description (case-insensitive, longest match wins so "gas
+    # furnace" beats "furnace" and "evaporator coil" beats "coil").
+    if category == 'equipment':
+        matches = sorted(
+            ((k, v) for k, v in _EQUIPMENT_ESTIMATED_COSTS.items()
+             if k in desc_lower),
+            key=lambda kv: -len(kv[0]),
+        )
+        if matches:
+            return float(matches[0][1])
 
     return 0.0  # Safe fallback — not all items have profile costs
 
@@ -724,6 +764,7 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
         ai_sku = (item.get('sku') or '').strip() or None
         catalog_entry = sku_catalog.get(ai_sku) if ai_sku else None
 
+        is_estimated_cost = False
         if catalog_entry is not None:
             # Catalog wins on cost + supplier + section + manufacturer.
             # Description stays as AI emitted (more contextual than
@@ -733,6 +774,15 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
             supplier      = catalog_entry.supplier
             section       = catalog_entry.section
             manufacturer  = catalog_entry.manufacturer
+            # Even a catalog match can be priced at $0 if the seed
+            # data left default_unit_price unset. Fall through to the
+            # equipment-estimate fallback so we still surface a
+            # plausible number instead of $0.
+            if unit_cost == 0.0 and category == 'equipment':
+                fallback = _get_unit_cost(description, category, profile)
+                if fallback > 0:
+                    unit_cost = fallback
+                    is_estimated_cost = True
         else:
             # No SKU or unknown SKU — fall back to the legacy
             # description-based unit-cost lookup.
@@ -741,6 +791,12 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
             supplier      = None
             section       = None
             manufacturer  = None
+            # If the category is equipment and we hit the estimated-
+            # cost lookup table, mark the line so the BOM viewer can
+            # render it differently ("$2,500 est.") and Richard
+            # knows not to treat it as a fixed quote.
+            if category == 'equipment' and unit_cost > 0 and ai_sku is None:
+                is_estimated_cost = True
 
         markup_pct  = _get_markup_pct(category, profile)
         # Compute totals from the unrounded arithmetic to avoid a
@@ -786,6 +842,12 @@ def _apply_pricing(raw_quantities: dict, profile: ClientProfile,
             line["section"] = section
         if manufacturer:
             line["manufacturer"] = manufacturer
+        # Day-7 — flag estimated-cost equipment lines so the BOM
+        # viewer / PDF can render them differently from quoted-cost
+        # lines. Avoids Richard's "no unit cost" complaint while
+        # making it explicit these aren't supplier quotes.
+        if is_estimated_cost:
+            line["cost_is_estimate"] = True
 
         line_items.append(line)
 
