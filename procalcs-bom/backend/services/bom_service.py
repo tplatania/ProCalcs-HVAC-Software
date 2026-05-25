@@ -104,12 +104,19 @@ def generate(client_id: str, job_id: str, design_data: dict,
     profile = ClientProfile.from_dict(profile_data)
     effective_mode = output_mode or profile.default_output_mode
 
+    # Day-8 — extract the file-inferred brand (e.g. "Trane", "Bryant")
+    # from the parser's raw_rup_context. Surfaced to the rules-engine
+    # and catalog-match formatters so equipment lines pick up the
+    # actual contractor brand instead of the catalog's Goodman
+    # default. The AI path already gets this via the prompt itself.
+    inferred_brand = _extract_inferred_brand(design_data)
+
     # Step 2a — Deterministic rules engine first. Emits SKU-level lines
     # for everything the catalog can express (AHU/condenser/heat-kit
     # equipment, Rheia duct system, plenum take-offs, etc.). Catalog
     # default_unit_price is the cost; Python applies profile markup.
     rule_lines = generate_rule_lines(design_data, output_mode=effective_mode)
-    rules_priced = _format_rule_lines_for_bom(rule_lines, profile)
+    rules_priced = _format_rule_lines_for_bom(rule_lines, profile, inferred_brand)
 
     # Step 2a' — Catalog-augmented per-equipment match (Phase 3.7,
     # May 2026). The rules engine fires SKUs by trigger flags but
@@ -122,7 +129,7 @@ def generate(client_id: str, job_id: str, design_data: dict,
     equipment = (design_data or {}).get("equipment") or []
     matched_per_instance = match_equipment_to_catalog(equipment, client_id)
     catalog_matched = _format_catalog_matches_for_bom(
-        coalesce_matched_lines(matched_per_instance), profile,
+        coalesce_matched_lines(matched_per_instance), profile, inferred_brand,
     )
 
     # Step 2b — AI fills the gaps the catalog doesn't cover yet
@@ -550,6 +557,38 @@ def _call_ai_for_quantities(
 # Pricing — Python does all math
 # ===============================
 
+import re as _re
+
+_BRAND_RE = _re.compile(r"Project favors brand:\s*([A-Za-z][A-Za-z ]*)", _re.IGNORECASE)
+
+
+def _extract_inferred_brand(design_data: dict) -> str | None:
+    """Day-8 — pull the file-inferred brand back out of the parser's
+    raw_rup_context block (where the rup_parser surfaced it under
+    'EQUIPMENT BRAND'). Returns None when no brand was inferred (multi-
+    brand project or insufficient signal)."""
+    if not isinstance(design_data, dict):
+        return None
+    ctx = design_data.get("raw_rup_context") or ""
+    m = _BRAND_RE.search(ctx)
+    if not m:
+        return None
+    brand = m.group(1).strip().rstrip(".").strip()
+    return brand or None
+
+
+def _maybe_append_brand(description: str, category: str, brand: str | None) -> str:
+    """Append '(<Brand>)' to equipment-category descriptions when a
+    file-inferred brand is available and the description doesn't
+    already mention it. Non-destructive — drops back to the original
+    description if brand is None or the line isn't equipment."""
+    if not brand or category != "equipment":
+        return description
+    if brand.lower() in (description or "").lower():
+        return description
+    return f"{description} ({brand})"
+
+
 _EQUIPMENT_ESTIMATED_COSTS: dict[str, float] = {
     # Conservative industry estimates so equipment lines stop emitting
     # at $0 when neither the catalog SKU nor the SupplierInfo has a
@@ -630,7 +669,8 @@ def _get_markup_pct(category: str, profile: ClientProfile) -> float:
     return float(markup_map.get(category, 0.0))
 
 
-def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile) -> list:
+def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile,
+                                    inferred_brand: str | None = None) -> list:
     """Apply contractor pricing/markup to per-equipment catalog matches.
 
     Mirrors _format_rule_lines_for_bom (same shape downstream) but
@@ -673,6 +713,11 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
             if override.standard_name and override.standard_name.lower() in description.lower():
                 display_name = override.client_name or description
                 break
+        # Day-8 — overlay the file-inferred brand onto equipment
+        # descriptions when the catalog row didn't carry a manufacturer.
+        # Catalog manufacturer wins if present.
+        if not ml.get("manufacturer"):
+            display_name = _maybe_append_brand(display_name, category, inferred_brand)
 
         line = {
             "category":     category,
@@ -690,7 +735,7 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
             "supplier":     ml.get("supplier"),
             "section":      ml.get("section"),
             "phase":        ml.get("phase"),
-            "manufacturer": ml.get("manufacturer"),
+            "manufacturer": ml.get("manufacturer") or inferred_brand,
             "source":       "catalog_match",
             "confidence":   ml.get("confidence"),
         }
@@ -700,7 +745,8 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
     return out
 
 
-def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list:
+def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile,
+                               inferred_brand: str | None = None) -> list:
     """
     Shape rules-engine output (SKU-keyed dicts from materials_rules.
     generate_rule_lines) into the same line-item dict shape that
@@ -740,6 +786,9 @@ def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list
             if override.standard_name.lower() in description.lower():
                 display_name = override.client_name or description
                 break
+        # Day-8 — overlay the file-inferred brand onto rules-engine
+        # equipment descriptions ("AHU" → "AHU (Trane)").
+        display_name = _maybe_append_brand(display_name, category, inferred_brand)
 
         line = {
             "category":    category,
@@ -761,6 +810,10 @@ def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list
         }
         if is_estimated_cost:
             line["cost_is_estimate"] = True
+        # Surface inferred brand to the SPA + downstream comparators
+        # so the brand badge renders even on rules-engine lines.
+        if inferred_brand and category == "equipment":
+            line["manufacturer"] = inferred_brand
         out.append(line)
     return out
 

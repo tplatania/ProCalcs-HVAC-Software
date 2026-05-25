@@ -436,6 +436,33 @@ class TestPricingLogic:
         coil_bare = _get_unit_cost("Coil", "equipment", sample_profile)
         assert coil_bare > 0  # bare match also non-zero
 
+    def test_extract_inferred_brand_picks_up_parser_emission(self):
+        """Day-8 — the rules + catalog formatters re-read the brand
+        from raw_rup_context (the parser's emission). Confirm the
+        regex extracts it cleanly."""
+        from services.bom_service import _extract_inferred_brand
+        dd = {"raw_rup_context": (
+            "=== EQUIPMENT BRAND (inferred from file) ===\n"
+            "  Project favors brand: Trane. When emitting AHU lines..."
+        )}
+        assert _extract_inferred_brand(dd) == "Trane"
+
+    def test_extract_inferred_brand_returns_none_when_absent(self):
+        from services.bom_service import _extract_inferred_brand
+        assert _extract_inferred_brand({}) is None
+        assert _extract_inferred_brand({"raw_rup_context": "no brand here"}) is None
+        assert _extract_inferred_brand(None) is None
+
+    def test_maybe_append_brand_decorates_equipment(self):
+        from services.bom_service import _maybe_append_brand
+        assert _maybe_append_brand("AHU", "equipment", "Trane") == "AHU (Trane)"
+        # Idempotent — already-branded line not double-tagged
+        assert _maybe_append_brand("AHU (Trane)", "equipment", "Trane") == "AHU (Trane)"
+        # Non-equipment lines untouched
+        assert _maybe_append_brand("Foil tape", "consumable", "Trane") == "Foil tape"
+        # None brand untouched
+        assert _maybe_append_brand("AHU", "equipment", None) == "AHU"
+
     def test_equipment_estimate_only_for_equipment_category(self, sample_profile):
         """Don't apply the equipment cost estimates to other categories
         — a duct line that happens to mention "coil" shouldn't get
