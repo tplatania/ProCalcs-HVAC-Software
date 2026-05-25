@@ -703,6 +703,18 @@ def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list
         unit_cost   = float(rl.get("unit_cost") or 0.0)
         markup_pct  = _get_markup_pct(category, profile)
 
+        # Day-7 — rules-engine equipment lines (AHU / Condenser /
+        # Heat Kit) often come through with unit_cost=0 because the
+        # SKU catalog seed didn't populate default_unit_price for
+        # those rows. Apply the same estimated-cost fallback we use
+        # on AI-emitted equipment so Richard doesn't see $0.
+        is_estimated_cost = False
+        if unit_cost == 0.0 and category == "equipment":
+            fallback = _get_unit_cost(description, category, profile)
+            if fallback > 0:
+                unit_cost = fallback
+                is_estimated_cost = True
+
         raw_unit_price = unit_cost * (1 + markup_pct / 100)
         total_cost  = round(quantity * unit_cost, 2)
         unit_price  = round(raw_unit_price, 2)
@@ -715,7 +727,7 @@ def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list
                 display_name = override.client_name or description
                 break
 
-        out.append({
+        line = {
             "category":    category,
             "description": display_name,
             "quantity":    quantity,
@@ -732,7 +744,10 @@ def _format_rule_lines_for_bom(rule_lines: list, profile: ClientProfile) -> list
             "section":     rl.get("section"),
             "phase":       rl.get("phase"),
             "source":      "rules_engine",
-        })
+        }
+        if is_estimated_cost:
+            line["cost_is_estimate"] = True
+        out.append(line)
     return out
 
 

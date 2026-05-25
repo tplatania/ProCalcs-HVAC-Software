@@ -684,6 +684,19 @@ class TestParseDuctSystemHierarchy:
         assert (60, 80) not in sizes
         assert (100, 200) not in sizes
 
+    def test_extract_rectangular_duct_dims_excludes_height_3_artifacts(self):
+        """Day-7 follow-up — Wrightsoft UI layouts produce '14x3' /
+        '10x3' / '60x3' strings throughout the file. Height < 4 is
+        not a plausible residential duct dimension and is filtered
+        out wholesale."""
+        from utils.rup_parser import _extract_rectangular_duct_dims
+        text = ("14x3 10x3 60x3 12x10 ").encode("utf-16-le")
+        sizes = [(w, h) for (w, h), _ in _extract_rectangular_duct_dims(text)]
+        assert (12, 10) in sizes
+        assert (14, 3) not in sizes
+        assert (10, 3) not in sizes
+        assert (60, 3) not in sizes
+
     def test_extract_rectangular_duct_dims_empty_on_garbage_bytes(self):
         from utils.rup_parser import _extract_rectangular_duct_dims
         assert _extract_rectangular_duct_dims(b"\x00" * 1024) == []

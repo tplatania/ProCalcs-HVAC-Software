@@ -580,7 +580,11 @@ def _extract_rectangular_duct_dims(file_bytes: bytes) -> List[tuple]:
     found.
 
     Heuristic filters:
-      - 4 ≤ w ≤ 36 AND 3 ≤ h ≤ 30  (HVAC residential range)
+      - 4 ≤ w ≤ 36 AND 4 ≤ h ≤ 30  (HVAC residential range; bumped
+        height min from 3 to 4 on Day-7 — height=3 turned out to be
+        UI layout artifacts ("14x3" / "10x3") not real ducts, hit on
+        the Easy fixture's smaller binary where occurrence-count
+        filter alone wasn't enough)
       - drop the "14x3" / "10x9" / "60x3" page-header / layout
         artifacts that appear 100+ times each (a real duct size
         rarely exceeds 8-10 occurrences across one project)
@@ -593,7 +597,7 @@ def _extract_rectangular_duct_dims(file_bytes: bytes) -> List[tuple]:
     ctr: Counter = Counter()
     for w, h in _NXM_RE.findall(text):
         w, h = int(w), int(h)
-        if 4 <= w <= 36 and 3 <= h <= 30:
+        if 4 <= w <= 36 and 4 <= h <= 30:
             ctr[(w, h)] += 1
     # Drop artifacts that occur > 50 times — real duct sizes don't
     # repeat that much in a single project.
