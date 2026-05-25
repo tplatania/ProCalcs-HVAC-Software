@@ -649,6 +649,17 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
         unit_cost   = float(ml.get("unit_cost") or 0.0)
         markup_pct  = _get_markup_pct(category, profile)
 
+        # Day-7 — catalog_match equipment lines also fall back to the
+        # estimated-cost lookup when the catalog SKU has default_unit
+        # _price=0 (seed-data gap). Same fix already applied to the
+        # rules-engine + AI paths.
+        is_estimated_cost = False
+        if unit_cost == 0.0 and category == "equipment":
+            fallback = _get_unit_cost(description, category, profile)
+            if fallback > 0:
+                unit_cost = fallback
+                is_estimated_cost = True
+
         raw_unit_price = unit_cost * (1 + markup_pct / 100)
         total_cost  = round(quantity * unit_cost, 2)
         unit_price  = round(raw_unit_price, 2)
@@ -663,7 +674,7 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
                 display_name = override.client_name or description
                 break
 
-        out.append({
+        line = {
             "category":     category,
             "description":  display_name,
             "quantity":     quantity,
@@ -682,7 +693,10 @@ def _format_catalog_matches_for_bom(matched_lines: list, profile: ClientProfile)
             "manufacturer": ml.get("manufacturer"),
             "source":       "catalog_match",
             "confidence":   ml.get("confidence"),
-        })
+        }
+        if is_estimated_cost:
+            line["cost_is_estimate"] = True
+        out.append(line)
     return out
 
 
