@@ -62,6 +62,7 @@ class _Cache:
     mapped_parts: Optional[list[dict[str, Any]]] = None  # one row per (generic, variant)
     mapped_by_generic: Optional[dict[str, list[dict[str, Any]]]] = None  # index
     dfunit: Optional[list[dict[str, Any]]] = None
+    dfunit_by_model: Optional[dict[str, dict[str, Any]]] = None  # Model -> row
     source: str = "uninitialized"
 
 
@@ -137,15 +138,113 @@ def load_mapped_parts() -> list[dict[str, Any]]:
 
 
 def load_dfunit() -> list[dict[str, Any]]:
-    """Ductless / mini-split equipment library. 19 columns including
-    Manufacturer, Model, SysType, ClgCap (BTU), HtgCap (BTU), Series,
-    Width / Depth / Height / Weight, MaxPipeLen / MaxPipeHeight."""
+    """Ductless / mini-split / heat-pump equipment library. 19 columns:
+    Manufacturer (4-char), Model, SysType (H=heat pump / A=AC),
+    UnitType (OS=Outdoor Split, IW=Indoor Wall, IC=Indoor Ceiling,
+    OM=Outdoor Multi, ID=Indoor Duct, IA/IF/IU=various indoor styles),
+    ClgCap (BTU), HtgCap (BTU), Series, Width / Depth / Height / Weight,
+    MaxPipeLen / MaxPipeHeight.
+
+    Day-11 — also builds a by-Model index so lookup_dfunit_by_model()
+    is O(1)."""
     with _lock:
         if _cache.dfunit is None:
             rows = _read_csv_dict(_DATA_DIR / "DFUnit.csv")
             _cache.dfunit = rows
-            logger.info("Loaded %d Wrightsoft DFUnit (mini-split) entries", len(rows))
+            idx: dict[str, dict[str, Any]] = {}
+            for r in rows:
+                model = (r.get("Model") or "").strip()
+                if model:
+                    # Last wins on dupes (catalog has <5).
+                    idx[model] = r
+            _cache.dfunit_by_model = idx
+            logger.info(
+                "Loaded %d Wrightsoft DFUnit entries (%d distinct models)",
+                len(rows), len(idx),
+            )
     return _cache.dfunit
+
+
+def lookup_dfunit_by_model(model: str) -> Optional[dict[str, Any]]:
+    """Return the DFUnit row whose Model column matches exactly,
+    or None. Case-sensitive — Wrightsoft model numbers are mixed-case
+    and authoritative (e.g. 38MARBQ24AA3, not 38marbq24aa3)."""
+    if not model:
+        return None
+    load_dfunit()  # populates _cache.dfunit_by_model
+    return (_cache.dfunit_by_model or {}).get(model.strip())
+
+
+def lookup_dfunit_by_capacity(
+    *,
+    cooling_btu: Optional[float] = None,
+    heating_btu: Optional[float] = None,
+    manufacturer: Optional[str] = None,
+    sys_type: Optional[str] = None,
+    unit_type: Optional[str] = None,
+    tolerance_pct: float = 0.10,
+) -> list[dict[str, Any]]:
+    """Find DFUnit rows matching a capacity target within tolerance.
+
+    Filters in priority order:
+      manufacturer (4-char code, exact match) →
+      sys_type ('H' heat pump / 'A' AC, exact) →
+      unit_type ('OS'/'IW'/etc., exact) →
+      capacity (cooling or heating BTU within +/- tolerance_pct)
+
+    Sorted: smallest absolute capacity-delta first.
+
+    Returns [] when nothing matches.
+    """
+    rows = load_dfunit()
+    out = list(rows)
+
+    if manufacturer:
+        mfr = manufacturer.upper()
+        out = [r for r in out if (r.get("Manufacturer") or "").upper() == mfr]
+    if sys_type:
+        out = [r for r in out if (r.get("SysType") or "") == sys_type]
+    if unit_type:
+        out = [r for r in out if (r.get("UnitType") or "") == unit_type]
+
+    target = cooling_btu if cooling_btu is not None else heating_btu
+    target_col = "ClgCap" if cooling_btu is not None else "HtgCap"
+    if target:
+        def _delta(r):
+            try:
+                v = float(r.get(target_col) or 0)
+            except (TypeError, ValueError):
+                return float("inf")
+            return abs(v - target)
+        tol_band = target * tolerance_pct
+        out = [r for r in out if _delta(r) <= tol_band]
+        out.sort(key=_delta)
+
+    return out
+
+
+def dfunit_line_spec(row: dict[str, Any]) -> dict[str, Any]:
+    """Project a DFUnit row into a compact spec dict suitable for
+    surfacing as line-item metadata. Caller is responsible for
+    handling None (when no DFUnit match was found)."""
+    def _float(k):
+        try:
+            v = row.get(k)
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    return {
+        "manufacturer":   row.get("Manufacturer") or None,
+        "model":          row.get("Model") or None,
+        "sys_type":       row.get("SysType") or None,
+        "unit_type":      row.get("UnitType") or None,
+        "cooling_btu":    _float("ClgCap"),
+        "heating_btu":    _float("HtgCap"),
+        "width_in":       _float("Width"),
+        "depth_in":       _float("Depth"),
+        "height_in":      _float("Height"),
+        "weight_lb":      _float("Weight"),
+    }
 
 
 # ---------------------------------------------------------------------

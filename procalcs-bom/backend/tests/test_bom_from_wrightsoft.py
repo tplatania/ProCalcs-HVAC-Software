@@ -344,3 +344,132 @@ class TestParseCsv:
         csv = b"Item,Qty,Description\nPEX0750,not-a-number,a\n"
         rows = parse_wrightsoft_bom_rows(csv, filename="bom.csv")
         assert rows[0]["quantity"] == 0.0
+
+
+# ─── DFUnit equipment-library integration (Day-11) ──────────────────
+
+class TestDFUnitIntegration:
+    """When a Wrightsoft BOM line's generic_id matches a DFUnit
+    model number, the deterministic pipeline emits an equipment line
+    enriched with full unit specs from DFUnit.csv (capacity,
+    dimensions, weight, sys_type, unit_type)."""
+
+    def test_dfunit_match_emits_equipment_line_with_full_spec(self, minimal_profile):
+        # 38MARBQ24AA3 = Carrier 24,000 BTU outdoor heat-pump split
+        bom = build_bom_from_wrightsoft_lines(
+            lines=[{"generic_id": "38MARBQ24AA3", "quantity": 1}],
+            profile=minimal_profile,
+            job_id="dfunit-direct",
+        )
+        assert bom["item_count"] == 1
+        assert bom["wrightsoft_dfunit_item_count"] == 1
+        # DFUnit hits count as mapped too — overall mapped includes DFUnit
+        assert bom["wrightsoft_mapped_item_count"] == 1
+        line = bom["line_items"][0]
+        assert line["source"] == "wrightsoft_dfunit"
+        # Authoritative manufacturer + model from DFUnit row
+        assert line["manufacturer"] == "CARR"
+        assert line["sku"] == "38MARBQ24AA3"
+        assert line["category"] == "equipment"
+        # Spec dict attached for PDF / SPA display
+        spec = line["dfunit_spec"]
+        assert spec["cooling_btu"] == 24000.0
+        assert spec["heating_btu"] == 24000.0
+        assert spec["sys_type"] == "H"
+        assert spec["unit_type"] == "OS"
+        assert spec["weight_lb"] == 135.0
+        # Description should include capacity + unit-type label
+        assert "24,000 BTU" in line["description"]
+        assert "Heat Pump" in line["description"]
+        assert "Outdoor Split" in line["description"]
+        assert "Carrier 38MARBQ24AA3" in line["description"]
+
+    def test_dfunit_match_takes_precedence_over_generic_mapping(self, minimal_profile):
+        """If a generic_id ALSO has a mapped_parts row (unlikely but
+        possible), the DFUnit path wins because it gives authoritative
+        equipment data."""
+        bom = build_bom_from_wrightsoft_lines(
+            lines=[{"generic_id": "38MARBQ24AA3", "quantity": 1}],
+            profile=minimal_profile,
+            job_id="t",
+        )
+        # Even if some future mapped_parts row pointed at this model,
+        # the source remains wrightsoft_dfunit, not wrightsoft_mapped.
+        assert bom["line_items"][0]["source"] == "wrightsoft_dfunit"
+
+    def test_non_dfunit_generic_falls_through_to_mapped_parts(self, minimal_profile):
+        """PEX0750 is a parts catalog entry, not a DFUnit equipment.
+        Should not get the DFUnit treatment."""
+        bom = build_bom_from_wrightsoft_lines(
+            lines=[{"generic_id": "PEX0750", "quantity": 100}],
+            profile=minimal_profile,
+            job_id="t",
+        )
+        assert bom["line_items"][0]["source"] == "wrightsoft_mapped"
+        assert "dfunit_spec" not in bom["line_items"][0]
+        assert bom["wrightsoft_dfunit_item_count"] == 0
+
+    def test_dfunit_count_separates_from_total_mapped(self, minimal_profile):
+        """Mixed BOM: 1 DFUnit equipment + 2 parts. dfunit_count=1,
+        mapped_count=3 (DFUnit hits also count as mapped overall)."""
+        bom = build_bom_from_wrightsoft_lines(
+            lines=[
+                {"generic_id": "38MARBQ24AA3", "quantity": 1},
+                {"generic_id": "PEX0750", "quantity": 100},
+                {"generic_id": "BPERT1000", "quantity": 50},
+            ],
+            profile=minimal_profile,
+            job_id="t",
+        )
+        assert bom["wrightsoft_dfunit_item_count"] == 1
+        assert bom["wrightsoft_mapped_item_count"] == 3
+        assert bom["wrightsoft_unmapped_item_count"] == 0
+
+
+class TestDFUnitLookupHelpers:
+    def test_lookup_dfunit_by_model_exact_match(self):
+        from services.wrightsoft_catalog import lookup_dfunit_by_model
+        r = lookup_dfunit_by_model("38MARBQ24AA3")
+        assert r is not None
+        assert r["Manufacturer"] == "CARR"
+        assert r["ClgCap"] == "24000"
+
+    def test_lookup_dfunit_by_model_returns_none_for_unknown(self):
+        from services.wrightsoft_catalog import lookup_dfunit_by_model
+        assert lookup_dfunit_by_model("TOTALLY-FAKE-MODEL") is None
+        assert lookup_dfunit_by_model("") is None
+        assert lookup_dfunit_by_model(None) is None  # type: ignore
+
+    def test_lookup_dfunit_by_capacity_with_filters(self):
+        from services.wrightsoft_catalog import lookup_dfunit_by_capacity
+        hits = lookup_dfunit_by_capacity(
+            cooling_btu=24000,
+            manufacturer="MITS",
+            sys_type="H",
+            unit_type="OS",
+        )
+        assert len(hits) >= 1
+        for h in hits:
+            assert h["Manufacturer"] == "MITS"
+            assert h["SysType"] == "H"
+            assert h["UnitType"] == "OS"
+
+    def test_lookup_dfunit_by_capacity_tolerance(self):
+        """22,400 BTU returns within 10% of 24,000 BTU target."""
+        from services.wrightsoft_catalog import lookup_dfunit_by_capacity
+        hits = lookup_dfunit_by_capacity(
+            cooling_btu=24000, manufacturer="MITS", tolerance_pct=0.10,
+        )
+        caps = [int(h["ClgCap"]) for h in hits]
+        # All within 10% tolerance band
+        assert all(21600 <= c <= 26400 for c in caps), caps
+
+    def test_dfunit_line_spec_extracts_numeric_fields(self):
+        from services.wrightsoft_catalog import lookup_dfunit_by_model, dfunit_line_spec
+        r = lookup_dfunit_by_model("38MARBQ24AA3")
+        spec = dfunit_line_spec(r)
+        assert spec["manufacturer"] == "CARR"
+        assert spec["cooling_btu"] == 24000.0
+        assert spec["weight_lb"] == 135.0
+        assert spec["sys_type"] == "H"
+        assert spec["unit_type"] == "OS"

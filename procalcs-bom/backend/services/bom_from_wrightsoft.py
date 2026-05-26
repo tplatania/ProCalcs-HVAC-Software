@@ -92,6 +92,7 @@ def build_bom_from_wrightsoft_lines(
     line_items: list[dict[str, Any]] = []
     mapped_count = 0
     unmapped_count = 0
+    dfunit_count = 0
 
     for raw in lines:
         gen_id = (raw.get("generic_id") or "").strip()
@@ -105,6 +106,15 @@ def build_bom_from_wrightsoft_lines(
             # Skip zero-quantity rows. Wrightsoft sometimes outputs
             # placeholder rows; emitting them as $0 BOM lines is noise.
             continue
+
+        # Day-11 — DFUnit equipment-spec lookup. Wrightsoft BOMs
+        # sometimes reference DFUnit model numbers directly (ductless
+        # / heat-pump units don't go through the parts catalog —
+        # they're listed by Manufacturer + Model). If the generic_id
+        # IS a DFUnit Model, we get the full unit spec for free:
+        # manufacturer, capacity (BTU), dimensions, weight.
+        dfunit_row = wsc.lookup_dfunit_by_model(gen_id)
+        dfunit_spec = wsc.dfunit_line_spec(dfunit_row) if dfunit_row else None
 
         # Look up the contractor's manufacturer SKU
         sku_matches = wsc.lookup_skus_for_generic(gen_id, supplier_pref)
@@ -121,7 +131,34 @@ def build_bom_from_wrightsoft_lines(
         section = wsc.section_for_generic(gen_id) or wsc.SECTION_OTHER
         category = _category_to_line_category(catalog_row.get("Category"))
 
-        if sku_matches:
+        if dfunit_spec:
+            # DFUnit direct match — authoritative manufacturer + model.
+            # This path is used for ductless / heat-pump units that
+            # Wrightsoft lists by model number rather than generic ID.
+            # Equipment category is implied; section is Equipment.
+            mapped_count += 1
+            dfunit_count += 1
+            # Description prefers a more informative composed string
+            # over the raw catalog description when we have spec data.
+            desc_with_spec = _compose_dfunit_description(description, dfunit_spec)
+            line = _priced_line(
+                generic_id=gen_id,
+                description=desc_with_spec,
+                quantity=quantity,
+                unit=unit or "EA",
+                section=wsc.SECTION_EQUIPMENT,
+                category="equipment",
+                profile=profile,
+                sku=dfunit_spec["model"],
+                manufacturer=dfunit_spec["manufacturer"],
+                source="wrightsoft_dfunit",
+                get_unit_cost=_get_unit_cost,
+                get_markup_pct=_get_markup_pct,
+            )
+            # Attach the spec dict so PDF / SPA can display capacity,
+            # dimensions, weight without re-looking up DFUnit downstream.
+            line["dfunit_spec"] = dfunit_spec
+        elif sku_matches:
             mapped_count += 1
             supplier_code, mfr_partnum = sku_matches[0]
             line = _priced_line(
@@ -173,6 +210,11 @@ def build_bom_from_wrightsoft_lines(
         # surfaces them without special casing.
         "wrightsoft_mapped_item_count":   mapped_count,
         "wrightsoft_unmapped_item_count": unmapped_count,
+        # Day-11 — how many of the mapped lines came from DFUnit
+        # (authoritative equipment-library hits with full spec data)
+        # vs the generic-parts mapping. Lets the SPA show e.g.
+        # "12 mapped (3 from equipment library)".
+        "wrightsoft_dfunit_item_count":   dfunit_count,
         "catalog_match_item_count":       0,
         "rules_engine_item_count":        0,
         "ai_item_count":                  0,
@@ -325,6 +367,62 @@ def _compute_totals(line_items: list[dict[str, Any]]) -> dict[str, float]:
 def _utcnow_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
+
+
+def _compose_dfunit_description(fallback: str, spec: dict[str, Any]) -> str:
+    """Build a human-readable description that incorporates the unit
+    capacity + type when DFUnit spec data is available. Keeps the
+    caller-provided description as a fallback when the spec is sparse.
+
+    Examples:
+        "Carrier 38MARBQ24AA3 — Heat Pump, Outdoor Split, 24,000 BTU"
+        "Mitsubishi MUZ-GL18NA-U1 — Heat Pump, Outdoor Multi, 18,000 BTU"
+    """
+    mfr = spec.get("manufacturer") or ""
+    model = spec.get("model") or ""
+    parts: list[str] = []
+    if mfr and model:
+        parts.append(f"{_pretty_manufacturer(mfr)} {model}")
+    elif model:
+        parts.append(model)
+    bits: list[str] = []
+    sys_type = spec.get("sys_type")
+    if sys_type == "H": bits.append("Heat Pump")
+    elif sys_type == "A": bits.append("AC")
+    unit_type_label = _UNIT_TYPE_LABEL.get(spec.get("unit_type") or "")
+    if unit_type_label: bits.append(unit_type_label)
+    cap = spec.get("cooling_btu") or spec.get("heating_btu")
+    if cap: bits.append(f"{int(cap):,} BTU")
+    if bits and parts:
+        return f"{parts[0]} — {', '.join(bits)}"
+    if parts:
+        return parts[0]
+    return fallback
+
+
+_UNIT_TYPE_LABEL: dict[str, str] = {
+    "OS": "Outdoor Split",
+    "OM": "Outdoor Multi",
+    "IW": "Indoor Wall",
+    "IC": "Indoor Ceiling",
+    "ID": "Indoor Duct",
+    "IF": "Indoor Floor",
+    "IA": "Indoor Air-Handler",
+    "IU": "Indoor Universal",
+}
+
+
+# Mirrors the substring-tolerant supplier matching in _supplier_pref_for;
+# used here to turn a 4-char code (CARR, MITS, DAIK) into a human name
+# for display.
+_MFR_DISPLAY: dict[str, str] = {
+    "CARR": "Carrier", "MITS": "Mitsubishi", "DAIK": "Daikin",
+    "FUJI": "Fujitsu", "GREE": "Gree",        "LGEL": "LG",
+    "MRCL": "MrCool",  "WSF":  "Wrightsoft",
+}
+
+def _pretty_manufacturer(code: str) -> str:
+    return _MFR_DISPLAY.get(code.upper(), code)
 
 
 # ─── CSV / XLS ingestion (Day-9 endpoint input parser) ──────────────
