@@ -28,6 +28,66 @@ bom_bp = Blueprint('bom', __name__)
 MAX_RUP_BYTES = 20 * 1024 * 1024
 
 
+def _catalog_xref_for_binary(file_bytes: bytes) -> dict:
+    """Day-10 — count how many Wrightsoft catalog generic IDs appear
+    in the .rup binary text. Empirically always near-zero because
+    Wrightsoft computes its BOM at output time rather than storing it
+    in the file, but the explicit number is what tells designers
+    why we need a separate Wrightsoft BOM export to be deterministic.
+
+    Returns:
+        {
+          "bom_is_in_binary": bool      — True iff a meaningful number
+                                          of catalog IDs were found
+          "generic_ids_in_catalog": int — denominator (always 3014 today)
+          "generic_ids_found": int      — how many catalog IDs appear in
+                                          the file's text
+          "found_sample": list[str]     — first 10 hits, for the SPA
+                                          to show as evidence
+          "recommendation": str         — what the designer should do
+        }
+    """
+    try:
+        text = file_bytes.decode("utf-16-le", errors="replace")
+    except Exception:
+        text = ""
+    try:
+        from services.wrightsoft_catalog import load_mapped_parts, _cache
+        load_mapped_parts()
+        catalog_generics = set((_cache.mapped_by_generic or {}).keys())
+    except Exception as exc:
+        logger.warning("catalog_xref: could not load mapped_parts: %s", exc)
+        catalog_generics = set()
+
+    found = [g for g in catalog_generics if g in text]
+    # We treat "BOM is in binary" as needing > 25% catalog coverage.
+    # In practice we see 0-5 hits out of 3014 (<0.2%) so this always
+    # resolves False today — but the threshold leaves room for a
+    # future Wrightsoft variant that does embed the BOM.
+    is_in_binary = len(found) > (len(catalog_generics) * 0.25)
+    if is_in_binary:
+        recommendation = (
+            "Catalog IDs detected in the binary — the deterministic "
+            "pipeline can run directly from this file via the new "
+            "Wrightsoft BOM endpoint."
+        )
+    else:
+        recommendation = (
+            "This .rup binary does not contain the project's BOM. "
+            "Wrightsoft computes the BOM at output time. For a "
+            "deterministic result, export the BOM in Wrightsoft "
+            "(Reports → Bill of Materials) and upload via /api/v1/bom/"
+            "from-wrightsoft instead of /generate."
+        )
+    return {
+        "bom_is_in_binary":        is_in_binary,
+        "generic_ids_in_catalog":  len(catalog_generics),
+        "generic_ids_found":       len(found),
+        "found_sample":            sorted(found)[:10],
+        "recommendation":          recommendation,
+    }
+
+
 # ===============================
 # POST — Generate BOM
 # ===============================
@@ -406,6 +466,16 @@ def rup_inspect():
 
         label_distribution = Counter(l for l in ec_labels if l)
 
+        # Day-10 — Wrightsoft-catalog cross-reference. Verifies whether
+        # the project's BOM is reachable from the .rup binary alone, or
+        # whether the deterministic pipeline needs Wrightsoft's own BOM
+        # export. Empirically this is always "0/3014 found" because
+        # Wrightsoft computes the BOM at print/report time rather than
+        # storing it in the project file — but the explicit signal is
+        # the honest answer to "why aren't we just reading the BOM out
+        # of the file?" (Tom's Day-9 question).
+        catalog_xref = _catalog_xref_for_binary(file_bytes)
+
         return jsonify({
             "success": True,
             "data": {
@@ -417,6 +487,10 @@ def rup_inspect():
                     "label_distribution": dict(label_distribution),
                 },
                 "rows": rows,
+                # Deterministic-pipeline signal. False on every Wrightsoft
+                # .rup we've sampled — the BOM is derived at output time,
+                # not stored.
+                "catalog_xref": catalog_xref,
             },
             "error": None,
         }), 200
