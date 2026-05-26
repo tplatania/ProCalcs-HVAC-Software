@@ -418,3 +418,109 @@ def cache_summary() -> dict[str, Any]:
         ),
         "dfunit":         len(_cache.dfunit) if _cache.dfunit else 0,
     }
+
+
+# ---------------------------------------------------------------------
+# Day-11 — coverage diagnostic: what fraction of the catalog has at
+# least one supplier mapping, broken down per category + per supplier.
+# Powers the SPA "Catalog Coverage" diagnostic page so Richard's team
+# can see at a glance which categories have the worst coverage and
+# prioritize what to add to mapped_parts.csv next.
+# ---------------------------------------------------------------------
+
+def coverage_report() -> dict[str, Any]:
+    """Build a coverage report from the bundled CSVs.
+
+    Per-category breakdown:
+        category code, human description, total generics in category,
+        generics with at least one supplier mapping, coverage %,
+        per-supplier mapping count.
+
+    Per-supplier roll-up:
+        supplier code, mfr name, distinct generics covered.
+
+    Totals at the top so the SPA can show a single-number headline.
+    """
+    cats = load_categories()
+    mfrs = load_manufacturers()
+    generics = load_generic_parts()
+    mapped = load_mapped_parts()
+    mapped_by_generic = _cache.mapped_by_generic or {}
+
+    # Index generic IDs by category
+    generics_by_cat: dict[str, list[str]] = defaultdict(list)
+    for gid, row in generics.items():
+        cat = (row.get("Category") or "").strip() or "_UNCATEGORIZED"
+        generics_by_cat[cat].append(gid)
+
+    # Per-supplier: distinct generics covered
+    supplier_generics: dict[str, set[str]] = defaultdict(set)
+    for m in mapped:
+        src = (m.get("preferred_source") or "").strip()
+        gid = (m.get("generic_item") or "").strip()
+        if src and gid:
+            supplier_generics[src].add(gid)
+
+    # Per-category breakdown
+    categories: list[dict[str, Any]] = []
+    for cat_code, cat_generics in generics_by_cat.items():
+        total_in_cat = len(cat_generics)
+        covered = sum(1 for gid in cat_generics if gid in mapped_by_generic)
+        coverage_pct = round(100.0 * covered / total_in_cat, 1) if total_in_cat else 0.0
+
+        # Per-supplier counts within this category
+        per_supplier: dict[str, int] = defaultdict(int)
+        for gid in cat_generics:
+            for m in mapped_by_generic.get(gid, []):
+                src = (m.get("preferred_source") or "").strip()
+                if src:
+                    per_supplier[src] += 1
+        suppliers = [
+            {
+                "supplier_code": s,
+                "name":          (mfrs.get(s) or {}).get("Name") or s,
+                "mapped_count":  n,
+            }
+            for s, n in sorted(per_supplier.items(), key=lambda kv: -kv[1])
+        ]
+
+        categories.append({
+            "category":         cat_code,
+            "description":      cats.get(cat_code, "(uncategorized)"),
+            "total_generics":   total_in_cat,
+            "covered_generics": covered,
+            "coverage_pct":     coverage_pct,
+            "suppliers":        suppliers,
+        })
+
+    # Sort categories: worst coverage first (most actionable for Richard)
+    categories.sort(key=lambda c: (c["coverage_pct"], -c["total_generics"]))
+
+    suppliers_rollup = [
+        {
+            "supplier_code":  s,
+            "name":           (mfrs.get(s) or {}).get("Name") or s,
+            "distinct_generics_covered": len(gids),
+        }
+        for s, gids in sorted(
+            supplier_generics.items(),
+            key=lambda kv: -len(kv[1]),
+        )
+    ]
+
+    total_generics = len(generics)
+    total_covered  = len(mapped_by_generic)
+    overall_pct = round(100.0 * total_covered / total_generics, 1) if total_generics else 0.0
+
+    return {
+        "totals": {
+            "generic_parts":           total_generics,
+            "covered_generics":        total_covered,
+            "overall_coverage_pct":    overall_pct,
+            "mapped_supplier_variants": len(mapped),
+            "suppliers":               len(supplier_generics),
+            "dfunit_models":           len(_cache.dfunit_by_model or {}),
+        },
+        "categories":        categories,
+        "suppliers":         suppliers_rollup,
+    }

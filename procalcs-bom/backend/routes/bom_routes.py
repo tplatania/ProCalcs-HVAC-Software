@@ -630,3 +630,28 @@ def bom_from_wrightsoft():
         logger.error("bom_from_wrightsoft failed: %s", e, exc_info=True)
         return jsonify({"success": False, "data": None,
                         "error": "Failed to build BOM from Wrightsoft input."}), 500
+
+
+# ===============================
+# GET — Catalog coverage diagnostic (Day-11)
+# ===============================
+#
+# Returns the coverage report from services.wrightsoft_catalog so the
+# SPA can render a Catalog Coverage page. Lets Richard's team see at
+# a glance which Wrightsoft categories have the worst supplier-mapping
+# coverage — drives the prioritization of what to add to
+# mapped_parts.csv next.
+
+@bom_bp.route('/catalog-coverage', methods=['GET'])
+def catalog_coverage():
+    """Per-category + per-supplier coverage of Tom's bundled
+    mapped_parts.csv. No filters; the report itself is cheap (<10ms
+    on ~3,000 generics) and the SPA does any client-side filtering."""
+    try:
+        from services.wrightsoft_catalog import coverage_report
+        report = coverage_report()
+        return jsonify({"success": True, "data": report, "error": None}), 200
+    except Exception as exc:
+        logger.error("catalog_coverage failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to build catalog coverage report"}), 500
