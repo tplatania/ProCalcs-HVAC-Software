@@ -12,10 +12,21 @@ from __future__ import annotations
 
 import os
 import sys
+from unittest.mock import MagicMock
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+# create_app() (used by the coverage-endpoint test) imports
+# pdf_service → weasyprint. Stub locally — global conftest stubbing
+# would break test_pdf_service.py's pytest.importorskip("weasyprint").
+if "weasyprint" not in sys.modules:
+    try:
+        import weasyprint  # noqa: F401
+    except Exception:  # noqa: BLE001
+        _w = MagicMock(); _w.HTML = MagicMock(); _w.CSS = MagicMock()
+        sys.modules["weasyprint"] = _w
 
 from models.client_profile import (
     ClientProfile, SupplierInfo, MarkupTiers, BrandPreferences,
@@ -473,3 +484,86 @@ class TestDFUnitLookupHelpers:
         assert spec["weight_lb"] == 135.0
         assert spec["sys_type"] == "H"
         assert spec["unit_type"] == "OS"
+
+
+# ─── Catalog coverage diagnostic (Day-11 Feature 3) ────────────────
+
+class TestCoverageReport:
+    def test_report_shape(self):
+        from services.wrightsoft_catalog import coverage_report
+        r = coverage_report()
+        # Top-level totals
+        for key in ("generic_parts", "covered_generics",
+                    "overall_coverage_pct", "mapped_supplier_variants",
+                    "suppliers", "dfunit_models"):
+            assert key in r["totals"]
+        assert isinstance(r["categories"], list)
+        assert isinstance(r["suppliers"], list)
+
+    def test_totals_match_known_catalog(self):
+        from services.wrightsoft_catalog import coverage_report
+        r = coverage_report()
+        t = r["totals"]
+        # Bundled Tom catalog: 3,178 generic parts, 3,014 distinct
+        # generics covered, 4,112 supplier variants, 963 DFUnit models
+        assert t["generic_parts"] >= 3000
+        assert t["covered_generics"] >= 2900
+        assert t["mapped_supplier_variants"] >= 4000
+        assert t["dfunit_models"] >= 900
+        # Overall coverage is ~95% of distinct generics
+        assert t["overall_coverage_pct"] >= 90.0
+
+    def test_categories_sorted_worst_coverage_first(self):
+        """The category list is meant to drive prioritization — worst
+        coverage should land at the top so Richard sees what to fix
+        first."""
+        from services.wrightsoft_catalog import coverage_report
+        r = coverage_report()
+        cats = r["categories"]
+        if len(cats) >= 2:
+            for i in range(len(cats) - 1):
+                a = cats[i]["coverage_pct"]
+                b = cats[i + 1]["coverage_pct"]
+                assert a <= b, f"Categories out of order at index {i}: {a} > {b}"
+
+    def test_each_category_has_supplier_breakdown(self):
+        from services.wrightsoft_catalog import coverage_report
+        r = coverage_report()
+        # Find a category that DOES have suppliers and check shape
+        non_empty = [c for c in r["categories"] if c["suppliers"]]
+        assert non_empty, "Expected at least one category with supplier mappings"
+        sup = non_empty[0]["suppliers"][0]
+        assert "supplier_code" in sup
+        assert "name" in sup
+        assert "mapped_count" in sup
+        assert sup["mapped_count"] > 0
+
+    def test_supplier_rollup_sorted_by_distinct_generics(self):
+        from services.wrightsoft_catalog import coverage_report
+        r = coverage_report()
+        ss = r["suppliers"]
+        # Top supplier (WSF per the actual bundled catalog) should have
+        # the most distinct generics covered
+        if len(ss) >= 2:
+            for i in range(len(ss) - 1):
+                a = ss[i]["distinct_generics_covered"]
+                b = ss[i + 1]["distinct_generics_covered"]
+                assert a >= b, f"Suppliers out of order: {a} < {b}"
+
+
+class TestCoverageEndpoint:
+    def test_endpoint_returns_report(self):
+        import os
+        os.environ.setdefault("ANTHROPIC_API_KEY", "dev-test")
+        os.environ.setdefault("FIRESTORE_PROJECT_ID", "dev-test")
+        os.environ.setdefault("SERVICE_SHARED_SECRET", "")
+        from app import create_app
+        client = create_app().test_client()
+
+        resp = client.get("/api/v1/bom/catalog-coverage")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["success"] is True
+        assert "totals" in body["data"]
+        assert "categories" in body["data"]
+        assert "suppliers" in body["data"]

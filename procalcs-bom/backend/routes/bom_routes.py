@@ -13,6 +13,7 @@ from services.bom_from_wrightsoft import (
     parse_wrightsoft_bom_rows,
 )
 from services.pdf_service import render_bom_pdf
+from services.bom_xls_service import render_bom_xlsx
 from services.materials_rules import generate_rule_lines, compute_scope, summarize_scope
 from services.profile_service import get_profile_by_id
 from models.client_profile import ClientProfile
@@ -304,6 +305,54 @@ def render_pdf():
             "success": False,
             "data": None,
             "error": "PDF render failed. Please try again.",
+        }), 500
+
+
+# ===============================
+# POST — Render BOM → XLSX
+# ===============================
+
+@bom_bp.route('/render-xls', methods=['POST'])
+def render_xls():
+    """
+    Render an already-generated BOM dict into an .xlsx workbook.
+
+    Input: the BOM response object from /generate or /from-wrightsoft
+    wrapped in {"bom": ...}.
+    Output: application/vnd.openxmlformats... bytes with a suggested
+    filename. Same shape contract as /render-pdf — no AI call,
+    deterministic, ~100ms server-side.
+
+    Designers paste the resulting sheet's SKU + qty columns directly
+    into supplier ordering portals, so the format prioritizes a clean
+    section grouping with per-section subtotals over decorative
+    styling.
+    """
+    try:
+        body = request.get_json(silent=True) or {}
+        bom = body.get('bom')
+        if not isinstance(bom, dict) or not bom.get('line_items'):
+            return jsonify({
+                "success": False,
+                "data": None,
+                "error": "Request body must be {\"bom\": <BomResponse with line_items>}.",
+            }), 400
+
+        xlsx_bytes = render_bom_xlsx(bom)
+        filename = f"{(bom.get('job_id') or 'bom').replace('/', '-')}.xlsx"
+
+        return Response(
+            xlsx_bytes,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+
+    except Exception as e:
+        logger.error("render_xls failed: %s", e, exc_info=True)
+        return jsonify({
+            "success": False,
+            "data": None,
+            "error": "XLSX render failed. Please try again.",
         }), 500
 
 
