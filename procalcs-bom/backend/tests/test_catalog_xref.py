@@ -42,3 +42,38 @@ class TestCatalogXref:
         data = ids * 10  # many hits but bounded distinct count
         x = _catalog_xref_for_binary(data)
         assert len(x["found_sample"]) <= 10
+
+
+# ─── /parse-rup now bundles the xref (Day-10 follow-up) ─────────────
+
+class TestParseRupBundlesXref:
+    """The BOM Engine SPA depends on parse-rup returning catalog_xref
+    so it can route to the deterministic pipeline before kicking off
+    AI estimation. Lock the contract here."""
+
+    def _make_minimal_rup(self) -> bytes:
+        """Synthetic blob that satisfies the .WSrsu.WSF magic + has
+        enough zero-bytes padding that parse_rup_bytes doesn't blow
+        up on a too-short buffer."""
+        magic = ".WSrsu.WSF.0004.APP=Test".encode("utf-16-le")
+        return magic + b"\x00" * 4096
+
+    def test_parse_rup_response_includes_catalog_xref(self):
+        import io
+        from app import create_app
+        app = create_app()
+        client = app.test_client()
+
+        resp = client.post(
+            "/api/v1/bom/parse-rup",
+            data={"file": (io.BytesIO(self._make_minimal_rup()), "smoke.rup")},
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        assert "catalog_xref" in data
+        xref = data["catalog_xref"]
+        assert xref["bom_is_in_binary"] is False
+        assert xref["generic_ids_found"] == 0
+        assert ("from-wrightsoft" in xref["recommendation"]
+                or "Bill of Materials" in xref["recommendation"])

@@ -236,6 +236,17 @@ def parse_rup():
         logger.info("Parsing .rup upload: %s (%d bytes)", source_name, len(file_bytes))
         design_data = parse_rup_bytes(file_bytes, source_name=source_name)
 
+        # Day-10 — attach the catalog cross-reference verdict so the
+        # SPA's BOM Engine page can nudge the user to the deterministic
+        # Wrightsoft BOM upload BEFORE running AI estimation. One round
+        # trip beats two; the xref is cheap (one set membership check
+        # per generic, ~3,000 of them, < 5ms on a typical file).
+        try:
+            design_data["catalog_xref"] = _catalog_xref_for_binary(file_bytes)
+        except Exception as exc:  # noqa: BLE001
+            # Non-fatal — log + drop the key. Parse-rup still succeeds.
+            logger.warning("parse-rup catalog_xref failed: %s", exc)
+
         return jsonify({
             "success": True,
             "data": design_data,
