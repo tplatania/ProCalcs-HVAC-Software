@@ -704,3 +704,251 @@ def catalog_coverage():
         logger.error("catalog_coverage failed: %s", exc, exc_info=True)
         return jsonify({"success": False, "data": None,
                         "error": "Failed to build catalog coverage report"}), 500
+
+
+# ===============================
+# GET — DFUnit equipment library browser (Day-12)
+# ===============================
+#
+# Browse / filter the 963-row DFUnit equipment catalog Tom bundled in
+# his Wrightsoft handoff (ductless heads, mini-splits, heat pumps).
+# Used by the SPA DFUnit Explorer page so designers can poke through
+# the equipment library without having to download the CSV.
+#
+# Read-only — DFUnit.csv ships with the app, not user-editable.
+
+@bom_bp.route('/dfunit', methods=['GET'])
+def dfunit_browse():
+    """List DFUnit rows with optional filters.
+
+    Query params:
+        manufacturer   4-char code (CARR, MITS, DAIK, …) — exact
+        sys_type       'H' (heat pump) or 'A' (AC) — exact
+        unit_type      OS / IW / IC / OM / ID / IA / IF / IU — exact
+        q              free-text — substring match on Model / Series
+        min_clg_btu    cooling capacity floor (BTU)
+        max_clg_btu    cooling capacity ceiling (BTU)
+        min_htg_btu    heating capacity floor (BTU)
+        max_htg_btu    heating capacity ceiling (BTU)
+        limit          int, default 200, max 1000
+
+    Returns: {
+        "items":    [<projected DFUnit spec dict>],
+        "total":    int,            # matched before limit
+        "returned": int,            # length of items
+        "facets":   {               # for SPA filter dropdowns
+            "manufacturers": [str],
+            "unit_types":    [str],
+            "sys_types":     [str],
+        }
+    }
+    """
+    try:
+        from services.wrightsoft_catalog import load_dfunit, dfunit_line_spec
+
+        rows = load_dfunit()
+
+        manufacturer = (request.args.get('manufacturer') or '').strip().upper()
+        sys_type     = (request.args.get('sys_type')     or '').strip()
+        unit_type    = (request.args.get('unit_type')    or '').strip()
+        q            = (request.args.get('q')            or '').strip().lower()
+
+        def _opt_float(name: str):
+            v = request.args.get(name)
+            if v in (None, ''):
+                return None
+            try:
+                return float(v)
+            except ValueError:
+                return None
+
+        min_clg = _opt_float('min_clg_btu')
+        max_clg = _opt_float('max_clg_btu')
+        min_htg = _opt_float('min_htg_btu')
+        max_htg = _opt_float('max_htg_btu')
+
+        try:
+            limit = int(request.args.get('limit') or '200')
+        except ValueError:
+            limit = 200
+        limit = max(1, min(limit, 1000))
+
+        def _row_float(r, k):
+            try:
+                v = r.get(k)
+                return float(v) if v not in (None, '') else None
+            except (TypeError, ValueError):
+                return None
+
+        def _keep(r):
+            if manufacturer and (r.get('Manufacturer') or '').upper() != manufacturer:
+                return False
+            if sys_type and (r.get('SysType') or '') != sys_type:
+                return False
+            if unit_type and (r.get('UnitType') or '') != unit_type:
+                return False
+            if q:
+                hay = ' '.join([
+                    str(r.get('Model') or ''),
+                    str(r.get('Series') or ''),
+                ]).lower()
+                if q not in hay:
+                    return False
+            clg = _row_float(r, 'ClgCap')
+            htg = _row_float(r, 'HtgCap')
+            if min_clg is not None and (clg is None or clg < min_clg):
+                return False
+            if max_clg is not None and (clg is None or clg > max_clg):
+                return False
+            if min_htg is not None and (htg is None or htg < min_htg):
+                return False
+            if max_htg is not None and (htg is None or htg > max_htg):
+                return False
+            return True
+
+        matched = [r for r in rows if _keep(r)]
+        total = len(matched)
+        items = [
+            # Include the model + series alongside the projected spec
+            # so the SPA table can render them in their own columns.
+            {
+                **dfunit_line_spec(r),
+                "series": r.get("Series") or None,
+            }
+            for r in matched[:limit]
+        ]
+
+        # Facets — derived from the full (unfiltered) catalog so the
+        # SPA's dropdowns are stable regardless of current filter state.
+        manufacturers = sorted({(r.get('Manufacturer') or '').strip()
+                                for r in rows if (r.get('Manufacturer') or '').strip()})
+        unit_types    = sorted({(r.get('UnitType') or '').strip()
+                                for r in rows if (r.get('UnitType') or '').strip()})
+        sys_types     = sorted({(r.get('SysType') or '').strip()
+                                for r in rows if (r.get('SysType') or '').strip()})
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "items":    items,
+                "total":    total,
+                "returned": len(items),
+                "facets": {
+                    "manufacturers": manufacturers,
+                    "unit_types":    unit_types,
+                    "sys_types":     sys_types,
+                },
+            },
+            "error": None,
+        }), 200
+    except Exception as exc:
+        logger.error("dfunit_browse failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to load DFUnit catalog"}), 500
+
+
+# ===============================
+# GET — Wrightsoft mapping browser (Day-12)
+# ===============================
+#
+# Search mapped_parts.csv directly. Lets reviewers verify what the
+# deterministic pipeline would emit for a given generic_id, or which
+# generics a particular supplier covers, without having to run a
+# full BOM through /from-wrightsoft.
+
+@bom_bp.route('/mappings', methods=['GET'])
+def mappings_browse():
+    """List mapped_parts.csv rows with optional filters.
+
+    Query params:
+        generic_id   exact match (case-insensitive)
+        supplier     4-char source code (WSF, CARR, …) — exact
+        q            free-text — substring on generic_id / description /
+                     manufacturer_partnum / category
+        category     exact Wrightsoft category code (DSRND, RHALL, …)
+        limit        int, default 200, max 2000
+
+    Returns: { "items": [...], "total": int, "returned": int,
+               "facets": {"suppliers": [str], "categories": [str]} }
+    """
+    try:
+        from services.wrightsoft_catalog import (
+            load_mapped_parts, load_generic_parts, category_for_generic,
+        )
+
+        rows = load_mapped_parts()
+        generics = load_generic_parts()
+
+        generic_id = (request.args.get('generic_id') or '').strip().upper()
+        supplier   = (request.args.get('supplier')   or '').strip().upper()
+        category   = (request.args.get('category')   or '').strip().upper()
+        q          = (request.args.get('q')          or '').strip().lower()
+
+        try:
+            limit = int(request.args.get('limit') or '200')
+        except ValueError:
+            limit = 200
+        limit = max(1, min(limit, 2000))
+
+        def _keep(r):
+            # mapped_parts.csv column is `generic_item`, not generic_id.
+            gid_raw = r.get('generic_item') or ''
+            gid = gid_raw.upper()
+            if generic_id and gid != generic_id:
+                return False
+            if supplier and (r.get('preferred_source') or '').upper() != supplier:
+                return False
+            if category:
+                cat = (category_for_generic(gid_raw) or '').upper()
+                if cat != category:
+                    return False
+            if q:
+                hay = ' '.join([
+                    gid,
+                    str(r.get('manufacturer_partnum') or ''),
+                    str(generics.get(gid_raw, {}).get('description') or ''),
+                ]).lower()
+                if q not in hay:
+                    return False
+            return True
+
+        matched = [r for r in rows if _keep(r)]
+        total = len(matched)
+
+        items = []
+        for r in matched[:limit]:
+            gid_raw = r.get('generic_item') or ''
+            items.append({
+                "generic_id":           gid_raw,
+                "description":          generics.get(gid_raw, {}).get('description'),
+                "category":             category_for_generic(gid_raw),
+                "supplier":             r.get('preferred_source'),
+                "manufacturer_partnum": r.get('manufacturer_partnum'),
+                "quantity_variant":     r.get('quantity_variant'),
+            })
+
+        # Facets derived from the full catalog so dropdowns are stable.
+        suppliers = sorted({(r.get('preferred_source') or '').strip()
+                            for r in rows if (r.get('preferred_source') or '').strip()})
+        categories = sorted({
+            (category_for_generic(r.get('generic_item') or '') or '').strip()
+            for r in rows
+        } - {''})
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "items":    items,
+                "total":    total,
+                "returned": len(items),
+                "facets": {
+                    "suppliers":  suppliers,
+                    "categories": categories,
+                },
+            },
+            "error": None,
+        }), 200
+    except Exception as exc:
+        logger.error("mappings_browse failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to load mappings"}), 500
