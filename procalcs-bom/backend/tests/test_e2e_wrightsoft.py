@@ -238,6 +238,77 @@ def test_e2e_parser_tolerates_header_aliases(wsf_profile):
     assert float(lines[0]["quantity"]) == 100.0
 
 
+def test_e2e_passthrough_uses_wrightsoft_src_column(wsf_profile):
+    """Real Wrightsoft BOMs include parts that aren't in the bundled
+    mapping catalog (Goodman / Broan equipment SKUs, Rheia
+    auto-generated codes, PGM-prefixed fittings). Wrightsoft's own
+    Src + Name columns already tell us who supplies them and what
+    the part number is — emit wrightsoft_passthrough lines for those
+    instead of routing them all into the SKU Backlog.
+
+    Locks in the Day-12 'use what Wrightsoft produced' behavior the
+    Richmond T333 sample exposed (was emitting 18/21 lines as
+    unmapped before this change)."""
+    csv = (
+        "Src,Name,Description,Phase,Qty,Un,Tax,Price,Ext price\n"
+        ",,Equipment,,,,,,\n"
+        "GOOD,AHVE24BP1300A,Air Handling Unit,None,1,0,,0,0\n"
+        "BROAN,B150E75NT,ERV,None,1,0,,0,0\n"
+        ",,Rheia Duct System Equipment,,,,,,\n"
+        "RHEA,10-00-190,3-in Duct Uninsulated,Rough,768,0,,0,0\n"
+    )
+    bom = _e2e(csv, wsf_profile)
+    # All three rows should be passthrough (none in bundled mapping)
+    assert bom["wrightsoft_passthrough_item_count"] == 3
+    assert bom["wrightsoft_unmapped_item_count"] == 0
+    for li in bom["line_items"]:
+        assert li["source"] == "wrightsoft_passthrough"
+        # SKU == Name column, Manufacturer == Src column
+        assert li["sku"] == li["generic_id"]
+        assert li["manufacturer"] in {"GOOD", "BROAN", "RHEA"}
+
+
+def test_e2e_section_hint_routes_unmapped_lines_correctly(wsf_profile):
+    """Section-divider rows ('Equipment' / 'Duct System Equipment' /
+    'Rheia Duct System Equipment') in the Wrightsoft export must
+    propagate to subsequent data rows even when those rows aren't
+    in the bundled mapping catalog. Without this, real BOMs piled
+    almost everything into 'Other'."""
+    csv = (
+        "Src,Name,Description,Phase,Qty,Un,Tax,Price,Ext price\n"
+        ",,Equipment,,,,,,\n"
+        "GOOD,AHVE24BP1300A,AHU,None,1,0,,0,0\n"
+        ",,Rheia Duct System Equipment,,,,,,\n"
+        "RHEA,10-00-190,3-in Duct,Rough,768,0,,0,0\n"
+        "RHEA,10-04-091,Slotted Diffuser,Finish,16,0,,0,0\n"
+    )
+    bom = _e2e(csv, wsf_profile)
+    by_section = {}
+    for li in bom["line_items"]:
+        by_section.setdefault(li["section"], []).append(li["generic_id"])
+    assert "AHVE24BP1300A" in by_section.get("Equipment", []), by_section
+    assert "10-00-190" in by_section.get("Rheia Duct System Equipment", []), by_section
+    assert "10-04-091" in by_section.get("Rheia Duct System Equipment", []), by_section
+
+
+def test_e2e_subtotal_rows_do_not_reset_section_hint(wsf_profile):
+    """A 'Subtotal, Equipment' row appearing between data rows must
+    not clear the rolling section hint — otherwise the next row
+    silently falls back to 'Other'."""
+    csv = (
+        "Src,Name,Description,Phase,Qty,Un,Tax,Price,Ext price\n"
+        ",,Duct System Equipment,,,,,,\n"
+        "WSF,DDVn10,Round vinyl duct,None,3,0,,2,6\n"
+        ",,\"Subtotal, Duct System Equipment\",,,,,,8\n"
+        "WSF,FBTI-10,Ceiling round register,None,2,0,,43.6,87.2\n"
+    )
+    bom = _e2e(csv, wsf_profile)
+    sections = {li["generic_id"]: li["section"] for li in bom["line_items"]}
+    # Both lines must land in Duct System Equipment — subtotal must
+    # not have wiped the hint.
+    assert sections.get("FBTI-10") == "Duct System Equipment", sections
+
+
 def test_e2e_parser_handles_real_wrightsoft_xls_columns(wsf_profile):
     """The real Wrightsoft XLS export uses these exact columns:
         Src | Name | Description | Phase | Qty | Un | Tax | Price | Ext price

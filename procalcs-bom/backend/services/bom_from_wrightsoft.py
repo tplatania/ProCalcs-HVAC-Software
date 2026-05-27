@@ -93,6 +93,7 @@ def build_bom_from_wrightsoft_lines(
     mapped_count = 0
     unmapped_count = 0
     dfunit_count = 0
+    passthrough_count = 0
 
     for raw in lines:
         gen_id = (raw.get("generic_id") or "").strip()
@@ -128,8 +129,24 @@ def build_bom_from_wrightsoft_lines(
             or gen_id
         )
         unit = catalog_row.get("Units") or raw.get("unit") or "EA"
-        section = wsc.section_for_generic(gen_id) or wsc.SECTION_OTHER
+        # Section resolution: catalog first (most precise), then
+        # Wrightsoft's section-divider hint preserved by the parser,
+        # then "Other" as last resort. section_for_generic returns
+        # SECTION_OTHER (a string, not None) for unknown generics —
+        # so we explicitly treat that as 'no answer' and fall through
+        # to the file's own section hint. This lets unmapped lines
+        # from the real BOM (Goodman/Broan equipment, Rheia parts)
+        # land in the right section instead of all piling into Other.
+        catalog_section = wsc.section_for_generic(gen_id)
+        if catalog_section and catalog_section != wsc.SECTION_OTHER:
+            section = catalog_section
+        else:
+            section = raw.get("section_hint") or wsc.SECTION_OTHER
         category = _category_to_line_category(catalog_row.get("Category"))
+        # Wrightsoft's Src column is the supplier-of-record when the
+        # bundled catalog doesn't cover this part. Used by the
+        # passthrough branch below.
+        wsf_src = (raw.get("src") or "").strip().upper() or None
 
         if dfunit_spec:
             # DFUnit direct match — authoritative manufacturer + model.
@@ -175,7 +192,32 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
             )
+        elif wsf_src:
+            # Wrightsoft told us who supplies this part (Src column) and
+            # what the part number is (Name column). Trust it — the
+            # contractor's actual procurement uses this exact SKU. This
+            # is the "use what Wrightsoft produced" path Tom asked about
+            # in Slack: no catalog round-trip needed when the BOM
+            # already names the manufacturer + SKU together.
+            passthrough_count += 1
+            line = _priced_line(
+                generic_id=gen_id,
+                description=description,
+                quantity=quantity,
+                unit=unit,
+                section=section,
+                category=category,
+                profile=profile,
+                sku=gen_id,             # Name column IS the SKU
+                manufacturer=wsf_src,   # Src column IS the supplier
+                source="wrightsoft_passthrough",
+                get_unit_cost=_get_unit_cost,
+                get_markup_pct=_get_markup_pct,
+            )
         else:
+            # No catalog match AND no Src column — genuinely unmapped.
+            # These are the lines worth investigating; everything else
+            # had a real answer in the file itself.
             unmapped_count += 1
             line = _priced_line(
                 generic_id=gen_id,
@@ -210,6 +252,10 @@ def build_bom_from_wrightsoft_lines(
         # surfaces them without special casing.
         "wrightsoft_mapped_item_count":   mapped_count,
         "wrightsoft_unmapped_item_count": unmapped_count,
+        # Day-12 — lines where Wrightsoft's own Src+Name combo gave us
+        # the answer directly (no catalog round-trip needed). Tom's
+        # 'use what Wrightsoft produced' path made explicit.
+        "wrightsoft_passthrough_item_count": passthrough_count,
         # Day-11 — how many of the mapped lines came from DFUnit
         # (authoritative equipment-library hits with full spec data)
         # vs the generic-parts mapping. Lets the SPA show e.g.
@@ -223,8 +269,9 @@ def build_bom_from_wrightsoft_lines(
         "source_pipeline": "wrightsoft_bom",
     }
     logger.info(
-        "Wrightsoft BOM built for job %s — %d lines (%d mapped / %d unmapped)",
-        job_id, len(line_items), mapped_count, unmapped_count,
+        "Wrightsoft BOM built for job %s — %d lines "
+        "(%d mapped / %d passthrough / %d unmapped)",
+        job_id, len(line_items), mapped_count, passthrough_count, unmapped_count,
     )
     return bom
 
@@ -447,6 +494,14 @@ _QUANTITY_HEADER_ALIASES = (
 _DESCRIPTION_HEADER_ALIASES = (
     "description", "desc", "label",
 )
+# Wrightsoft's BOM exports include a 'Src' column carrying the 4-char
+# supplier-of-record (GOOD, BROAN, WSF, PGM, RHEA, …). When the bundled
+# catalog has no entry for a part, Src tells us who supplies it — which
+# the builder uses to emit a wrightsoft_passthrough line instead of
+# stuffing it into the SKU Backlog as 'unmapped'.
+_SRC_HEADER_ALIASES = (
+    "src", "source", "supplier", "vendor",
+)
 
 
 def parse_wrightsoft_bom_rows(
@@ -521,12 +576,26 @@ def _read_csv_rows(file_bytes: bytes) -> list[list[str]]:
 
 def _rows_to_generic_lines(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
     """Find the header row (scans first 10 rows), then map each data
-    row to {generic_id, quantity, description}. Tolerates rows shorter
-    than the header (treats missing cells as empty)."""
+    row to {generic_id, quantity, description, src, section_hint}.
+
+    Tolerates rows shorter than the header (treats missing cells as
+    empty). Section-divider rows (e.g. 'Equipment', 'Duct System
+    Equipment', 'Rheia Duct System Equipment' — rows with blank Name
+    + a known section label in the description column) become a
+    rolling section_hint that gets attached to subsequent data rows,
+    so downstream grouping works even on lines that aren't in the
+    bundled mapping catalog.
+
+    'src' is Wrightsoft's supplier-of-record column (GOOD, BROAN,
+    RHEA, PGM, WSF, etc.) and is preserved verbatim — the builder
+    uses it as a pass-through when the catalog has no entry for the
+    Name, so real-world BOMs don't get drowned in 'unmapped' lines
+    for parts Wrightsoft has already told us who supplies.
+    """
     if not raw_rows:
         return []
 
-    header_idx, gid_col, qty_col, desc_col = _locate_header(raw_rows)
+    header_idx, gid_col, qty_col, desc_col, src_col = _locate_header(raw_rows)
     if header_idx < 0:
         raise ValueError(
             "Could not find header row — expected columns including one of "
@@ -535,6 +604,7 @@ def _rows_to_generic_lines(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
         )
 
     out: list[dict[str, Any]] = []
+    current_section_hint: Optional[str] = None
     for row in raw_rows[header_idx + 1:]:
         # Tolerant access — pad short rows so indexing doesn't IndexError
         def _at(i: int) -> str:
@@ -544,27 +614,43 @@ def _rows_to_generic_lines(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
             return str(v).strip() if v is not None else ""
 
         gid = _at(gid_col)
+        desc = _at(desc_col) if desc_col >= 0 else ""
+
+        # Section-divider row detection. In real Wrightsoft exports
+        # these look like ['','','Equipment','','',...] — blank Src +
+        # blank Name + description matches a known section keyword.
+        # 'Subtotal, X' rows look similar but match the SUBTOTAL_RE so
+        # they don't overwrite the hint with junk.
         if not gid:
+            hint = _section_hint_from_label(desc)
+            if hint:
+                current_section_hint = hint
             continue
+
         qty_raw = _at(qty_col)
         try:
             qty = float(qty_raw or 0)
         except ValueError:
             qty = 0.0
-        line = {
-            "generic_id": gid,
-            "quantity":   qty,
-            "description": _at(desc_col) if desc_col >= 0 else "",
+        line: dict[str, Any] = {
+            "generic_id":   gid,
+            "quantity":     qty,
+            "description":  desc,
         }
+        src = _at(src_col) if src_col >= 0 else ""
+        if src:
+            line["src"] = src
+        if current_section_hint:
+            line["section_hint"] = current_section_hint
         out.append(line)
     return out
 
 
-def _locate_header(raw_rows: list[list[Any]]) -> tuple[int, int, int, int]:
+def _locate_header(raw_rows: list[list[Any]]) -> tuple[int, int, int, int, int]:
     """Scan the first 10 rows for one containing both a generic-id
     header alias AND a quantity header alias. Returns
-    (header_row_index, gid_col, qty_col, description_col_or_-1).
-    Returns (-1, 0, 0, -1) if no header is found.
+    (header_row_index, gid_col, qty_col, description_col_or_-1,
+     src_col_or_-1). Returns (-1, 0, 0, -1, -1) if no header is found.
     """
     for idx, row in enumerate(raw_rows[:10]):
         norm = [str(c or "").strip().lower() for c in row]
@@ -572,8 +658,37 @@ def _locate_header(raw_rows: list[list[Any]]) -> tuple[int, int, int, int]:
         qty_col = _first_alias_index(norm, _QUANTITY_HEADER_ALIASES)
         if gid_col >= 0 and qty_col >= 0:
             desc_col = _first_alias_index(norm, _DESCRIPTION_HEADER_ALIASES)
-            return idx, gid_col, qty_col, desc_col
-    return -1, 0, 0, -1
+            src_col  = _first_alias_index(norm, _SRC_HEADER_ALIASES)
+            return idx, gid_col, qty_col, desc_col, src_col
+    return -1, 0, 0, -1, -1
+
+
+# Section-divider lookup. Keys are lowercased; matched as substring
+# against the description cell (so 'Subtotal, Equipment' still maps
+# to Equipment via the 'equipment' suffix — but we filter subtotals
+# out below so they don't reset the hint after an empty section).
+_SECTION_HINT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("rheia duct system equipment", "Rheia Duct System Equipment"),
+    ("duct system equipment",       "Duct System Equipment"),
+    ("equipment",                   "Equipment"),
+    ("labor",                       "Labor"),
+)
+
+
+def _section_hint_from_label(label: str) -> Optional[str]:
+    """Recognize a Wrightsoft section-divider row's text. Returns the
+    canonical section name or None when the label isn't a divider
+    (e.g. 'Subtotal, X' rows must not reset the rolling hint —
+    they're handled by the subtotal-prefix filter below)."""
+    if not label:
+        return None
+    low = label.strip().lower()
+    if low.startswith("subtotal") or low.startswith("overall total"):
+        return None
+    for needle, canonical in _SECTION_HINT_KEYWORDS:
+        if needle in low:
+            return canonical
+    return None
 
 
 def _first_alias_index(norm_row: list[str], aliases: tuple[str, ...]) -> int:
