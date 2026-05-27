@@ -94,6 +94,12 @@ def build_bom_from_wrightsoft_lines(
     unmapped_count = 0
     dfunit_count = 0
     passthrough_count = 0
+    # Day-12 — collected for the discovered_mappings auto-learn write.
+    # Each entry is the minimum needed for upsert_many. Populated
+    # only on the passthrough branch (the catalog branches are already
+    # in the bundled mapping).
+    discovered_seen: list[dict[str, Any]] = []
+    discovered_count = 0
 
     for raw in lines:
         gen_id = (raw.get("generic_id") or "").strip()
@@ -195,11 +201,43 @@ def build_bom_from_wrightsoft_lines(
         elif wsf_src:
             # Wrightsoft told us who supplies this part (Src column) and
             # what the part number is (Name column). Trust it — the
-            # contractor's actual procurement uses this exact SKU. This
-            # is the "use what Wrightsoft produced" path Tom asked about
-            # in Slack: no catalog round-trip needed when the BOM
-            # already names the manufacturer + SKU together.
-            passthrough_count += 1
+            # contractor's actual procurement uses this exact SKU.
+            #
+            # Day-12 — check the discovered_mappings table first. If
+            # we've seen this (Src, Name) combo on a previous run, the
+            # line gets the richer 'wrightsoft_discovered' source and
+            # the line table tags it as catalog-resolved. The first
+            # time we see a SKU it's passthrough; the second time
+            # onward it's discovered. Both are queued for upsert.
+            from models.discovered_mapping import DiscoveredMapping
+            try:
+                existing_row = DiscoveredMapping.lookup(supplier=wsf_src, sku=gen_id)
+            except Exception:
+                # DB unavailable (e.g. tests with no app context) — fall
+                # through to passthrough. The upsert at the end is also
+                # wrapped in a try/except so we never poison a BOM
+                # response with a DB hiccup.
+                existing_row = None
+
+            if existing_row is not None:
+                discovered_count += 1
+                emitted_source = "wrightsoft_discovered"
+                # Prefer the verified description we've seen before
+                # over whatever this run's row carried (Wrightsoft
+                # occasionally truncates descriptions on smaller exports).
+                description = existing_row.description or description
+            else:
+                passthrough_count += 1
+                emitted_source = "wrightsoft_passthrough"
+
+            discovered_seen.append({
+                "supplier":     wsf_src,
+                "sku":          gen_id,
+                "description":  description,
+                "section_hint": section,
+                "quantity":     quantity,
+            })
+
             line = _priced_line(
                 generic_id=gen_id,
                 description=description,
@@ -208,9 +246,9 @@ def build_bom_from_wrightsoft_lines(
                 section=section,
                 category=category,
                 profile=profile,
-                sku=gen_id,             # Name column IS the SKU
-                manufacturer=wsf_src,   # Src column IS the supplier
-                source="wrightsoft_passthrough",
+                sku=gen_id,
+                manufacturer=wsf_src,
+                source=emitted_source,
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
             )
@@ -256,6 +294,12 @@ def build_bom_from_wrightsoft_lines(
         # the answer directly (no catalog round-trip needed). Tom's
         # 'use what Wrightsoft produced' path made explicit.
         "wrightsoft_passthrough_item_count": passthrough_count,
+        # Day-12 — lines whose (Src, SKU) combo we've seen on a previous
+        # run (rows in discovered_mappings). Functionally the same as
+        # passthrough but with the assurance that we've cataloged the
+        # combo. Counts split so we can see how the auto-learn catalog
+        # is filling in over time.
+        "wrightsoft_discovered_item_count":  discovered_count,
         # Day-11 — how many of the mapped lines came from DFUnit
         # (authoritative equipment-library hits with full spec data)
         # vs the generic-parts mapping. Lets the SPA show e.g.
@@ -268,10 +312,28 @@ def build_bom_from_wrightsoft_lines(
         # Wrightsoft's own output rather than the AI pipeline.
         "source_pipeline": "wrightsoft_bom",
     }
+    # Day-12 — auto-learn upsert. Wrapped so any DB issue (e.g. test
+    # context with no session) doesn't poison the BOM response. The
+    # caller (bom_routes.from_wrightsoft) does a separate commit after
+    # persisting the bom_runs row; this work is queued onto the same
+    # session and rides along with that commit.
+    if discovered_seen:
+        try:
+            from extensions import db
+            from models.discovered_mapping import DiscoveredMapping
+            DiscoveredMapping.upsert_many(discovered_seen)
+            db.session.flush()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "discovered_mappings upsert skipped for job %s — %s",
+                job_id, exc,
+            )
+
     logger.info(
         "Wrightsoft BOM built for job %s — %d lines "
-        "(%d mapped / %d passthrough / %d unmapped)",
-        job_id, len(line_items), mapped_count, passthrough_count, unmapped_count,
+        "(%d mapped / %d discovered / %d passthrough / %d unmapped)",
+        job_id, len(line_items), mapped_count, discovered_count,
+        passthrough_count, unmapped_count,
     )
     return bom
 

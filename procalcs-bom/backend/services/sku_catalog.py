@@ -48,6 +48,11 @@ VALID_SECTIONS = {
     "Duct System Equipment",
     "Rheia Duct System Equipment",
     "Labor",
+    # Day-12 — install consumables (mastic, foil tape, hanger straps,
+    # screws, brushes). Wrightsoft's BOM doesn't list these but every
+    # real install needs them. Derived deterministically from duct LF
+    # + fitting counts via the per_lf_ratio quantity mode.
+    "Consumables",
 }
 VALID_TRIGGERS = {
     "always",
@@ -69,6 +74,9 @@ VALID_QUANTITY_MODES = {
     "rheia_per_takeoff",
     "rheia_per_endpoint",
     "fitting_count",
+    # Day-12 — total-duct-LF divided by a ratio. e.g. 1 gallon of
+    # mastic per 100 LF of duct → divisor=100. Used by consumables.
+    "per_lf_ratio",
 }
 VALID_PHASES = {None, "Rough", "Finish"}
 

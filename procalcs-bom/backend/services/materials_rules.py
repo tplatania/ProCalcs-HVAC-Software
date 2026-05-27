@@ -109,6 +109,26 @@ class Scope:
             or self.rheia_ceiling_endpoints > 0
         )
 
+    @property
+    def total_duct_lf(self) -> float:
+        """All duct, regardless of shape. Used by consumables rules
+        (mastic / foil tape / hanger straps) which scale with the
+        total duct run, not any one duct type. Round-vinyl is counted
+        as 1 LF per emitted line as a reasonable approximation when
+        the parser doesn't surface explicit LF."""
+        return float(self.rectangular_lf) + float(self.rheia_lf) + float(self.round_vinyl_count)
+
+    @property
+    def total_fitting_count(self) -> int:
+        """All fittings (elbows + takeoffs + endpoints). Used by the
+        sheet-metal-screws consumable rule (X boxes per N fittings)."""
+        return (
+            int(self.elbow_count)
+            + int(self.rheia_takeoffs)
+            + int(self.rheia_high_sidewall_endpoints)
+            + int(self.rheia_ceiling_endpoints)
+        )
+
 
 # Regexes used to mine raw_rup_context when structured arrays are sparse.
 _DUCT_DIM_RE = re.compile(r"\b(\d{1,2})(?:\s*[\"x×])", re.IGNORECASE)
@@ -313,11 +333,15 @@ def _resolve_source(source: str, scope: Scope) -> float:
         "equipment.heat_kit":         scope.heat_kit_count,
         "duct_runs.rectangular":      scope.rectangular_lf,
         "duct_runs.round_vinyl":      scope.round_vinyl_count,
+        # Day-12 — total across all duct shapes; backs consumables.
+        "duct_runs.total_lf":         scope.total_duct_lf,
         "registers":                  scope.register_count,
         "registers.ceiling_round":    scope.register_ceiling_round,
         "registers.ceiling_grill":    scope.register_ceiling_grill,
         "registers.high_wall_rect":   scope.register_high_wall_rect,
         "fittings.elbow":             scope.elbow_count,
+        # Day-12 — total fittings across all types; backs sheet-metal-screws.
+        "fittings.total":             scope.total_fitting_count,
     }
     if source not in table:
         logger.warning("Unknown quantity source %r", source)
@@ -375,6 +399,31 @@ def _qty_fitting_count(rule: dict, scope: Scope) -> float:
     return _resolve_source(rule.get("source", ""), scope)
 
 
+def _qty_per_lf_ratio(rule: dict, scope: Scope) -> float:
+    """Day-12 — total of an LF source divided by a ratio, rounded up
+    to the next whole unit. Backs consumables ('1 gallon per 100 LF').
+
+    Required:
+      source  — any LF-shaped source from the resolve table
+      divisor — integer; the LF that yields 1 unit of the consumable
+
+    Returns 0 (line suppressed) when the source has no LF, so a
+    project with no duct doesn't get a phantom mastic line.
+    """
+    import math
+    lf = _resolve_source(rule.get("source", ""), scope)
+    if lf <= 0:
+        return 0.0
+    divisor = rule.get("divisor")
+    try:
+        d = float(divisor or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if d <= 0:
+        return 0.0
+    return float(math.ceil(lf / d))
+
+
 _QTY_RESOLVERS = {
     "fixed":              _qty_fixed,
     "per_unit":           _qty_per_unit,
@@ -384,6 +433,7 @@ _QTY_RESOLVERS = {
     "rheia_per_takeoff":  _qty_rheia_per_takeoff,
     "rheia_per_endpoint": _qty_rheia_per_endpoint,
     "fitting_count":      _qty_fitting_count,
+    "per_lf_ratio":       _qty_per_lf_ratio,
 }
 
 
@@ -415,12 +465,77 @@ _SECTION_TO_CATEGORY = {
     "Duct System Equipment":           "duct",
     "Rheia Duct System Equipment":     "rheia",
     "Labor":                           "labor",
+    "Consumables":                     "consumable",
 }
+
+
+# ---------------------------------------------------------------------------
+# Day-12 — Labor lines (profile-driven, deterministic)
+# ---------------------------------------------------------------------------
+#
+# generate_labor_lines() emits BOM lines for the Labor section based on
+# the contractor's per-task labor rates. Lives next to the rules engine
+# because it consumes the same Scope, but takes the profile separately
+# (the catalog SKUs don't carry contractor-specific data).
+
+def generate_labor_lines(design_data: dict, *, profile) -> list[dict]:
+    """Emit deterministic Labor lines based on profile.labor rates.
+
+    Returns [] when:
+      - profile.labor is not configured (hourly_rate=0 or no task rates)
+      - the design has no scope that maps to a configured task
+
+    Each line shape matches what _format_rule_lines_for_bom would emit,
+    so the caller can merge them straight into priced_items.
+    """
+    if profile is None:
+        return []
+    labor = getattr(profile, "labor", None)
+    if labor is None or not labor.is_configured:
+        return []
+
+    scope = compute_scope(design_data)
+    rate = float(labor.hourly_rate or 0)
+    if rate <= 0:
+        return []
+
+    out: list[dict] = []
+
+    def _emit(label: str, count: float, hours_each: float, sku: str):
+        if count <= 0 or hours_each <= 0:
+            return
+        total_hours = round(count * hours_each, 2)
+        total_cost = round(total_hours * rate, 2)
+        out.append({
+            "sku":         sku,
+            "supplier":    "LABOR",
+            "section":     "Labor",
+            "category":    "labor",
+            "description": label,
+            "quantity":    total_hours,
+            "unit":        "hr",
+            "unit_cost":   rate,
+            "total_cost":  total_cost,
+            "source":      "rules_engine",
+            "notes":       f"{count:g} × {hours_each:g} hr/unit @ ${rate:.2f}/hr",
+        })
+
+    _emit("AHU install labor",       scope.ahu_count,       labor.per_ahu_install_hours,       "LABOR-AHU")
+    _emit("Condenser install labor", scope.condenser_count, labor.per_condenser_install_hours, "LABOR-CONDENSER")
+    _emit("ERV install labor",       scope.erv_count,       labor.per_erv_install_hours,       "LABOR-ERV")
+    _emit("Heat-kit install labor",  scope.heat_kit_count,  labor.per_heat_kit_install_hours,  "LABOR-HEATKIT")
+    _emit("Duct rough-in labor",     scope.total_duct_lf,   labor.per_duct_lf_hours,           "LABOR-DUCT-LF")
+
+    return out
 
 
 def _unit_for(item: sku_catalog.SKUItem) -> str:
     """Best-guess unit string for the line item. Catalog doesn't store
-    unit explicitly today, so infer from the quantity mode."""
+    unit explicitly today, so infer from the quantity mode + notes.
+    Consumables can override via the unit field on the rule itself."""
+    explicit = (item.quantity or {}).get("unit")
+    if explicit:
+        return str(explicit).strip()
     mode = (item.quantity or {}).get("mode", "")
     if mode in ("per_lf", "rheia_per_lf"):
         return "lf"

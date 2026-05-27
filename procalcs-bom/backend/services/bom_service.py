@@ -16,7 +16,7 @@ import anthropic
 from flask import current_app
 from services.profile_service import get_profile_by_id
 from services import sku_catalog
-from services.materials_rules import generate_rule_lines
+from services.materials_rules import generate_rule_lines, generate_labor_lines
 from services.catalog_match import (
     match_equipment_to_catalog,
     coalesce_matched_lines,
@@ -192,7 +192,12 @@ def generate(client_id: str, job_id: str, design_data: dict,
         if not any(c and c in (li.get("description") or "").lower() for c in claimed_descs)
     ]
 
-    priced_items = catalog_matched + deduped_rules + deduped_ai
+    # Day-12 — deterministic labor lines from profile.labor rates.
+    # Skipped silently when the profile hasn't set rates; AI falls back
+    # to estimating labor in that case (existing behavior).
+    labor_lines = generate_labor_lines(design_data, profile=profile)
+
+    priced_items = catalog_matched + deduped_rules + labor_lines + deduped_ai
 
     # Day-12 cross-pollination — every priced line gets a verification
     # pass against the bundled Wrightsoft catalog. When an AI-emitted

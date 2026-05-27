@@ -53,6 +53,46 @@ class MarkupTiers:
 
 
 @dataclass
+class LaborRates:
+    """Day-12 — per-contractor labor rates for the deterministic labor
+    pricing. Wrightsoft leaves the Labor section empty; the AI used to
+    guess. With these populated, the rules engine emits Labor lines
+    deterministically:
+
+      - per_ahu_install_hours × hourly_rate  per AHU
+      - per_condenser_install_hours × hourly_rate  per condenser
+      - per_erv_install_hours × hourly_rate  per ERV
+      - per_duct_lf_hours × hourly_rate  per LF of duct (covers
+        rough-in labor for the whole duct run)
+
+    All defaults are 0 so a contractor who hasn't filled them in gets
+    no labor lines (the AI fallback path then fills the gap as before)."""
+    hourly_rate:                 float = 0.0    # $/hr
+    per_ahu_install_hours:       float = 0.0    # hours per AHU install
+    per_condenser_install_hours: float = 0.0
+    per_erv_install_hours:       float = 0.0
+    per_heat_kit_install_hours:  float = 0.0
+    per_duct_lf_hours:           float = 0.0    # hours per LF (rough-in)
+
+    @property
+    def is_configured(self) -> bool:
+        """True when the contractor has set a non-zero hourly rate AND
+        at least one task rate. The rules engine uses this to decide
+        whether to emit labor lines at all — partial config (rate set,
+        no hours) yields no lines, matching the 'opt-in' shape of the
+        existing include_labor flag."""
+        if self.hourly_rate <= 0:
+            return False
+        return any([
+            self.per_ahu_install_hours > 0,
+            self.per_condenser_install_hours > 0,
+            self.per_erv_install_hours > 0,
+            self.per_heat_kit_install_hours > 0,
+            self.per_duct_lf_hours > 0,
+        ])
+
+
+@dataclass
 class BrandPreferences:
     """Preferred equipment and material brands per category."""
     ac_brand: str = ""               # e.g. "Carrier", "Goodman"
@@ -96,6 +136,10 @@ class ClientProfile:
     supplier: SupplierInfo = field(default_factory=SupplierInfo)
     markup: MarkupTiers = field(default_factory=MarkupTiers)
     brands: BrandPreferences = field(default_factory=BrandPreferences)
+    # Day-12 — optional labor rates. When configured (hourly_rate > 0
+    # AND at least one per-task rate > 0), the rules engine emits
+    # deterministic Labor lines instead of letting the AI estimate.
+    labor: LaborRates = field(default_factory=LaborRates)
     part_name_overrides: list = field(default_factory=list)  # list of PartNameOverride
     markup_tiers: list = field(default_factory=list)          # list of MarkupTier
 
@@ -162,6 +206,14 @@ class ClientProfile:
                  "client_sku": p.client_sku}
                 for p in self.part_name_overrides
             ],
+            "labor": {
+                "hourly_rate":                 self.labor.hourly_rate,
+                "per_ahu_install_hours":       self.labor.per_ahu_install_hours,
+                "per_condenser_install_hours": self.labor.per_condenser_install_hours,
+                "per_erv_install_hours":       self.labor.per_erv_install_hours,
+                "per_heat_kit_install_hours":  self.labor.per_heat_kit_install_hours,
+                "per_duct_lf_hours":           self.labor.per_duct_lf_hours,
+            },
             "default_output_mode": self.default_output_mode,
             "include_labor":       self.include_labor,
             "created_at":          self.created_at,
@@ -231,6 +283,14 @@ class ClientProfile:
                 mastic_brand=brands_data.get('mastic_brand', ''),
                 tape_brand=brands_data.get('tape_brand', ''),
                 flex_duct_brand=brands_data.get('flex_duct_brand', ''),
+            ),
+            labor=LaborRates(
+                hourly_rate=float((data.get('labor') or {}).get('hourly_rate', 0.0) or 0.0),
+                per_ahu_install_hours=float((data.get('labor') or {}).get('per_ahu_install_hours', 0.0) or 0.0),
+                per_condenser_install_hours=float((data.get('labor') or {}).get('per_condenser_install_hours', 0.0) or 0.0),
+                per_erv_install_hours=float((data.get('labor') or {}).get('per_erv_install_hours', 0.0) or 0.0),
+                per_heat_kit_install_hours=float((data.get('labor') or {}).get('per_heat_kit_install_hours', 0.0) or 0.0),
+                per_duct_lf_hours=float((data.get('labor') or {}).get('per_duct_lf_hours', 0.0) or 0.0),
             ),
             part_name_overrides=overrides,
             default_output_mode=data.get('default_output_mode', 'full'),
