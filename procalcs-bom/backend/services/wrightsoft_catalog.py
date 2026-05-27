@@ -61,6 +61,10 @@ class _Cache:
     generic_parts: Optional[dict[str, dict[str, Any]]] = None  # generic_id (item) -> row
     mapped_parts: Optional[list[dict[str, Any]]] = None  # one row per (generic, variant)
     mapped_by_generic: Optional[dict[str, list[dict[str, Any]]]] = None  # index
+    # Reverse index — manufacturer_partnum (the SKU the contractor
+    # actually orders) → list of mapping rows. Used by the BOM Engine
+    # to verify AI-emitted SKUs against the bundled catalog.
+    mapped_by_sku: Optional[dict[str, list[dict[str, Any]]]] = None
     dfunit: Optional[list[dict[str, Any]]] = None
     dfunit_by_model: Optional[dict[str, dict[str, Any]]] = None  # Model -> row
     source: str = "uninitialized"
@@ -127,12 +131,17 @@ def load_mapped_parts() -> list[dict[str, Any]]:
             _cache.mapped_parts = rows
             # Build index by generic_item for cheap lookup.
             idx: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            sku_idx: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for r in rows:
                 idx[r["generic_item"]].append(r)
+                sku = (r.get("manufacturer_partnum") or "").strip()
+                if sku:
+                    sku_idx[sku].append(r)
             _cache.mapped_by_generic = dict(idx)
+            _cache.mapped_by_sku = dict(sku_idx)
             logger.info(
-                "Loaded %d Wrightsoft mapped parts (%d distinct generics)",
-                len(rows), len(_cache.mapped_by_generic),
+                "Loaded %d Wrightsoft mapped parts (%d distinct generics, %d distinct SKUs)",
+                len(rows), len(_cache.mapped_by_generic), len(_cache.mapped_by_sku),
             )
     return _cache.mapped_parts
 
@@ -283,6 +292,28 @@ def lookup_skus_for_generic(
         if filtered:
             return filtered
     return out
+
+
+def lookup_mapping_by_sku(sku: str) -> Optional[dict[str, Any]]:
+    """Reverse lookup: given a manufacturer SKU the contractor would
+    actually order (e.g. 'Q4PC100XRED' or '38MARBQ24AA3'), return the
+    matching mapped_parts.csv row — or None.
+
+    Returns the first match when multiple suppliers carry the same SKU
+    (rare but possible — same OEM part stocked through different
+    distributors). Caller can ask for the generic_item / preferred_source
+    out of the returned dict.
+
+    Used by the BOM Engine to verify AI-emitted SKUs against the bundled
+    catalog — when an AI line's SKU is in the catalog, we know the
+    answer is real and can re-tag the source from 'ai_*' to a verified
+    provenance.
+    """
+    if not sku:
+        return None
+    load_mapped_parts()  # populates _cache.mapped_by_sku
+    rows = (_cache.mapped_by_sku or {}).get(sku.strip(), [])
+    return rows[0] if rows else None
 
 
 def category_for_generic(generic_id: str) -> Optional[str]:

@@ -194,11 +194,25 @@ def generate(client_id: str, job_id: str, design_data: dict,
 
     priced_items = catalog_matched + deduped_rules + deduped_ai
 
+    # Day-12 cross-pollination — every priced line gets a verification
+    # pass against the bundled Wrightsoft catalog. When an AI-emitted
+    # SKU matches a DFUnit model OR a mapped_parts manufacturer_partnum,
+    # we promote the source from 'ai_*' to a verified provenance
+    # ('catalog_verified_*'). Lines without a SKU or with no catalog
+    # hit keep their original source unchanged.
+    #
+    # This is the answer to "all my lines say AI but most of them
+    # exist in the catalog" — Tom's bundled mapping covers 94%+ of
+    # generics; verifying after the fact lets us reflect that without
+    # rewriting the prompt or the AI pipeline.
+    verified_count = _verify_against_wrightsoft_catalog(priced_items)
+
     # Step 4 — Format final BOM
     bom = _format_bom(priced_items, profile, job_id, effective_mode)
     bom["catalog_match_item_count"] = len(catalog_matched)
     bom["rules_engine_item_count"] = len(deduped_rules)
     bom["ai_item_count"] = len(deduped_ai)
+    bom["catalog_verified_item_count"] = verified_count
 
     logger.info("BOM generated successfully for job %s — %s line items",
                 job_id, len(bom.get('line_items', [])))
@@ -226,6 +240,64 @@ def generate(client_id: str, job_id: str, design_data: dict,
         logger.warning("BOM persistence failed for job %s — %s", job_id, exc)
 
     return bom
+
+
+def _verify_against_wrightsoft_catalog(line_items: list[dict]) -> int:
+    """In-place cross-pollination — promote AI lines to catalog-verified
+    when their SKU matches the bundled Wrightsoft catalog.
+
+    Rules:
+      - If line has no 'sku' → skip (no way to verify).
+      - If line's source is already a non-AI verified source
+        (catalog_match, rules_engine, wrightsoft_*) → skip.
+      - If SKU matches a DFUnit Model → set
+        source='catalog_verified_dfunit', attach dfunit_spec, set
+        manufacturer from DFUnit if absent.
+      - Else if SKU appears as a manufacturer_partnum in
+        mapped_parts.csv → set source='catalog_verified_mapped',
+        set generic_id and supplier from the mapping row.
+
+    Returns the number of lines that got promoted.
+    """
+    from services import wrightsoft_catalog as wsc
+
+    promoted = 0
+    # AI sources we're willing to promote. Other sources (catalog_match,
+    # rules_engine, wrightsoft_*) already have a verified provenance —
+    # don't clobber them.
+    AI_SOURCES = {"ai_inferred", "ai_with_catalog_sku", "ai"}
+
+    for li in line_items:
+        sku = (li.get("sku") or "").strip()
+        if not sku:
+            continue
+        src = (li.get("source") or "").strip()
+        if src not in AI_SOURCES:
+            continue
+
+        # DFUnit hit — most informative; carries full spec.
+        dfunit_row = wsc.lookup_dfunit_by_model(sku)
+        if dfunit_row:
+            spec = wsc.dfunit_line_spec(dfunit_row)
+            li["source"] = "catalog_verified_dfunit"
+            li["dfunit_spec"] = spec
+            if not li.get("manufacturer") and spec.get("manufacturer"):
+                li["manufacturer"] = spec["manufacturer"]
+            promoted += 1
+            continue
+
+        # mapped_parts hit — known generic + supplier.
+        mapping = wsc.lookup_mapping_by_sku(sku)
+        if mapping:
+            li["source"] = "catalog_verified_mapped"
+            if not li.get("generic_id"):
+                li["generic_id"] = mapping.get("generic_item")
+            if not li.get("manufacturer"):
+                li["manufacturer"] = mapping.get("preferred_source")
+            promoted += 1
+            continue
+
+    return promoted
 
 
 def _record_bom_run(
