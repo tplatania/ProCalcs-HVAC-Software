@@ -431,15 +431,21 @@ def _pretty_manufacturer(code: str) -> str:
 # generic_id / quantity columns. Lowercased and stripped before match.
 # Lets us tolerate variations across Wrightsoft versions without
 # requiring Tom to rename columns. Order matters — first match wins.
+# 'name' must come BEFORE 'item' — Wrightsoft's actual XLS export uses
+# 'Name' as the part-identifier column (the row labelled 'Src | Name |
+# Description | Phase | Qty | Un | Tax | Price | Ext price'). Older
+# pre-Day-12 fixtures used 'item' or 'generic_id' so those still work
+# as fallbacks. 'name' is intentionally NOT in the description alias
+# list below — same column can't be both gid and description.
 _GENERIC_ID_HEADER_ALIASES = (
-    "item", "generic_id", "generic id", "id", "part", "part_id",
+    "name", "item", "generic_id", "generic id", "id", "part", "part_id",
     "part id", "generic", "code",
 )
 _QUANTITY_HEADER_ALIASES = (
     "qty", "quantity", "count", "amount", "number",
 )
 _DESCRIPTION_HEADER_ALIASES = (
-    "description", "desc", "name", "label",
+    "description", "desc", "label",
 )
 
 

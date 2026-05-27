@@ -238,6 +238,40 @@ def test_e2e_parser_tolerates_header_aliases(wsf_profile):
     assert float(lines[0]["quantity"]) == 100.0
 
 
+def test_e2e_parser_handles_real_wrightsoft_xls_columns(wsf_profile):
+    """The real Wrightsoft XLS export uses these exact columns:
+        Src | Name | Description | Phase | Qty | Un | Tax | Price | Ext price
+    The 'Name' column carries the generic_id (or manufacturer SKU for
+    pre-mapped equipment). Plus section-divider rows like 'Equipment',
+    'Subtotal, Equipment', 'Duct System Equipment' have empty Src/Name
+    cells and must be skipped silently.
+
+    Regression test for the 'Could not find header row' bug Gerald hit
+    on (Sample BOM) Lot 1 T075 Elm ACL BOM.xls — caused by 'name'
+    living only in the description alias list.
+    """
+    csv = (
+        "Src,Name,Description,Phase,Qty,Un,Tax,Price,Ext price\n"
+        ",,Equipment,,,,,,\n"
+        "GOODMAN,AHVE24BP1300A,AHU,None,1,0,,0,0\n"
+        "WSF,DDVn10,\"Round vinyl duct, D = 10\",None,3,0,,2,6\n"
+        ",,\"Subtotal, Equipment\",,,,,,0\n"
+        ",,Duct System Equipment,,,,,,\n"
+        "PGM,DRFg1712MI,\"Rect fiberglass duct\",None,4.12,0,,6.5,26.8\n"
+    )
+    lines = parse_wrightsoft_bom_rows(csv.encode("utf-8"), filename="real.csv")
+    # 3 data rows; 3 section/subtotal rows skipped because Name is blank
+    names = [l["generic_id"] for l in lines]
+    assert names == ["AHVE24BP1300A", "DDVn10", "DRFg1712MI"], (
+        f"expected the 3 Name-column values, got {names}"
+    )
+    # End-to-end build still works on the parsed rows.
+    bom = build_bom_from_wrightsoft_lines(
+        lines=lines, profile=wsf_profile, job_id="real-wsf-test",
+    )
+    assert bom["item_count"] == 3
+
+
 def test_e2e_parser_handles_utf8_bom():
     """Wrightsoft exports include a UTF-8 BOM; parser must strip it
     silently or the first generic_id is misread."""
