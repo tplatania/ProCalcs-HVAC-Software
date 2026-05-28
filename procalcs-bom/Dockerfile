@@ -31,6 +31,11 @@ COPY backend/ ./
 # Cloud Run sets PORT, default to 8080 for local docker run
 ENV PORT=8080
 ENV FLASK_ENV=production
+# Factory form so `flask db upgrade` invokes create_app() (which
+# registers the migrate extension). The .py form fails on our flat
+# import layout — flask tries to import 'app.app' as a package and
+# can't resolve top-level modules like 'config'.
+ENV FLASK_APP=app:create_app
 
 EXPOSE 8080
 
@@ -45,13 +50,8 @@ EXPOSE 8080
 # (e9b7c1a3f8d2) tables are required by the new features and
 # Cloud Run deploys without manual migration steps would have served
 # traffic against the old schema.
-# FLASK_APP must use the factory form (app:create_app) so the
-# Flask-Migrate db CLI sees the migrate extension that create_app()
-# registers — otherwise `db` is an unknown command. The .py form
-# tries to import 'app.app' as a package which fails on our flat
-# import layout.
 CMD set -e; \
-    FLASK_APP="app:create_app" flask db upgrade; \
+    flask db upgrade; \
     exec gunicorn --bind 0.0.0.0:${PORT} \
         --workers 2 --threads 4 --timeout 120 \
         "app:create_app()"
