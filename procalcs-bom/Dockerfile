@@ -36,6 +36,13 @@ ENV FLASK_ENV=production
 # import layout — flask tries to import 'app.app' as a package and
 # can't resolve top-level modules like 'config'.
 ENV FLASK_APP=app:create_app
+# Add /app to the import path so `from config import …` (the flat
+# import pattern used throughout the codebase) resolves when invoked
+# by tools that don't auto-add cwd to sys.path — notably the flask
+# CLI, which we use for `flask db upgrade` on container start.
+# Gunicorn already does this implicitly when launched with
+# 'app:create_app()'; the CLI does not.
+ENV PYTHONPATH=/app
 
 EXPOSE 8080
 
