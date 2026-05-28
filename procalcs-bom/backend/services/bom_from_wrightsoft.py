@@ -100,6 +100,9 @@ def build_bom_from_wrightsoft_lines(
     # in the bundled mapping).
     discovered_seen: list[dict[str, Any]] = []
     discovered_count = 0
+    # Day-13 — count of lines that hit a manual contractor override.
+    # Manual edits beat auto-discovery beat raw passthrough.
+    manual_count = 0
 
     for raw in lines:
         gen_id = (raw.get("generic_id") or "").strip()
@@ -154,6 +157,28 @@ def build_bom_from_wrightsoft_lines(
         # passthrough branch below.
         wsf_src = (raw.get("src") or "").strip().upper() or None
 
+        # Day-13 — check for a contractor-level manual override BEFORE
+        # any source branching. The override applies regardless of
+        # whether the line ends up mapped, dfunit, discovered, or
+        # passthrough: Tom's "we collect prices per contractor" workflow
+        # means the price-side override has to win on every code path.
+        # The SKU+supplier side of the override only takes effect on
+        # the passthrough branch (where Wrightsoft didn't already give
+        # us a verified catalog answer).
+        override_row = None
+        if wsf_src:
+            try:
+                from models.contractor_override import ContractorOverride
+                override_row = ContractorOverride.lookup(
+                    contractor_id=profile.client_id,
+                    supplier=wsf_src,
+                    sku=gen_id,
+                )
+            except Exception:
+                # DB unavailable — fall through. Best-effort, never
+                # poison the BOM response.
+                override_row = None
+
         if dfunit_spec:
             # DFUnit direct match — authoritative manufacturer + model.
             # This path is used for ductless / heat-pump units that
@@ -203,13 +228,14 @@ def build_bom_from_wrightsoft_lines(
             # what the part number is (Name column). Trust it — the
             # contractor's actual procurement uses this exact SKU.
             #
-            # Day-12 — check the discovered_mappings table first. If
-            # we've seen this (Src, Name) combo on a previous run, the
-            # line gets the richer 'wrightsoft_discovered' source and
-            # the line table tags it as catalog-resolved. The first
-            # time we see a SKU it's passthrough; the second time
-            # onward it's discovered. Both are queued for upsert.
+            # Precedence on the passthrough branch:
+            #   1. ContractorOverride — a human said this is right
+            #      (Day-13). Overrides SKU / supplier / unit price.
+            #   2. DiscoveredMapping — we've seen this combo before
+            #      (Day-12). Verified description.
+            #   3. Raw Wrightsoft passthrough — first time we've seen it.
             from models.discovered_mapping import DiscoveredMapping
+
             try:
                 existing_row = DiscoveredMapping.lookup(supplier=wsf_src, sku=gen_id)
             except Exception:
@@ -219,24 +245,53 @@ def build_bom_from_wrightsoft_lines(
                 # response with a DB hiccup.
                 existing_row = None
 
-            if existing_row is not None:
+            if override_row is not None:
+                # Highest precedence — Richard already corrected this
+                # (Src, Name) for this contractor. Use the corrections.
+                manual_count += 1
+                emitted_source = "wrightsoft_manual"
+                emitted_sku = override_row.corrected_sku or gen_id
+                emitted_supplier = override_row.corrected_supplier or wsf_src
+                if existing_row is not None and existing_row.description:
+                    description = existing_row.description
+                # Still record the upsert so discovered_mappings keeps
+                # tracking that we saw this combo today (without
+                # promoting the un-corrected version over the manual).
+                discovered_seen.append({
+                    "supplier":     wsf_src,
+                    "sku":          gen_id,
+                    "description":  description,
+                    "section_hint": section,
+                    "quantity":     quantity,
+                })
+            elif existing_row is not None:
                 discovered_count += 1
                 emitted_source = "wrightsoft_discovered"
+                emitted_sku = gen_id
+                emitted_supplier = wsf_src
                 # Prefer the verified description we've seen before
                 # over whatever this run's row carried (Wrightsoft
                 # occasionally truncates descriptions on smaller exports).
                 description = existing_row.description or description
+                discovered_seen.append({
+                    "supplier":     wsf_src,
+                    "sku":          gen_id,
+                    "description":  description,
+                    "section_hint": section,
+                    "quantity":     quantity,
+                })
             else:
                 passthrough_count += 1
                 emitted_source = "wrightsoft_passthrough"
-
-            discovered_seen.append({
-                "supplier":     wsf_src,
-                "sku":          gen_id,
-                "description":  description,
-                "section_hint": section,
-                "quantity":     quantity,
-            })
+                emitted_sku = gen_id
+                emitted_supplier = wsf_src
+                discovered_seen.append({
+                    "supplier":     wsf_src,
+                    "sku":          gen_id,
+                    "description":  description,
+                    "section_hint": section,
+                    "quantity":     quantity,
+                })
 
             line = _priced_line(
                 generic_id=gen_id,
@@ -246,8 +301,8 @@ def build_bom_from_wrightsoft_lines(
                 section=section,
                 category=category,
                 profile=profile,
-                sku=gen_id,
-                manufacturer=wsf_src,
+                sku=emitted_sku,
+                manufacturer=emitted_supplier,
                 source=emitted_source,
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
@@ -271,6 +326,35 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
             )
+
+        # Day-13 — apply contractor-level overrides on every line that
+        # got emitted, regardless of which branch (mapped / dfunit /
+        # discovered / passthrough) picked it up. The override's
+        # unit_price IS Tom's per-contractor pricing workflow — it has
+        # to win on every code path, not just passthrough.
+        #
+        # The source-tagging promotion to 'wrightsoft_manual' is handled
+        # in the passthrough branch above (where we don't already have
+        # a verified catalog source). For mapped/dfunit/discovered
+        # lines, the override applies silently — the trustworthy
+        # provenance stays, the price is the only thing that changes.
+        if override_row is not None:
+            if override_row.unit_price is not None:
+                new_cost = float(override_row.unit_price)
+                markup_pct = float(line.get("markup_pct") or 0.0)
+                line["unit_cost"]  = new_cost
+                line["total_cost"] = round(new_cost * quantity, 2)
+                if "unit_price" in line:
+                    new_unit_price = round(new_cost * (1 + markup_pct / 100), 2)
+                    line["unit_price"]  = new_unit_price
+                    line["total_price"] = round(new_unit_price * quantity, 2)
+                line["cost_is_estimate"] = False
+            line["override_id"] = override_row.id
+            line["override_updated_at"] = (
+                override_row.updated_at.isoformat() + "Z"
+                if override_row.updated_at else None
+            )
+            line["override_updated_by"] = override_row.updated_by
 
         line_items.append(line)
 
@@ -300,6 +384,11 @@ def build_bom_from_wrightsoft_lines(
         # combo. Counts split so we can see how the auto-learn catalog
         # is filling in over time.
         "wrightsoft_discovered_item_count":  discovered_count,
+        # Day-13 — lines a human has manually corrected for this
+        # contractor (rows in contractor_overrides). Highest precedence
+        # in the source hierarchy; also where Tom's per-contractor
+        # pricing flow lives.
+        "wrightsoft_manual_item_count":      manual_count,
         # Day-11 — how many of the mapped lines came from DFUnit
         # (authoritative equipment-library hits with full spec data)
         # vs the generic-parts mapping. Lets the SPA show e.g.
@@ -331,9 +420,9 @@ def build_bom_from_wrightsoft_lines(
 
     logger.info(
         "Wrightsoft BOM built for job %s — %d lines "
-        "(%d mapped / %d discovered / %d passthrough / %d unmapped)",
-        job_id, len(line_items), mapped_count, discovered_count,
-        passthrough_count, unmapped_count,
+        "(%d manual / %d mapped / %d discovered / %d passthrough / %d unmapped)",
+        job_id, len(line_items), manual_count, mapped_count,
+        discovered_count, passthrough_count, unmapped_count,
     )
     return bom
 

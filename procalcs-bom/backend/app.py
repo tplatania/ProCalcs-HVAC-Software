@@ -102,6 +102,10 @@ def register_blueprints(app):
     from routes.bom_runs_routes import bom_runs_bp
     from routes.sku_catalog_routes import sku_catalog_bp
     from routes.billing_routes import billing_bp
+    # Day-13 — per-contractor manual corrections (SKU / supplier /
+    # unit price). Backs the inline-edit drawer on the Wrightsoft BOM
+    # result page and Tom's price-entry workflow.
+    from routes.contractor_override_routes import contractor_override_bp
 
     # Keep /health for Cloud Run probes AND expose /api/v1/health so a
     # second API consumer can hit the versioned namespace consistently.
@@ -112,6 +116,8 @@ def register_blueprints(app):
     app.register_blueprint(bom_runs_bp,    url_prefix='/api/v1/bom-runs')
     app.register_blueprint(sku_catalog_bp, url_prefix='/api/v1/sku-catalog')
     app.register_blueprint(billing_bp,     url_prefix='/api/v1/billing')
+    app.register_blueprint(contractor_override_bp,
+                           url_prefix='/api/v1/contractor-overrides')
 
 
 # ===============================
