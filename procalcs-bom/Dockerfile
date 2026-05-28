@@ -45,8 +45,13 @@ EXPOSE 8080
 # (e9b7c1a3f8d2) tables are required by the new features and
 # Cloud Run deploys without manual migration steps would have served
 # traffic against the old schema.
+# FLASK_APP must use the factory form (app:create_app) so the
+# Flask-Migrate db CLI sees the migrate extension that create_app()
+# registers — otherwise `db` is an unknown command. The .py form
+# tries to import 'app.app' as a package which fails on our flat
+# import layout.
 CMD set -e; \
-    FLASK_APP=app.py flask db upgrade; \
+    FLASK_APP="app:create_app" flask db upgrade; \
     exec gunicorn --bind 0.0.0.0:${PORT} \
         --workers 2 --threads 4 --timeout 120 \
         "app:create_app()"
