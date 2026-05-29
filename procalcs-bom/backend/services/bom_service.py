@@ -212,12 +212,21 @@ def generate(client_id: str, job_id: str, design_data: dict,
     # rewriting the prompt or the AI pipeline.
     verified_count = _verify_against_wrightsoft_catalog(priced_items)
 
+    # Day-13 — apply contractor_overrides for this client. Lines whose
+    # (supplier, sku) match a row in contractor_overrides get the
+    # corrected SKU / supplier / unit_price applied AND the source
+    # promoted to 'catalog_verified_manual'. This is the read side of
+    # the inline-edit workflow: edits Richard's team makes on the
+    # Wrightsoft BOM page automatically apply to AI-pipeline runs too.
+    override_count = _apply_contractor_overrides(priced_items, client_id)
+
     # Step 4 — Format final BOM
     bom = _format_bom(priced_items, profile, job_id, effective_mode)
     bom["catalog_match_item_count"] = len(catalog_matched)
     bom["rules_engine_item_count"] = len(deduped_rules)
     bom["ai_item_count"] = len(deduped_ai)
     bom["catalog_verified_item_count"] = verified_count
+    bom["contractor_override_item_count"] = override_count
 
     logger.info("BOM generated successfully for job %s — %s line items",
                 job_id, len(bom.get('line_items', [])))
@@ -303,6 +312,82 @@ def _verify_against_wrightsoft_catalog(line_items: list[dict]) -> int:
             continue
 
     return promoted
+
+
+def _apply_contractor_overrides(line_items: list[dict], client_id: str) -> int:
+    """In-place apply contractor_overrides for a given client.
+
+    For each line whose (manufacturer, sku) matches a row in
+    contractor_overrides:
+      - sku/manufacturer get the corrected values when present
+      - unit_cost gets the override price; unit_price/total_cost/
+        total_price are recomputed from quantity + markup
+      - source is promoted to 'catalog_verified_manual' so the SPA
+        renders the line as a human-verified entry (green)
+      - audit fields (override_id, override_updated_by/at) attached
+
+    Best-effort — any DB hiccup is swallowed and the BOM returns
+    unchanged. Returns the number of lines that got an override
+    applied (0 when client_id is empty or no overrides exist).
+    """
+    if not client_id or not line_items:
+        return 0
+    try:
+        from models.contractor_override import ContractorOverride
+        from extensions import db  # noqa: F401 — kept for app-context check
+        overrides = ContractorOverride.list_for_client(client_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "contractor_overrides lookup failed for client %s — %s",
+            client_id, exc,
+        )
+        return 0
+    if not overrides:
+        return 0
+
+    # Index for O(1) lookup by (supplier_upper, sku) — the same key
+    # the upsert path uses, so case-folding stays consistent.
+    by_key: dict[tuple[str, str], "ContractorOverride"] = {
+        ((o.supplier or "").upper(), o.sku or ""): o for o in overrides
+    }
+
+    applied = 0
+    for li in line_items:
+        sup = ((li.get("manufacturer") or "")).upper()
+        sku = (li.get("sku") or "")
+        if not sup or not sku:
+            continue
+        ov = by_key.get((sup, sku))
+        if ov is None:
+            continue
+
+        if ov.corrected_sku:
+            li["sku"] = ov.corrected_sku
+        if ov.corrected_supplier:
+            li["manufacturer"] = ov.corrected_supplier
+        if ov.unit_price is not None:
+            qty       = float(li.get("quantity") or 0)
+            markup    = float(li.get("markup_pct") or 0)
+            li["unit_cost"]  = float(ov.unit_price)
+            li["total_cost"] = round(float(ov.unit_price) * qty, 2)
+            new_unit_price = round(float(ov.unit_price) * (1 + markup / 100.0), 2)
+            li["unit_price"]  = new_unit_price
+            li["total_price"] = round(new_unit_price * qty, 2)
+
+        li["source"] = "catalog_verified_manual"
+        li["override_id"]         = ov.id
+        li["override_updated_by"] = ov.updated_by
+        li["override_updated_at"] = (
+            ov.updated_at.isoformat() + "Z" if ov.updated_at else None
+        )
+        applied += 1
+
+    if applied:
+        logger.info(
+            "Applied %d contractor_overrides for client %s",
+            applied, client_id,
+        )
+    return applied
 
 
 def _record_bom_run(

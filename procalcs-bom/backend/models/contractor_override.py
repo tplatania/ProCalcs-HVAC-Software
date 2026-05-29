@@ -93,6 +93,20 @@ class ContractorOverride(db.Model):
         }
 
     @classmethod
+    def list_for_client(cls, contractor_id: str) -> list["ContractorOverride"]:
+        """Bulk read for the BOM Engine's apply pass. Returns all
+        overrides for a contractor in a single query so we don't issue
+        N lookups per BOM. Empty list when no overrides exist or
+        contractor_id is empty."""
+        if not contractor_id:
+            return []
+        return (
+            db.session.query(cls)
+            .filter_by(contractor_id=contractor_id)
+            .all()
+        )
+
+    @classmethod
     def lookup(
         cls,
         *,
