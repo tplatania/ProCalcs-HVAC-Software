@@ -248,6 +248,28 @@ def parse_rup():
             # Non-fatal — log + drop the key. Parse-rup still succeeds.
             logger.warning("parse-rup catalog_xref failed: %s", exc)
 
+        # Day-14 Phase 4 — content-hash of the RUP so the SPA can look
+        # up cached known-duct-LF totals for re-uploads of the same
+        # file. Also bundle any cached totals straight into the
+        # duct_summary so the form pre-populates without a second
+        # round trip.
+        try:
+            from models.rup_duct_totals import RupDuctTotals, compute_rup_hash
+            rup_hash = compute_rup_hash(file_bytes)
+            design_data["rup_hash"] = rup_hash
+            cached = RupDuctTotals.lookup(rup_hash)
+            if cached and cached.known_lengths_ft:
+                ds = design_data.get("duct_summary") or {}
+                ds["known_lengths_ft"] = cached.known_lengths_ft
+                ds["known_lengths_cached_at"] = (
+                    cached.updated_at.isoformat() + "Z"
+                    if cached.updated_at else None
+                )
+                ds["known_lengths_cached_by"] = cached.updated_by
+                design_data["duct_summary"] = ds
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("parse-rup duct-totals lookup failed: %s", exc)
+
         return jsonify({
             "success": True,
             "data": design_data,

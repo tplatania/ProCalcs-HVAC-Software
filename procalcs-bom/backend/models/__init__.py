@@ -10,3 +10,4 @@ from .bom_run import BomRun                # noqa: F401
 from .bom_comparison import BomComparison  # noqa: F401
 from .discovered_mapping import DiscoveredMapping  # noqa: F401
 from .contractor_override import ContractorOverride  # noqa: F401
+from .rup_duct_totals import RupDuctTotals  # noqa: F401

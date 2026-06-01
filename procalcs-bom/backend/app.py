@@ -106,6 +106,9 @@ def register_blueprints(app):
     # unit price). Backs the inline-edit drawer on the Wrightsoft BOM
     # result page and Tom's price-entry workflow.
     from routes.contractor_override_routes import contractor_override_bp
+    # Day-14 Phase 4 — per-RUP known-duct-LF cache. Pre-populates the
+    # BOM Engine form on re-upload of the same file.
+    from routes.rup_duct_totals_routes import rup_duct_totals_bp
 
     # Keep /health for Cloud Run probes AND expose /api/v1/health so a
     # second API consumer can hit the versioned namespace consistently.
@@ -118,6 +121,8 @@ def register_blueprints(app):
     app.register_blueprint(billing_bp,     url_prefix='/api/v1/billing')
     app.register_blueprint(contractor_override_bp,
                            url_prefix='/api/v1/contractor-overrides')
+    app.register_blueprint(rup_duct_totals_bp,
+                           url_prefix='/api/v1/rup-duct-totals')
 
 
 # ===============================
