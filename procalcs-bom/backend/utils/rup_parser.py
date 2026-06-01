@@ -343,55 +343,225 @@ def _extract_serial(full_text: str) -> str:
     return m.group(1) if m else ""
 
 
-def _parse_equipment(full_text: str) -> List[Dict[str, Any]]:
-    """Enumerate AHUs from the `AHU - N|AHU - N` pipe-delimited line.
-    Returns one entry per AHU with best-effort CFM/tonnage/model.
+def _parse_equipment(
+    full_text: str,
+    sections: Dict[str, List[str]] | None = None,
+) -> List[Dict[str, Any]]:
+    """Enumerate AHUs from the `AHU - N|AHU - N` pipe-delimited line PLUS
+    per-equipment-instance model numbers + condenser + heat-kit + ERV
+    records pulled from the EQUIP section (Day-14).
+
+    Returns one entry per equipment unit found:
+      [
+        {"name": "AHU - 1", "type": "air_handler", "manufacturer": "TRANE",
+         "model": "5TAMXD06AV41", "cfm": 152, "tonnage": null},
+        {"type": "condenser", "manufacturer": "TRANE", "model": "5TTV0X48A1"},
+        {"type": "heat_kit",  "manufacturer": "TRANE", "model": "BAYEAAC08BK1"},
+        ...
+      ]
+
+    The rules-engine "model expansion" pass uses the (manufacturer, model)
+    fields to emit per-model BOM lines instead of falling back to the
+    Goodman default SKUs. Lines without a model still produce a fallback
+    line so we don't silently lose equipment.
     """
     equipment: List[Dict[str, Any]] = []
 
     ahu_match = re.search(r"(AHU - \d+(?:\|AHU - \d+)+)", full_text)
-    if not ahu_match:
-        return equipment
+    ahus = sorted(set(ahu_match.group(1).split("|"))) if ahu_match else []
 
-    ahus = sorted(set(ahu_match.group(1).split("|")))
-
-    # Aggregate signals — CFMs, tonnage, SEER, model numbers — we can't
-    # cleanly associate them per-AHU without deeper binary parsing, so we
-    # expose them on the first entry as hints and leave the rest blank.
+    # Aggregate signals — CFMs, tonnage, SEER — exposed on the first AHU
+    # entry as hints. Per-instance attribution requires deeper binary
+    # parsing we don't do yet.
     cfms = re.findall(r"(\d{2,5})\s*(?:cfm|CFM)", full_text)
     cfm_values = _dedupe([int(c) for c in cfms if c.isdigit()])
 
     tonnage_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:ton|TON)\b", full_text)
     tonnage = float(tonnage_match.group(1)) if tonnage_match else None
 
-    seer_match = re.search(r"SEER\s*[:=]?\s*(\d+(?:\.\d+)?)", full_text, re.IGNORECASE)
-    seer = float(seer_match.group(1)) if seer_match else None
-
-    # Model-number regex hits are unreliable on the raw binary — they tend
-    # to pick up serial numbers and HVAC contractor license codes. Leave
-    # model extraction to the AI pass via raw_rup_context for now.
-    model_numbers: List[str] = []
+    # Day-14 — pull real model numbers from the EQUIP section. Each
+    # section entry that's a CONFIGURED equipment instance (vs a
+    # Wrightsoft catalog template) carries the model adjacent to the
+    # manufacturer name. _extract_equipment_models groups them by
+    # (type, manufacturer, model) with occurrence counts.
+    models_by_type: Dict[str, List[Dict[str, Any]]] = {
+        "air_handler": [], "condenser": [], "heat_kit": [], "erv": [],
+        "furnace": [],
+    }
+    if sections is not None:
+        for spec in _extract_equipment_models(sections):
+            models_by_type.setdefault(spec["type"], []).append(spec)
 
     for idx, name in enumerate(ahus):
         entry: Dict[str, Any] = {
-            "name":    name.strip(),
-            "type":    "air_handler",
-            "cfm":     None,
-            "tonnage": None,
-            "model":   None,
+            "name":         name.strip(),
+            "type":         "air_handler",
+            "cfm":          None,
+            "tonnage":      None,
+            "model":        None,
+            "manufacturer": None,
         }
         if idx == 0:
-            # Attach system-level signals to the first AHU so the AI prompt
-            # has them to work with. Not strictly per-unit but better than
-            # dropping the data.
             if cfm_values:
                 entry["cfm"] = cfm_values[0]
             entry["tonnage"] = tonnage
-            if model_numbers:
-                entry["model"] = model_numbers[0]
+        # When the EQUIP section gave us air-handler models, attach the
+        # first-found one to the first AHU. Per-AHU attribution would
+        # require linking SYSTEM records to AHU IDs — out of scope here.
+        ah_models = models_by_type["air_handler"]
+        if idx == 0 and ah_models:
+            entry["manufacturer"] = ah_models[0]["manufacturer"]
+            entry["model"]        = ah_models[0]["model"]
         equipment.append(entry)
 
+    # Emit non-AHU equipment as separate entries so downstream
+    # consumers (rules engine, AI prompt) see them explicitly. Each
+    # entry's `count` reflects how many distinct EQUIP occurrences
+    # we observed — used by the model-expansion pass to set qty.
+    for kind in ("condenser", "heat_kit", "erv", "furnace"):
+        for spec in models_by_type[kind]:
+            equipment.append({
+                "type":         kind,
+                "name":         spec.get("name") or kind.replace("_", " ").title(),
+                "manufacturer": spec["manufacturer"],
+                "model":        spec["model"],
+                "count":        spec.get("count", 1),
+                "cfm":          None,
+                "tonnage":      None,
+            })
+
     return equipment
+
+
+# Day-14 — patterns for the EQUIP-section model extraction.
+# Wrightsoft's EQUIP records mix catalog templates ("Split AC",
+# "Gas furnace", "Elec strip" with no model) and configured project
+# instances (same labels but with a model number a few strings down).
+# We classify by the type-keyword and pull (manufacturer, model) from
+# the surrounding tokens.
+
+_EQUIP_TYPE_KEYWORDS = (
+    # (substring in EQUIP entry, mapped equipment type for design_data)
+    ("split ac",         "condenser"),
+    ("heat pump",        "condenser"),
+    ("furnace",          "furnace"),
+    ("elec strip",       "heat_kit"),
+    ("electric strip",   "heat_kit"),
+    ("heat kit",         "heat_kit"),
+    ("air handler",      "air_handler"),
+    ("ahu",              "air_handler"),
+    ("erv",              "erv"),
+    ("hrv",              "erv"),
+    ("energy recovery",  "erv"),
+)
+
+# A model token must look like a real part number — alphanumeric,
+# 5-20 chars, contains both letters and digits. Excludes pure
+# Wrightsoft tags ("RCU-A-CB"), section markers, and serials.
+_MODEL_TOKEN_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-]{4,19}$")
+
+# Known manufacturer 4-char codes + display names. When the EQUIP
+# entry contains one of these, use it as the manufacturer.
+_KNOWN_MANUFACTURERS = {
+    "TRANE": "TRANE", "TRAN": "TRANE",
+    "GOODMAN": "GOODMAN", "GOOD": "GOODMAN",
+    "CARRIER": "CARRIER", "CARR": "CARRIER",
+    "LENNOX": "LENNOX", "LENN": "LENNOX",
+    "BRYANT": "BRYANT", "BRYT": "BRYANT",
+    "RHEEM": "RHEEM", "RHEE": "RHEEM",
+    "AMERICAN STANDARD": "AMERICAN STANDARD",
+    "YORK": "YORK",
+    "DAIKIN": "DAIKIN", "DAIK": "DAIKIN",
+    "MITSUBISHI": "MITSUBISHI", "MITS": "MITSUBISHI",
+    "FUJITSU": "FUJITSU", "FUJI": "FUJITSU",
+    "LG": "LG", "LGEL": "LG",
+    "GREE": "GREE",
+    "BROAN": "BROAN", "BRON": "BROAN",
+}
+
+
+def _extract_equipment_models(sections: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    """Walk the EQUIP section and pull real (type, manufacturer, model)
+    tuples. Each configured project equipment instance shows up as a
+    multi-line EQUIP entry like:
+
+        Split AC
+        RCU-A-CB
+
+        Trane
+
+        TRANE
+        TRAN
+        5TTV0X48A1
+        5TAMXD06AV41
+
+    We classify by the first-line type keyword, then scan the subsequent
+    lines for manufacturer + model. Multiple model tokens (e.g. outdoor
+    + indoor) are emitted as separate entries since they go on the BOM
+    as separate line items. Returns groups of distinct (type, mfr, model)
+    each with a `count` reflecting how many EQUIP entries it came from.
+    """
+    equip_entries = sections.get("EQUIP", []) or []
+    raw_hits: List[Dict[str, Any]] = []
+    for entry in equip_entries:
+        if not entry:
+            continue
+        lines = [l.strip() for l in entry.split("\n") if l.strip()]
+        if not lines:
+            continue
+        # Classify by first-line keyword
+        head = lines[0].lower()
+        equip_type: str | None = None
+        for needle, kind in _EQUIP_TYPE_KEYWORDS:
+            if needle in head:
+                equip_type = kind
+                break
+        if equip_type is None:
+            continue
+        # Find manufacturer (first known-mfr token in the body)
+        manufacturer = None
+        for tok in lines[1:]:
+            up = tok.strip().upper()
+            if up in _KNOWN_MANUFACTURERS:
+                manufacturer = _KNOWN_MANUFACTURERS[up]
+                break
+        # Find model tokens (alphanumeric, 5-20 chars, mixed)
+        models = []
+        for tok in lines[1:]:
+            up = tok.strip().upper()
+            if up in _KNOWN_MANUFACTURERS:
+                continue
+            if _MODEL_TOKEN_RE.match(up) and any(c.isalpha() for c in up) and any(c.isdigit() for c in up):
+                models.append(up)
+        if not models or not manufacturer:
+            # Catalog template without project-specific config; skip.
+            continue
+        # First model after the type label is usually the OUTDOOR unit
+        # (for split AC) or the unit itself (for furnace/heat-kit).
+        # Second model (when present) is the INDOOR coil / air handler.
+        # Emit each as its own record so the BOM lists them separately.
+        for i, model in enumerate(models):
+            kind = equip_type
+            # Split AC entries often pair outdoor + indoor — promote
+            # the second model to air_handler so the BOM splits them.
+            if equip_type == "condenser" and i >= 1:
+                kind = "air_handler"
+            raw_hits.append({
+                "type":         kind,
+                "manufacturer": manufacturer,
+                "model":        model,
+                "name":         lines[0],
+            })
+
+    # Group by (type, mfr, model) with occurrence counts
+    grouped: Dict[tuple, Dict[str, Any]] = {}
+    for hit in raw_hits:
+        key = (hit["type"], hit["manufacturer"], hit["model"])
+        if key in grouped:
+            grouped[key]["count"] += 1
+        else:
+            grouped[key] = {**hit, "count": 1}
+    return list(grouped.values())
 
 
 def _parse_rooms(full_text: str) -> List[Dict[str, Any]]:
@@ -1368,7 +1538,7 @@ def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
     # 8-AHU residence — ~6 zone-equipment items per AHU). ZEQUIP parser
     # is a follow-up; until it lands, the regex path's AHU-pipe pattern
     # remains the most reliable signal for compute_scope.
-    equipment = _parse_equipment(full_text)
+    equipment = _parse_equipment(full_text, sections)
 
     rooms     = _parse_rooms(full_text)
 

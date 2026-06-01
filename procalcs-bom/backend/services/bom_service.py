@@ -118,6 +118,14 @@ def generate(client_id: str, job_id: str, design_data: dict,
     rule_lines = generate_rule_lines(design_data, output_mode=effective_mode)
     rules_priced = _format_rule_lines_for_bom(rule_lines, profile, inferred_brand)
 
+    # Day-14 Phase 1 — equipment-model expansion. When the RUP parser
+    # surfaced per-instance equipment with real manufacturer + model
+    # (e.g. "TRANE 5TTV0X48A1" instead of the Goodman catalog default),
+    # replace the catalog-default rule line with one line per distinct
+    # model. The cross-pollination pass then verifies each model SKU
+    # against the bundled catalog and tags Verified where possible.
+    rules_priced = _expand_equipment_models(rules_priced, design_data, profile)
+
     # Step 2a' — Catalog-augmented per-equipment match (Phase 3.7,
     # May 2026). The rules engine fires SKUs by trigger flags but
     # doesn't pick by capacity — if a project has 5 AHUs at 24 kBTU
@@ -279,7 +287,14 @@ def _verify_against_wrightsoft_catalog(line_items: list[dict]) -> int:
     # AI sources we're willing to promote. Other sources (catalog_match,
     # rules_engine, wrightsoft_*) already have a verified provenance —
     # don't clobber them.
-    AI_SOURCES = {"ai_inferred", "ai_with_catalog_sku", "ai"}
+    AI_SOURCES = {
+        "ai_inferred", "ai_with_catalog_sku", "ai",
+        # Day-14 — model-expansion emits this source. The SKUs are
+        # real Trane/Goodman/etc. part numbers pulled from the RUP's
+        # EQUIP section; promote to catalog_verified_* if we can find
+        # them in DFUnit / mapped_parts.
+        "rup_equipment_model",
+    }
 
     for li in line_items:
         sku = (li.get("sku") or "").strip()
@@ -312,6 +327,106 @@ def _verify_against_wrightsoft_catalog(line_items: list[dict]) -> int:
             continue
 
     return promoted
+
+
+# Map of equipment trigger → design_data.equipment.type that
+# carries the actual model. When a rules-engine line fires on the
+# trigger AND the parser surfaced models, we fan the single line
+# out into one per (manufacturer, model).
+_TRIGGER_TO_EQUIP_TYPE = {
+    "ahu_present":       "air_handler",
+    "condenser_present": "condenser",
+    "heat_kit_present":  "heat_kit",
+    "erv_present":       "erv",
+}
+
+
+def _expand_equipment_models(
+    rule_lines: list[dict],
+    design_data: dict,
+    profile: ClientProfile,
+) -> list[dict]:
+    """Fan out catalog-default equipment lines into per-model lines
+    when the parser found real model numbers in the RUP's EQUIP
+    section.
+
+    Why: with no model info the rules engine emits a single catalog
+    default (e.g. Goodman AHU SKU with qty=5). With models we want
+    one line per (manufacturer, model) with qty = how many EQUIP
+    occurrences we saw. Cross-pollination then verifies each.
+
+    Lines whose trigger isn't an equipment trigger, OR whose
+    design_data equipment list has no model info, pass through
+    unchanged.
+    """
+    if not isinstance(design_data, dict):
+        return rule_lines
+
+    # Group design_data.equipment by type, keeping only entries with a
+    # real model. Pre-aggregated by count from the parser.
+    by_type: dict[str, list[dict]] = {}
+    for eq in design_data.get("equipment") or []:
+        if not isinstance(eq, dict):
+            continue
+        if not eq.get("model"):
+            continue
+        t = (eq.get("type") or "").lower()
+        by_type.setdefault(t, []).append(eq)
+
+    if not by_type:
+        return rule_lines
+
+    out: list[dict] = []
+    for line in rule_lines:
+        trig = line.get("trigger")
+        equip_type = _TRIGGER_TO_EQUIP_TYPE.get(trig or "")
+        if not equip_type or equip_type not in by_type:
+            out.append(line)
+            continue
+
+        # Replace this single catalog-default line with per-model lines.
+        instances = by_type[equip_type]
+        # Reuse the trigger's pricing math: each per-model line gets
+        # the same unit_cost as the catalog default for now (until the
+        # contractor override or a real per-SKU price list is in
+        # place). The contractor_overrides pass downstream will swap
+        # in real prices when they exist.
+        for inst in instances:
+            count = int(inst.get("count") or 1)
+            unit_cost  = float(line.get("unit_cost") or 0)
+            unit_price = float(line.get("unit_price") or 0)
+            mfr        = inst.get("manufacturer") or line.get("manufacturer")
+            model      = inst.get("model")
+            new_desc = _maybe_append_brand(
+                # Re-derive description from the equipment-type label,
+                # not the catalog default. "AHU" / "Condenser" /
+                # "Electric Heat Kit" — the model goes in the SKU column.
+                {
+                    "air_handler": "Air Handler",
+                    "condenser":   "Condenser",
+                    "heat_kit":    "Electric Heat Kit",
+                    "erv":         "ERV",
+                    "furnace":     "Furnace",
+                }.get(equip_type, line.get("description") or "Equipment"),
+                "equipment",
+                mfr,
+            )
+            out.append({
+                **line,
+                "sku":          model,
+                "manufacturer": mfr,
+                "description":  new_desc,
+                "quantity":     count,
+                "unit_cost":    unit_cost,
+                "unit_price":   unit_price,
+                "total_cost":   round(count * unit_cost, 2),
+                "total_price":  round(count * unit_price, 2),
+                # Tag so we can recognize these in the cross-pollination
+                # pass and on the run-history page.
+                "source":       "rup_equipment_model",
+            })
+
+    return out
 
 
 def _apply_contractor_overrides(line_items: list[dict], client_id: str) -> int:
