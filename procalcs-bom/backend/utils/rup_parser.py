@@ -646,10 +646,33 @@ def _extract_duct_summary(
         except ValueError:
             pass
 
+    # Day-14 Phase 3 — return-vs-supply identifier counts. Wrightsoft
+    # tags duct paths with prefixes:
+    #   st  = supply trunk         sr  = supply rectangular (run)
+    #   sb  = supply branch        srs = supply rectangular special
+    #   rb  = return branch        rt  = return trunk
+    #   rrs = return rectangular
+    # Counting these tells us how many supply + return paths the
+    # designer drew, even when we can't decode their per-path lengths.
+    # AI uses the counts to emit a proportional return-side line set
+    # (Richard's "RETURNS are not included yet" was a 0-return-lines
+    # bug — once the AI sees the count it emits matching coverage).
+    id_re = re.compile(
+        r"\b(st|sb|sr|srs|rb|rt|rrs)(\d{1,3})[a-z]?\b", re.I)
+    id_counts: Dict[str, int] = {}
+    for m in id_re.finditer(text16):
+        pfx = m.group(1).lower()
+        id_counts[pfx] = id_counts.get(pfx, 0) + 1
+    supply_id_count = sum(id_counts.get(k, 0) for k in ("st", "sb", "sr", "srs"))
+    return_id_count = sum(id_counts.get(k, 0) for k in ("rb", "rt", "rrs"))
+
     return {
         "type_counts":             type_counts,
         "round_diameters_present": sorted(round_diameters),
         "rect_sizes_present":      sorted(rect_sizes),
+        "supply_path_count":       supply_id_count,
+        "return_path_count":       return_id_count,
+        "path_count_by_prefix":    {k: v for k, v in sorted(id_counts.items())},
     }
 
 

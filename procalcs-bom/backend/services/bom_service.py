@@ -722,12 +722,27 @@ def _build_ai_prompt(
             ", ".join(f'{s}"' for s in rect_sizes[:20])
             if rect_sizes else "(no rectangular duct detected)"
         )
+        supply_n = int(duct_summary.get("supply_path_count") or 0)
+        return_n = int(duct_summary.get("return_path_count") or 0)
+        path_line = (
+            f"  Supply paths drawn: {supply_n}; "
+            f"Return paths drawn: {return_n}.\n"
+        )
+        return_instruction = (
+            "  RETURN DUCT: the RUP has "
+            f"{return_n} return paths drawn — you MUST emit return-side "
+            "duct lines (description ends with '(return)'). Returns "
+            "typically use the same diameter set as supply. Skipping "
+            "returns underestimates the install by ~30%.\n"
+        ) if return_n > 0 else ""
         duct_constraint_block = (
             "\n\nDUCT SYSTEM CONSTRAINT (extracted deterministically from the RUP — "
             "DO NOT invent sizes or types outside this list):\n"
             f"  Duct types in use: {type_lines}\n"
             f"  Round flex/vinyl diameters present: {round_line}\n"
             f"  Rectangular sizes present: {rect_line}\n"
+            f"{path_line}"
+            f"{return_instruction}"
             "  Emit duct lines ONLY for these sizes and types. If a size you "
             "want to emit is not in this list, OMIT it — the designer did "
             "not specify that size.\n"

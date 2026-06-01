@@ -69,6 +69,26 @@ def test_round_diameters_match_richards_table():
     assert ds["round_diameters_present"] == [4, 6, 8, 10]
 
 
+def test_path_counts_distinguish_supply_and_return():
+    """Phase 3 — duct_summary carries supply_path_count + return_path_count
+    so the AI knows the RUP has return ducts to emit (Richard's
+    'RETURNS are not included yet' fix).
+
+    79th Ct prefix counts from the actual binary:
+      st (supply trunks)   = 43
+      sr+srs (supply rect) = 19
+      rb (return branches) = 9
+      rt (return trunks)   = 6
+    Supply total ≥ 60, return total = 15."""
+    ds = _design_data()["duct_summary"]
+    assert ds["supply_path_count"] >= 60
+    assert ds["return_path_count"] == 15  # 9 rb + 6 rt
+    pbp = ds["path_count_by_prefix"]
+    assert pbp.get("rb") == 9
+    assert pbp.get("rt") == 6
+    assert pbp.get("st") == 43
+
+
 def test_rect_sizes_normalized_larger_first():
     """'12 " x 10 "' and '10 " x 12 "' must collapse to one entry
     ('12x10') so reviewers don't see duplicate-shaped sizes."""
@@ -113,6 +133,9 @@ def test_prompt_includes_duct_constraint_when_summary_present():
             "type_counts": {"ShtMetl": 24, "VinlFlx": 20, "RectFbg": 4},
             "round_diameters_present": [4, 6, 8, 10],
             "rect_sizes_present": ["12x10", "20x16"],
+            "supply_path_count": 62,
+            "return_path_count": 15,
+            "path_count_by_prefix": {"st": 43, "sr": 12, "srs": 7, "rb": 9, "rt": 6},
         },
     }
     prompt = _build_prompt(design, profile, claimed_lines=[])
@@ -122,6 +145,10 @@ def test_prompt_includes_duct_constraint_when_summary_present():
     assert "4\"" in prompt and "6\"" in prompt and "8\"" in prompt and "10\"" in prompt
     assert "12x10" in prompt
     assert "OMIT it" in prompt
+    # Phase 3 — return-side instruction
+    assert "Return paths drawn: 15" in prompt
+    assert "RETURN DUCT" in prompt
+    assert "must emit return-side" in prompt.lower()
 
 
 def test_prompt_skips_constraint_when_summary_empty():
