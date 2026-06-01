@@ -8,6 +8,15 @@ CRITICAL RULE (from design standards):
 AI reads text and reasons. Python does math.
 Never let AI calculate totals — AI estimates quantities,
 Python multiplies by price and applies markup.
+
+DATA-SOURCES CONTRACT (Day-14, 2026-06-01):
+Before adding a new emission path or changing how an existing
+BOM field gets its value, consult docs/data-sources.md. The
+contract declares — per BOM data domain — whether the value is
+deterministic (RUP/catalog), computed (rules), user-encoded
+(profile/overrides/per-RUP cache), or AI-estimated. Mixing
+strategies on the same domain is the anti-pattern that kept
+breaking testing rounds 1–4; the contract exists to stop that.
 """
 
 import logging
