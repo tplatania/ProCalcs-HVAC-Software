@@ -126,6 +126,14 @@ def generate(client_id: str, job_id: str, design_data: dict,
     # against the bundled catalog and tags Verified where possible.
     rules_priced = _expand_equipment_models(rules_priced, design_data, profile)
 
+    # Day-14 Phase 4 — when the user pasted Wrightsoft's known per-size
+    # duct LF totals into the BOM Engine form, emit duct lines straight
+    # from those numbers (fully deterministic). The AI pass downstream
+    # is told via the prompt block to skip duct emission for any size
+    # already covered here. This is the workflow Tom asked about (us
+    # entering manual data) applied to duct quantities specifically.
+    known_duct_lines = _emit_known_duct_lines(design_data, profile)
+
     # Step 2a' — Catalog-augmented per-equipment match (Phase 3.7,
     # May 2026). The rules engine fires SKUs by trigger flags but
     # doesn't pick by capacity — if a project has 5 AHUs at 24 kBTU
@@ -191,21 +199,30 @@ def generate(client_id: str, job_id: str, design_data: dict,
     ]
 
     claimed_descs: set[str] = set()
-    for li in catalog_matched + deduped_rules:
+    for li in catalog_matched + deduped_rules + known_duct_lines:
         d = (li.get("description") or "").lower()
         if d:
             claimed_descs.add(d)
-    deduped_ai = [
-        li for li in ai_priced
-        if not any(c and c in (li.get("description") or "").lower() for c in claimed_descs)
-    ]
+    # When known duct LF is present, suppress ALL AI-emitted duct lines
+    # outright — the user gave us numbers, we trust them over AI.
+    has_known_ducts = bool(known_duct_lines)
+    deduped_ai = []
+    for li in ai_priced:
+        if has_known_ducts and (li.get("category") or "").lower() == "duct":
+            continue
+        if any(c and c in (li.get("description") or "").lower() for c in claimed_descs):
+            continue
+        deduped_ai.append(li)
 
     # Day-12 — deterministic labor lines from profile.labor rates.
     # Skipped silently when the profile hasn't set rates; AI falls back
     # to estimating labor in that case (existing behavior).
     labor_lines = generate_labor_lines(design_data, profile=profile)
 
-    priced_items = catalog_matched + deduped_rules + labor_lines + deduped_ai
+    priced_items = (
+        catalog_matched + deduped_rules + known_duct_lines
+        + labor_lines + deduped_ai
+    )
 
     # Day-12 cross-pollination — every priced line gets a verification
     # pass against the bundled Wrightsoft catalog. When an AI-emitted
@@ -426,6 +443,96 @@ def _expand_equipment_models(
                 "source":       "rup_equipment_model",
             })
 
+    return out
+
+
+def _emit_known_duct_lines(
+    design_data: dict,
+    profile: ClientProfile,
+) -> list[dict]:
+    """Day-14 Phase 4 — emit fully-deterministic duct BOM lines when
+    the user pasted Wrightsoft's Supply Actual Ln(ft) table into the
+    BOM Engine form.
+
+    Expected shape on design_data:
+      duct_summary.known_lengths_ft = {
+        "round_supply": { 4: 524.1, 6: 50.0, 8: 979.2, 10: 211.5 },
+        "round_return": { 6: 80.0, 10: 100.0 },
+        "rect_supply":  { "12x10": 350.0, "20x16": 80.0 },
+        "rect_return":  { "20x16": 60.0 },
+      }
+
+    One line per (type, size, direction). Trust the user's numbers
+    verbatim — no AI in this path. Returns [] when no totals provided.
+    """
+    if not isinstance(design_data, dict):
+        return []
+    summary = design_data.get("duct_summary") or {}
+    known = summary.get("known_lengths_ft") or {}
+    if not known:
+        return []
+
+    markup_pct = _get_markup_pct("duct", profile)
+
+    def _line(*, description: str, qty: float, supplier_hint: str | None = None):
+        if qty is None or qty <= 0:
+            return None
+        unit_cost = float(_get_unit_cost(description, "duct", profile) or 0.0)
+        raw_unit_price = unit_cost * (1 + markup_pct / 100.0)
+        unit_price = round(raw_unit_price, 2)
+        qty_f = float(qty)
+        return {
+            "category":    "duct",
+            "description": description,
+            "quantity":    qty_f,
+            "unit":        "LF",
+            "unit_cost":   unit_cost,
+            "unit_price":  unit_price,
+            "total_cost":  round(qty_f * unit_cost, 2),
+            "total_price": round(qty_f * unit_price, 2),
+            "markup_pct":  markup_pct,
+            "section":     "Duct System Equipment",
+            "supplier":    supplier_hint or "",
+            "source":      "user_known_lengths",
+            "cost_is_estimate": unit_cost == 0.0,
+        }
+
+    out: list[dict] = []
+
+    # Round duct (supply + return)
+    for direction, label_dir in (("round_supply", "supply"),
+                                 ("round_return", "return")):
+        bucket = known.get(direction) or {}
+        for diam, lf in bucket.items():
+            # Tolerate string keys ("4") from JSON serialization
+            try:
+                d_int = int(diam)
+            except (TypeError, ValueError):
+                continue
+            line = _line(
+                description=f'{d_int}-in flex duct ({label_dir})',
+                qty=lf,
+            )
+            if line:
+                out.append(line)
+
+    # Rect duct (supply + return)
+    for direction, label_dir in (("rect_supply", "supply"),
+                                 ("rect_return", "return")):
+        bucket = known.get(direction) or {}
+        for size, lf in bucket.items():
+            line = _line(
+                description=f'Rectangular duct {size} ({label_dir})',
+                qty=lf,
+            )
+            if line:
+                out.append(line)
+
+    if out:
+        logger.info(
+            "Emitted %d deterministic duct lines from user-known LF totals",
+            len(out),
+        )
     return out
 
 
@@ -735,6 +842,19 @@ def _build_ai_prompt(
             "typically use the same diameter set as supply. Skipping "
             "returns underestimates the install by ~30%.\n"
         ) if return_n > 0 else ""
+        # Day-14 Phase 4 — when the user supplied known per-size LF
+        # totals (pasted from Wrightsoft's Supply Actual Ln table),
+        # the deterministic emitter already produced those duct lines.
+        # Tell the AI to SKIP duct emission entirely.
+        known_lf = (duct_summary.get("known_lengths_ft") or {})
+        has_known = any(known_lf.get(k) for k in
+                        ("round_supply", "round_return", "rect_supply", "rect_return"))
+        known_lf_instruction = (
+            "  ⚠ USER PROVIDED known LF totals from Wrightsoft's Supply "
+            "Actual Ln table. Duct lines have been EMITTED DETERMINISTICALLY. "
+            "DO NOT emit any 'duct' category lines — they will be dropped "
+            "by the deduper.\n"
+        ) if has_known else ""
         duct_constraint_block = (
             "\n\nDUCT SYSTEM CONSTRAINT (extracted deterministically from the RUP — "
             "DO NOT invent sizes or types outside this list):\n"
@@ -743,6 +863,7 @@ def _build_ai_prompt(
             f"  Rectangular sizes present: {rect_line}\n"
             f"{path_line}"
             f"{return_instruction}"
+            f"{known_lf_instruction}"
             "  Emit duct lines ONLY for these sizes and types. If a size you "
             "want to emit is not in this list, OMIT it — the designer did "
             "not specify that size.\n"
