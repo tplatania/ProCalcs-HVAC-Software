@@ -30,6 +30,11 @@ procalcs-bom/backend/services/bom_service.py):
         "duct_location": "attic" | "crawlspace" | "conditioned" | "basement" | "other",
       },
       "equipment":  [{"name", "type", "cfm", "tonnage", "model"}],
+      "duct_summary": {       # Day-14 Phase 2 — what the RUP says
+        "type_counts":              {"ShtMetl": int, ...},  # from DTYPREF
+        "round_diameters_present":  [int, ...],  # round duct diameters seen
+        "rect_sizes_present":       [str, ...],  # "12x10" style mentions
+      },
       "duct_runs":  [],   # populated via AI fallback in hybrid mode
       "fittings":   [],   # populated via AI fallback in hybrid mode
       "registers":  [],   # populated via AI fallback in hybrid mode
@@ -562,6 +567,90 @@ def _extract_equipment_models(sections: Dict[str, List[str]]) -> List[Dict[str, 
         else:
             grouped[key] = {**hit, "count": 1}
     return list(grouped.values())
+
+
+def _extract_duct_summary(
+    raw_bytes: bytes,
+    sections: Dict[str, List[str]],
+) -> Dict[str, Any]:
+    """Day-14 Phase 2 — surface what the RUP says about its duct
+    system WITHOUT trying to decode per-run binary lengths (that's
+    a separate engineering project).
+
+    Three signals:
+      type_counts             — from DTYPREF (ShtMetl, VinlFlx, RectFbg)
+                                gives the deterministic system mix
+      round_diameters_present — round duct diameters that appear anywhere
+                                in the binary as 'N"' or 'N in'
+      rect_sizes_present      — rectangular duct sizes ('12x10' etc.)
+                                pulled from 'Duct N " x M "' patterns
+
+    The AI prompt uses these to CONSTRAIN its duct-line output —
+    no more 18"/20"/24" round-flex hallucinations on a project that
+    only has 4-10". LF totals are still AI-estimated until a future
+    iteration cracks the per-run binary fields.
+    """
+    # type_counts is rock-solid — DTYPREF is one entry per duct run
+    type_counts: Dict[str, int] = {}
+    for s in (sections.get("DTYPREF") or []):
+        tok = (s or "").strip()
+        if tok:
+            type_counts[tok] = type_counts.get(tok, 0) + 1
+
+    # Pull the full UTF-16 stream once so we don't miss 2-char tokens
+    # ('4"') that the min-length string extractor filters out.
+    try:
+        text16 = raw_bytes.decode("utf-16-le", errors="replace")
+    except Exception:
+        text16 = ""
+
+    # Round diameters — anywhere 'N"' or 'N in' appears in a context
+    # that's NOT a rectangular size. Wrightsoft serializes:
+    #   rectangular ducts as 'Duct W " x H "'
+    #   round branches as '<rect_dims> <cfm> cfm N "'
+    # We accept the second pattern (round-branch diameters) AND
+    # explicit 'D = N' / 'round N "' / 'D = N' patterns, then drop
+    # any number that's the FIRST dim of a 'W x H' pair (which we
+    # already capture in rect_sizes).
+    round_diameters = set()
+    rect_ctx_re = re.compile(r"\bx\b\s*\d", re.I)
+    # Pattern 1: '... cfm N "' — round branch diameter after CFM
+    cfm_diam_re = re.compile(r"\bcfm\s+(\d{1,2})\s*[\"i]")
+    for m in cfm_diam_re.finditer(text16):
+        d = int(m.group(1))
+        if 3 <= d <= 30:
+            round_diameters.add(d)
+    # Pattern 2: explicit 'D = N' / 'round N "' / 'vinyl N "'
+    explicit_re = re.compile(
+        r"(?:D\s*=\s*|round\s+|vinyl\s+|fiberglass\s+round\s+)(\d{1,2})\s*[\"i]",
+        re.I,
+    )
+    for m in explicit_re.finditer(text16):
+        d = int(m.group(1))
+        if 3 <= d <= 30:
+            round_diameters.add(d)
+
+    # Rect sizes — 'Duct N " x M "' (Wrightsoft's serialized format)
+    rect_sizes = set()
+    rect_re = re.compile(
+        r"(?:Duct|Rectangular|Trans)\s+(\d{1,2})\s*[\"in]+\s*x\s*(\d{1,2})\s*[\"in]+",
+        re.I)
+    for m in rect_re.finditer(text16):
+        a, b = m.group(1), m.group(2)
+        try:
+            ai, bi = int(a), int(b)
+            if 3 <= ai <= 60 and 3 <= bi <= 60:
+                # Normalize: larger dim first so 12x10 == 10x12.
+                lo, hi = sorted((ai, bi))
+                rect_sizes.add(f"{hi}x{lo}")
+        except ValueError:
+            pass
+
+    return {
+        "type_counts":             type_counts,
+        "round_diameters_present": sorted(round_diameters),
+        "rect_sizes_present":      sorted(rect_sizes),
+    }
 
 
 def _parse_rooms(full_text: str) -> List[Dict[str, Any]]:
@@ -1542,6 +1631,11 @@ def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
 
     rooms     = _parse_rooms(full_text)
 
+    # Day-14 Phase 2 — duct-system metadata pulled from DTYPREF +
+    # diameter scans. Used by the AI prompt to constrain duct-line
+    # output to sizes/types actually present in the RUP.
+    duct_summary = _extract_duct_summary(file_bytes, sections)
+
     raw_context = _build_raw_context(
         project, building, equipment, rooms, full_text,
         file_bytes=file_bytes,
@@ -1552,6 +1646,7 @@ def parse_rup_bytes(file_bytes: bytes, source_name: str = "") -> Dict[str, Any]:
         "location":  location,
         "building":  building,
         "equipment": equipment,
+        "duct_summary": duct_summary,
         "duct_runs": [],   # hybrid — filled by AI from raw_rup_context
         "fittings":  [],   # hybrid — filled by AI from raw_rup_context
         "registers": [],   # hybrid — filled by AI from raw_rup_context

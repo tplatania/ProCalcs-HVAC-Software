@@ -699,6 +699,40 @@ def _build_ai_prompt(
     else:
         fallback_block = ""
 
+    # Day-14 Phase 2 — duct-summary constraint block. The RUP tells us
+    # which duct types + sizes are actually in the design; without this
+    # the AI invents sizes that weren't designed (Richard's Comparison
+    # Summary 4.0 caught us emitting 18"/20"/24" round flex on a
+    # project that only had 4"/6"/8"/10"). HARD CONSTRAINT — Claude
+    # must not emit duct lines for sizes/types outside this list.
+    duct_summary = design_data.get('duct_summary') or {}
+    duct_constraint_block = ""
+    if duct_summary:
+        type_lines = ", ".join(
+            f"{k} ({v} segments)"
+            for k, v in (duct_summary.get("type_counts") or {}).items()
+        ) or "(not detected)"
+        round_diams = duct_summary.get("round_diameters_present") or []
+        round_line = (
+            ", ".join(f'{d}"' for d in round_diams)
+            if round_diams else "(no round duct detected)"
+        )
+        rect_sizes = duct_summary.get("rect_sizes_present") or []
+        rect_line = (
+            ", ".join(f'{s}"' for s in rect_sizes[:20])
+            if rect_sizes else "(no rectangular duct detected)"
+        )
+        duct_constraint_block = (
+            "\n\nDUCT SYSTEM CONSTRAINT (extracted deterministically from the RUP — "
+            "DO NOT invent sizes or types outside this list):\n"
+            f"  Duct types in use: {type_lines}\n"
+            f"  Round flex/vinyl diameters present: {round_line}\n"
+            f"  Rectangular sizes present: {rect_line}\n"
+            "  Emit duct lines ONLY for these sizes and types. If a size you "
+            "want to emit is not in this list, OMIT it — the designer did "
+            "not specify that size.\n"
+        )
+
     rooms_block = ""
     if rooms:
         room_lines = "\n".join(
@@ -720,7 +754,7 @@ Fittings: {fittings}
 
 Equipment: {equipment}
 
-Registers/Grilles: {registers}{rooms_block}{fallback_block}{available_catalog_block}{catalog_context_block}
+Registers/Grilles: {registers}{rooms_block}{duct_constraint_block}{fallback_block}{available_catalog_block}{catalog_context_block}
 
 CLIENT PREFERENCES:
 Preferred mastic brand: {mastic_brand}
@@ -762,6 +796,7 @@ For hanger straps: approximately 1 per 4-5 LF of horizontal duct run.
         equipment=json.dumps(equipment, indent=2),
         registers=json.dumps(registers, indent=2),
         rooms_block=rooms_block,
+        duct_constraint_block=duct_constraint_block,
         fallback_block=fallback_block,
         available_catalog_block=available_catalog_block,
         catalog_context_block=catalog_context_block,
