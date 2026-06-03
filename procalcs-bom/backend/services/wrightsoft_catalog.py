@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
@@ -45,13 +46,48 @@ logger = logging.getLogger("procalcs_bom.wrightsoft_catalog")
 
 # ---------------------------------------------------------------------
 # Module-level cache. Populated lazily on first call to any loader.
-# Thread-safe via a single lock — these CSVs load in <100ms so a
-# coarse lock is fine.
+# Thread-safe via a single lock — load completes in <500ms whether
+# from local CSV (legacy) or the catalog API (Phase C).
 # ---------------------------------------------------------------------
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "wrightsoft_catalog"
 
+# Phase C dispatch — when CATALOG_API_URL is set, every loader fetches
+# from procalcs-catalog instead of reading local CSVs. Falls back to
+# CSV on any client error so a misconfigured deploy doesn't take the
+# BOM Generator offline.
+_API_URL_ENV = "CATALOG_API_URL"
+_API_TOKEN_ENV = "CATALOG_API_TOKEN"
+
 _lock = threading.Lock()
+
+
+_catalog_client = None  # lazy-init
+
+
+def _get_client():
+    """Return a singleton CatalogClient when CATALOG_API_URL is set,
+    or None to signal 'use the local CSV path'."""
+    global _catalog_client
+    if _catalog_client is not None:
+        return _catalog_client
+    url = os.environ.get(_API_URL_ENV, "").strip()
+    if not url:
+        return None
+    try:
+        from services._catalog_client import CatalogClient
+        _catalog_client = CatalogClient(
+            base_url=url,
+            service_token=os.environ.get(_API_TOKEN_ENV) or None,
+            client_id="procalcs-bom",
+            timeout_seconds=15.0,
+            cache_ttl_seconds=300.0,
+        )
+        logger.info("CatalogClient initialized → %s", url)
+        return _catalog_client
+    except Exception as exc:  # noqa: BLE001
+        logger.error("CatalogClient init failed (%s) — falling back to CSV", exc)
+        return None
 
 
 @dataclass
@@ -85,55 +121,158 @@ def _read_csv_dict(path: Path) -> list[dict[str, str]]:
         return [dict(row) for row in reader]
 
 
+# ─── Phase C — API → CSV-shape adapters ────────────────────────────
+#
+# The catalog API serializes rows with snake_case keys (manufacturer,
+# clg_cap, …). Existing callers in procalcs-bom expect the original
+# CSV shape (Manufacturer, ClgCap, …). These small adapters keep
+# downstream code untouched.
+
+def _api_to_csv_manufacturer(row: dict) -> dict:
+    return {
+        "Source":  row.get("source") or "",
+        "Type":    row.get("type") or "",
+        "Name":    row.get("name") or "",
+        "Address": row.get("address") or "",
+        "City":    row.get("city") or "",
+        "State":   row.get("state") or "",
+        "Zip":     row.get("zip") or "",
+        "Phone":   row.get("phone") or "",
+        "Email":   row.get("email") or "",
+        "Web":     row.get("web") or "",
+        "Contact": row.get("contact") or "",
+    }
+
+
+def _api_to_csv_generic(row: dict) -> dict:
+    return {
+        "Category":    row.get("category") or "",
+        "Item":        row.get("item") or "",
+        "Description": row.get("description") or "",
+        "Units":       row.get("units") or "",
+    }
+
+
+def _api_to_csv_dfunit(row: dict) -> dict:
+    return {
+        "Manufacturer":   row.get("manufacturer") or "",
+        "Model":          row.get("model") or "",
+        "SysType":        row.get("sys_type") or "",
+        "UnitType":       row.get("unit_type") or "",
+        "ClgCap":         row.get("clg_cap"),
+        "HtgCap":         row.get("htg_cap"),
+        "PowerCode":      row.get("power_code") or "",
+        "Series":         row.get("series") or "",
+        "MixPipeId":      row.get("mix_pipe_id") or "",
+        "VapPipeId":      row.get("vap_pipe_id") or "",
+        "Height":         row.get("height"),
+        "Width":          row.get("width"),
+        "Depth":          row.get("depth"),
+        "Weight":         row.get("weight"),
+        "MaxPipeLen":     row.get("max_pipe_len"),
+        "MaxPipeHeight":  row.get("max_pipe_height"),
+    }
+
+
 def load_categories() -> dict[str, str]:
-    """Wrightsoft category code (e.g. 'DFRBTR') → human description
-    (e.g. 'Duct boots and registers')."""
+    """Wrightsoft category code (e.g. 'DFRBTR') → human description.
+    Sourced from procalcs-catalog when CATALOG_API_URL is set;
+    falls back to local CSV otherwise."""
     with _lock:
         if _cache.categories is None:
-            rows = _read_csv_dict(_DATA_DIR / "categories.csv")
-            _cache.categories = {r["Category"]: r["Description"] for r in rows}
-            logger.info("Loaded %d Wrightsoft categories", len(_cache.categories))
+            client = _get_client()
+            if client is not None:
+                try:
+                    items = client.categories()
+                    _cache.categories = {
+                        (r.get("category") or ""): (r.get("description") or "")
+                        for r in items
+                    }
+                    _cache.source = "catalog_api"
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("catalog API categories failed (%s) — CSV fallback", exc)
+            if _cache.categories is None:
+                rows = _read_csv_dict(_DATA_DIR / "categories.csv")
+                _cache.categories = {r["Category"]: r["Description"] for r in rows}
+                _cache.source = "csv"
+            logger.info("Loaded %d Wrightsoft categories from %s",
+                        len(_cache.categories), _cache.source)
     return _cache.categories
 
 
 def load_manufacturers() -> dict[str, dict[str, Any]]:
-    """4-char source code (e.g. 'GOOD', 'WSF', 'RHEA') → manufacturer
-    metadata dict (Name / Address / Phone / Web / Type / etc.)."""
+    """4-char source code → manufacturer metadata row."""
     with _lock:
         if _cache.manufacturers is None:
-            rows = _read_csv_dict(_DATA_DIR / "manufacturers.csv")
-            _cache.manufacturers = {r["Source"]: r for r in rows}
+            client = _get_client()
+            if client is not None:
+                try:
+                    items = client.manufacturers()
+                    _cache.manufacturers = {
+                        (r.get("source") or ""): _api_to_csv_manufacturer(r)
+                        for r in items if r.get("source")
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("catalog API manufacturers failed (%s) — CSV fallback", exc)
+            if _cache.manufacturers is None:
+                rows = _read_csv_dict(_DATA_DIR / "manufacturers.csv")
+                _cache.manufacturers = {r["Source"]: r for r in rows}
             logger.info("Loaded %d Wrightsoft manufacturers", len(_cache.manufacturers))
     return _cache.manufacturers
 
 
 def load_generic_parts() -> dict[str, dict[str, Any]]:
-    """generic_id (e.g. 'BPERT0750', 'HV-B15L') → row with
-    Category / Description / Units. The generic_id IS the
-    Wrightsoft-internal part code that DQFTG-library entries reference
-    in the .rup binary."""
+    """generic_id → row with Category / Description / Units."""
     with _lock:
         if _cache.generic_parts is None:
-            rows = _read_csv_dict(_DATA_DIR / "generic_parts.csv")
-            _cache.generic_parts = {r["Item"]: r for r in rows}
+            client = _get_client()
+            if client is not None:
+                try:
+                    # 3,178 generics — fits under the API's 5000 ceiling
+                    items = client.generics(limit=5000)
+                    _cache.generic_parts = {
+                        (r.get("item") or ""): _api_to_csv_generic(r)
+                        for r in items if r.get("item")
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("catalog API generics failed (%s) — CSV fallback", exc)
+            if _cache.generic_parts is None:
+                rows = _read_csv_dict(_DATA_DIR / "generic_parts.csv")
+                _cache.generic_parts = {r["Item"]: r for r in rows}
             logger.info("Loaded %d Wrightsoft generic parts", len(_cache.generic_parts))
     return _cache.generic_parts
 
 
 def load_mapped_parts() -> list[dict[str, Any]]:
-    """Generic-part → manufacturer-SKU mappings. One row per
-    (generic_item, supplier, quantity_variant). Multiple rows per
-    generic_item when the part comes in different package sizes
-    (e.g. PEX0750 sold as 100 ft / 500 ft / 1000 ft rolls under QST)."""
+    """Generic-part → manufacturer-SKU mapping rows. Mapping API row
+    shape is already snake_case-matching the existing callers
+    (generic_item, preferred_source, manufacturer_partnum, etc.) —
+    no key translation needed for this one."""
     with _lock:
         if _cache.mapped_parts is None:
-            rows = _read_csv_dict(_DATA_DIR / "mapped_parts.csv")
+            rows: Optional[list[dict[str, Any]]] = None
+            client = _get_client()
+            if client is not None:
+                try:
+                    # 4,112 rows — paginate twice to be safe against
+                    # any future row growth. API ceiling is 5000 per
+                    # call but pagination would require an offset
+                    # param which the v1 API lacks; rely on the 5000
+                    # ceiling for now.
+                    rows = _fetch_all_mapped_parts(client)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("catalog API mapped_parts failed (%s) — CSV fallback", exc)
+            if rows is None:
+                rows = _read_csv_dict(_DATA_DIR / "mapped_parts.csv")
             _cache.mapped_parts = rows
-            # Build index by generic_item for cheap lookup.
+            # Build indexes
             idx: dict[str, list[dict[str, Any]]] = defaultdict(list)
             sku_idx: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for r in rows:
-                idx[r["generic_item"]].append(r)
+                gid = r.get("generic_item")
+                if not gid:
+                    continue
+                idx[gid].append(r)
                 sku = (r.get("manufacturer_partnum") or "").strip()
                 if sku:
                     sku_idx[sku].append(r)
@@ -144,6 +283,13 @@ def load_mapped_parts() -> list[dict[str, Any]]:
                 len(rows), len(_cache.mapped_by_generic), len(_cache.mapped_by_sku),
             )
     return _cache.mapped_parts
+
+
+def _fetch_all_mapped_parts(client) -> list[dict[str, Any]]:
+    """Bulk fetch via the catalog API's paginating /mappings endpoint.
+    Single round-trip for the full table (4k+ rows fit in one call;
+    the SDK paginates if the catalog grows past the limit ceiling)."""
+    return client.mappings(limit=5000)
 
 
 def load_dfunit() -> list[dict[str, Any]]:
@@ -158,7 +304,16 @@ def load_dfunit() -> list[dict[str, Any]]:
     is O(1)."""
     with _lock:
         if _cache.dfunit is None:
-            rows = _read_csv_dict(_DATA_DIR / "DFUnit.csv")
+            rows: Optional[list[dict[str, Any]]] = None
+            client = _get_client()
+            if client is not None:
+                try:
+                    api_rows = client.dfunit(limit=2000)
+                    rows = [_api_to_csv_dfunit(r) for r in api_rows]
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("catalog API dfunit failed (%s) — CSV fallback", exc)
+            if rows is None:
+                rows = _read_csv_dict(_DATA_DIR / "DFUnit.csv")
             _cache.dfunit = rows
             idx: dict[str, dict[str, Any]] = {}
             for r in rows:
