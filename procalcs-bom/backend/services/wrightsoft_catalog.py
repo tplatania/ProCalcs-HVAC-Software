@@ -103,6 +103,11 @@ class _Cache:
     mapped_by_sku: Optional[dict[str, list[dict[str, Any]]]] = None
     dfunit: Optional[list[dict[str, Any]]] = None
     dfunit_by_model: Optional[dict[str, dict[str, Any]]] = None  # Model -> row
+    # Day-15 — Tom's standard fitting-code template (set of canonical
+    # codes designers SHOULD be using). Loaded from the catalog API.
+    # bom-side: classify each Wrightsoft fitting on incoming BOMs;
+    # codes NOT in this set get flagged as 'non-standard fitting'.
+    fitting_template_codes: Optional[set[str]] = None
     source: str = "uninitialized"
 
 
@@ -290,6 +295,55 @@ def _fetch_all_mapped_parts(client) -> list[dict[str, Any]]:
     Single round-trip for the full table (4k+ rows fit in one call;
     the SDK paginates if the catalog grows past the limit ceiling)."""
     return client.mappings(limit=5000)
+
+
+def load_fitting_template_codes() -> set[str]:
+    """Day-15 — return the set of canonical fitting codes Tom's
+    standard template defines. Used to flag non-standard fittings
+    on incoming Wrightsoft BOMs.
+
+    API-only — no local CSV fallback yet. When CATALOG_API_URL is
+    unset OR the call fails, returns an empty set, which makes
+    is_standard_fitting_code() answer 'unknown' (no flagging).
+    The bom service should treat empty-set as 'classifier disabled,
+    do not flag', NOT 'everything is non-standard'.
+    """
+    with _lock:
+        if _cache.fitting_template_codes is not None:
+            return _cache.fitting_template_codes
+        codes: set[str] = set()
+        client = _get_client()
+        if client is not None:
+            try:
+                rows = client.fitting_template()
+                codes = {(r.get("fitting_code") or "").strip()
+                         for r in rows
+                         if r.get("fitting_code")}
+                logger.info("Loaded %d canonical fitting codes from catalog API",
+                            len(codes))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "fitting-template load failed (%s) — non-standard "
+                    "fitting flagging disabled for this process", exc,
+                )
+        _cache.fitting_template_codes = codes
+        return codes
+
+
+def is_standard_fitting_code(code: Optional[str]) -> Optional[bool]:
+    """Day-15 classifier.
+
+    Returns:
+      True  — code is in Tom's canonical template
+      False — code is not in the template (FLAG as non-standard)
+      None  — classifier disabled (no template loaded; don't flag)
+    """
+    codes = load_fitting_template_codes()
+    if not codes:
+        return None  # classifier disabled
+    if not code:
+        return False
+    return code.strip() in codes
 
 
 def load_dfunit() -> list[dict[str, Any]]:

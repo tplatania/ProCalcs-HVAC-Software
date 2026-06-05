@@ -94,6 +94,9 @@ def build_bom_from_wrightsoft_lines(
     unmapped_count = 0
     dfunit_count = 0
     passthrough_count = 0
+    # Day-15 — Wrightsoft fittings whose code is NOT in Tom's
+    # standard template (designer used a non-canonical fitting).
+    non_standard_count = 0
     # Day-12 — collected for the discovered_mappings auto-learn write.
     # Each entry is the minimum needed for upsert_many. Populated
     # only on the passthrough branch (the catalog branches are already
@@ -356,6 +359,17 @@ def build_bom_from_wrightsoft_lines(
             )
             line["override_updated_by"] = override_row.updated_by
 
+        # Day-15 — non-standard fitting flag.
+        # Use the Wrightsoft Name column (gen_id) as the fitting-code
+        # observation. Classifier returns:
+        #   True  → standard (do nothing)
+        #   False → flag the line so reviewers can audit
+        #   None  → classifier disabled (no template loaded; skip)
+        std = wsc.is_standard_fitting_code(gen_id)
+        if std is False:
+            line["non_standard_fitting"] = True
+            non_standard_count += 1
+
         line_items.append(line)
 
     totals = _compute_totals(line_items)
@@ -384,6 +398,11 @@ def build_bom_from_wrightsoft_lines(
         # combo. Counts split so we can see how the auto-learn catalog
         # is filling in over time.
         "wrightsoft_discovered_item_count":  discovered_count,
+        # Day-15 — count of fittings on this BOM whose code isn't in
+        # Tom's standard template. Surfaced for the SPA so reviewers
+        # see a "Non-standard fittings detected" banner. Individual
+        # lines carry non_standard_fitting=True.
+        "wrightsoft_non_standard_fitting_count": non_standard_count,
         # Day-13 — lines a human has manually corrected for this
         # contractor (rows in contractor_overrides). Highest precedence
         # in the source hierarchy; also where Tom's per-contractor

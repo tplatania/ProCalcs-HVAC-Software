@@ -163,6 +163,31 @@ class CatalogClient:
         return self._get_items(f"api/v1/catalog/ahri/{product_type}",
                                params, as_of)
 
+    def fitting_template(self, *,
+                         category: str | None = None,
+                         direction: str | None = None,
+                         shape: str | None = None,
+                         fitting_code: str | None = None,
+                         as_of: str | None = None) -> list[dict]:
+        """List Tom's canonical fitting-code template rows."""
+        params = {k: v for k, v in {
+            "category": category, "direction": direction,
+            "shape": shape, "fitting_code": fitting_code,
+        }.items() if v is not None}
+        return self._get_items("api/v1/catalog/fitting-template",
+                               params, as_of)
+
+    def fitting_template_by_code(self, code: str, *,
+                                 as_of: str | None = None) -> dict:
+        """Reverse lookup — returns {fitting_code, in_template (bool),
+        count, items: [...]}. `in_template == False` is the BOM
+        Generator's 'flag as non-standard' signal."""
+        return self._get_cached(
+            f"api/v1/catalog/fitting-template/by-code/{code}",
+            {}, as_of,
+        ) or {"fitting_code": code, "in_template": False,
+              "count": 0, "items": []}
+
     def latest_batch(self) -> dict | None:
         body = self._get_envelope("api/v1/catalog/batches/latest", {}, None)
         return body if isinstance(body, dict) else None
