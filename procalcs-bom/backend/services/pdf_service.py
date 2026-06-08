@@ -137,6 +137,12 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         ai_count = sum(1 for it in line_items if it.get("source") != "rules")
     has_provenance = (rules_count or 0) > 0 or (ai_count or 0) > 0
 
+    # Contractor branding — Day-15. The bom payload now carries the
+    # selected client's brand_color + logo_url + display name (wired in
+    # bom_service when the profile is hydrated). Empty strings fall
+    # back to the ProCalcs default look in the template.
+    branding = bom.get("branding") or {}
+
     return {
         "job_id":         bom.get("job_id", ""),
         "client_name":    bom.get("client_name", ""),
@@ -147,6 +153,10 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         "item_count":     bom.get("item_count", len(line_items)),
         "grand_total":    grand_total,
         "groups":         _group_lines(line_items),
+        # Branding
+        "logo_url":                branding.get("logo_url", ""),
+        "brand_color":             branding.get("brand_color", ""),
+        "contractor_display_name": branding.get("display_name", ""),
         # Provenance — wired into the template behind has_provenance so
         # pre-rules-engine payloads render the prior layout untouched.
         "rules_count":    int(rules_count or 0),

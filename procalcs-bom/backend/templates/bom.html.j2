@@ -32,6 +32,15 @@
   .brand-header {
     margin-bottom: 18pt;
   }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 14pt;
+  }
+  .brand-logo {
+    max-height: 48pt;
+    max-width: 160pt;
+  }
   .brand-name {
     font-size: 24pt;
     font-weight: 700;
@@ -41,7 +50,7 @@
   }
   .brand-bar {
     height: 4pt;
-    background: #f97316;
+    background: {{ brand_color or "#f97316" }};
     width: 60pt;
     margin-top: 4pt;
   }
@@ -251,9 +260,16 @@
 
 <!-- ===== Brand header ===== -->
 <div class="brand-header">
-  <h1 class="brand-name">ProCalcs</h1>
-  <div class="brand-bar"></div>
-  <p class="brand-sub">HVAC Bill of Materials</p>
+  <div class="brand-row">
+    {% if logo_url %}
+      <img class="brand-logo" src="{{ logo_url }}" alt="">
+    {% endif %}
+    <div>
+      <h1 class="brand-name">{{ contractor_display_name or "ProCalcs" }}</h1>
+      <div class="brand-bar"></div>
+      <p class="brand-sub">HVAC Bill of Materials</p>
+    </div>
+  </div>
 </div>
 
 <!-- ===== Job metadata banner ===== -->

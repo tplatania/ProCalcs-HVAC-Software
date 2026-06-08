@@ -1452,6 +1452,14 @@ def _format_bom(line_items: list, profile: ClientProfile,
         "output_mode":   output_mode,
         "generated_at":  datetime.now(timezone.utc).isoformat(),
         "supplier":      profile.supplier.supplier_name,
+        # Day-15 — contractor branding (logo + brand color + display name)
+        # piped through to the PDF/XLS renderer. Empty values fall back
+        # to the ProCalcs default look.
+        "branding": {
+            "display_name": profile.client_name or "",
+            "logo_url":     getattr(profile, "logo_url", "") or "",
+            "brand_color":  getattr(profile, "brand_color", "") or "",
+        },
         "line_items":    formatted_items,
         "totals": {
             "total_cost":  total_cost  if show_cost  else None,

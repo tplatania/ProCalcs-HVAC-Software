@@ -380,6 +380,13 @@ def build_bom_from_wrightsoft_lines(
         "output_mode": output_mode,
         "generated_at": _utcnow_iso(),
         "supplier":    profile.supplier.supplier_name or "",
+        # Day-15 — contractor branding for PDF/XLS exports. Empty values
+        # let the renderer fall back to ProCalcs defaults.
+        "branding": {
+            "display_name": profile.client_name or "",
+            "logo_url":     getattr(profile, "logo_url", "") or "",
+            "brand_color":  getattr(profile, "brand_color", "") or "",
+        },
         "line_items":  line_items,
         "totals":      totals,
         "item_count":  len(line_items),

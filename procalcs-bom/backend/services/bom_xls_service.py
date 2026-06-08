@@ -81,7 +81,13 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     ws.title = "BOM"
 
     # ── Title block ────────────────────────────────────────────────
-    ws["A1"] = "ProCalcs HVAC — Bill of Materials"
+    # Day-15 — contractor branding. When a contractor display name is
+    # supplied via bom["branding"], it leads the header; otherwise the
+    # ProCalcs default. Logo embedding is left for a follow-up because
+    # openpyxl image insert needs binary download outside this hot path.
+    branding = bom.get("branding") or {}
+    display_name = branding.get("display_name") or "ProCalcs"
+    ws["A1"] = f"{display_name} HVAC — Bill of Materials"
     ws["A1"].font = Font(size=14, bold=True)
     ws.merge_cells("A1:J1")
 
