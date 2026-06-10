@@ -143,6 +143,22 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
     # back to the ProCalcs default look in the template.
     branding = bom.get("branding") or {}
 
+    # Day-15 — AHRI certified equipment specs. Collect any line carrying
+    # ahri_spec into a dedicated table so contractors get a proper
+    # equipment-spec sheet at the bottom of the BOM. Each row carries
+    # the description + the spec dict; the template renders only the
+    # fields that are present.
+    ahri_specs = []
+    for li in line_items:
+        spec = li.get("ahri_spec")
+        if spec:
+            ahri_specs.append({
+                "description":     li.get("description") or "",
+                "generic_id":      li.get("generic_id") or li.get("sku") or "",
+                "quantity":        li.get("quantity"),
+                **spec,
+            })
+
     return {
         "job_id":         bom.get("job_id", ""),
         "client_name":    bom.get("client_name", ""),
@@ -157,6 +173,8 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         "logo_url":                branding.get("logo_url", ""),
         "brand_color":             branding.get("brand_color", ""),
         "contractor_display_name": branding.get("display_name", ""),
+        # Equipment specs (Day-15)
+        "ahri_specs":              ahri_specs,
         # Provenance — wired into the template behind has_provenance so
         # pre-rules-engine payloads render the prior layout untouched.
         "rules_count":    int(rules_count or 0),

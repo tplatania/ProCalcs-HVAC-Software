@@ -214,6 +214,47 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     # Freeze header row so the column titles stick when scrolling
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
 
+    # ── Equipment Specifications (AHRI) — Day-15 ──────────────────
+    # Collect any line carrying an ahri_spec and drop them into a
+    # dedicated sheet so contractors can hand the spec sheet to the
+    # AHJ / building inspector without re-keying anything.
+    ahri_rows = []
+    for li in line_items:
+        spec = li.get("ahri_spec") or {}
+        if spec:
+            ahri_rows.append({
+                "Model":         spec.get("condenser_model") or li.get("generic_id") or "",
+                "Description":   spec.get("trade_name") or li.get("description") or "",
+                "Manufacturer":  spec.get("manufacturer") or "",
+                "Type":          spec.get("product_type") or "",
+                "Capacity (BTU)": spec.get("capacity_btu"),
+                "SEER":          spec.get("seer"),
+                "HSPF":          spec.get("hspf"),
+                "EER95":         spec.get("eer95"),
+                "AFUE":          spec.get("afue"),
+                "AHRI Ref":      spec.get("ari_refno") if spec.get("ari_refno") not in (None, "0") else "",
+                "Coil Model":    spec.get("coil_model") or "",
+                "Qty":           li.get("quantity"),
+            })
+    if ahri_rows:
+        ws2 = wb.create_sheet(title="Equipment Specs")
+        headers = list(ahri_rows[0].keys())
+        for col_idx, label in enumerate(headers, start=1):
+            cell = ws2.cell(row=1, column=col_idx, value=label)
+            cell.fill = _HEADER_FILL
+            cell.font = _WHITE_BOLD
+        for row_idx, row in enumerate(ahri_rows, start=2):
+            for col_idx, key in enumerate(headers, start=1):
+                v = row[key]
+                if key in ("Capacity (BTU)", "SEER", "HSPF", "EER95", "AFUE", "Qty"):
+                    v = _num(v)
+                ws2.cell(row=row_idx, column=col_idx, value=v)
+        # Column widths — Model + Description are the wide ones
+        widths = {1: 22, 2: 38, 3: 16, 4: 8, 5: 14, 6: 8, 7: 8, 8: 8, 9: 8, 10: 14, 11: 18, 12: 6}
+        for i, w in widths.items():
+            ws2.column_dimensions[get_column_letter(i)].width = w
+        ws2.freeze_panes = ws2.cell(row=2, column=1)
+
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

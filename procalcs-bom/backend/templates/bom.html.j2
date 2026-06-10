@@ -365,5 +365,48 @@
 </div>
 <div class="mode-note">{{ item_count }} line items · output mode: {{ output_mode }}</div>
 
+{% if ahri_specs %}
+<!-- ===== Equipment Specifications (AHRI-certified) ===== -->
+<div style="margin-top: 24pt; page-break-inside: avoid;">
+  <h3 style="font-size: 12pt; color: #1e293b; margin: 0 0 6pt 0;">
+    Equipment Specifications
+  </h3>
+  <p style="font-size: 8pt; color: #64748b; margin: 0 0 8pt 0;">
+    AHRI-certified ratings for equipment listed in this BOM.
+  </p>
+  <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+    <thead>
+      <tr style="background: #f1f5f9;">
+        <th style="text-align: left; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">Model / Description</th>
+        <th style="text-align: left; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">Type</th>
+        <th style="text-align: right; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">Capacity (BTU)</th>
+        <th style="text-align: right; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">SEER</th>
+        <th style="text-align: right; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">HSPF</th>
+        <th style="text-align: right; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">EER95</th>
+        <th style="text-align: right; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">AFUE</th>
+        <th style="text-align: left; padding: 5pt 6pt; border-bottom: 1pt solid #cbd5e1;">AHRI Ref</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in ahri_specs %}
+        <tr>
+          <td style="padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">
+            <div style="font-weight: 600;">{{ s.condenser_model or s.generic_id }}</div>
+            <div style="color: #64748b; font-size: 7.5pt;">{{ s.trade_name or s.description }} — {{ s.manufacturer or "—" }}</div>
+          </td>
+          <td style="padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ s.product_type or "—" }}</td>
+          <td style="text-align: right; padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ "{:,}".format(s.capacity_btu) if s.capacity_btu else "—" }}</td>
+          <td style="text-align: right; padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ s.seer if s.seer is not none else "—" }}</td>
+          <td style="text-align: right; padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ s.hspf if s.hspf is not none else "—" }}</td>
+          <td style="text-align: right; padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ s.eer95 if s.eer95 is not none else "—" }}</td>
+          <td style="text-align: right; padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0;">{{ s.afue if s.afue is not none else "—" }}</td>
+          <td style="padding: 4pt 6pt; border-bottom: 0.5pt solid #e2e8f0; font-family: monospace; font-size: 8pt;">{{ s.ari_refno if s.ari_refno and s.ari_refno != "0" else "—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 </body>
 </html>
