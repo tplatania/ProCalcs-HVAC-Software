@@ -108,6 +108,12 @@ class _Cache:
     # bom-side: classify each Wrightsoft fitting on incoming BOMs;
     # codes NOT in this set get flagged as 'non-standard fitting'.
     fitting_template_codes: Optional[set[str]] = None
+    # Day-15 — AHRI per-model spec cache. Lazy/sparse: each lookup hits
+    # the catalog API and the result (row or None) is memoized so we
+    # never re-query the same model in one process. 1.4M rows means we
+    # CAN'T load it all; per-model lookups stay cheap because condenser
+    # model is indexed in postgres.
+    ahri_by_model: Optional[dict[str, Optional[dict[str, Any]]]] = None
     source: str = "uninitialized"
 
 
@@ -462,6 +468,70 @@ def dfunit_line_spec(row: dict[str, Any]) -> dict[str, Any]:
         "depth_in":       _float("Depth"),
         "height_in":      _float("Height"),
         "weight_lb":      _float("Weight"),
+    }
+
+
+# ─── AHRI per-model spec lookup (Day-15) ───────────────────────────
+#
+# The AHRI tree has 1.4M rows — too big to load locally. Instead we
+# query the catalog API per model number and memoize. Cache hits (incl.
+# negative "not found" results) stay in-process for the life of the
+# worker so a BOM with the same equipment listed multiple times only
+# hits the API once.
+
+def _query_ahri_by_model(model: str) -> Optional[dict[str, Any]]:
+    """Hit the catalog API for the first AHRI unit matching this
+    condenser model. Returns the row dict, or None if not found or the
+    catalog isn't reachable. The cache layer is in lookup_ahri_by_model."""
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        # Try HP, then AC, then FURNACE — the most useful product types
+        # for residential Wrightsoft BOMs.
+        for product_type in ("HP", "AC", "FURNACE"):
+            rows = client.ahri(product_type, condenser_model=model, limit=1)
+            if rows:
+                row = dict(rows[0])
+                row["product_type"] = product_type
+                return row
+    except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+        logger.warning("AHRI lookup failed for %s — %s", model, exc)
+    return None
+
+
+def lookup_ahri_by_model(model: str) -> Optional[dict[str, Any]]:
+    """Memoized per-process AHRI lookup by condenser model. Returns
+    the AHRI row (with product_type added) or None when no match."""
+    if not model:
+        return None
+    key = model.strip()
+    if not key:
+        return None
+    if _cache.ahri_by_model is None:
+        _cache.ahri_by_model = {}
+    if key not in _cache.ahri_by_model:
+        _cache.ahri_by_model[key] = _query_ahri_by_model(key)
+    return _cache.ahri_by_model[key]
+
+
+def ahri_line_spec(row: dict[str, Any]) -> dict[str, Any]:
+    """Project an AHRI row into a compact spec dict the BOM line can
+    carry as metadata (drives the PDF / XLS efficiency columns)."""
+    if not row:
+        return {}
+    return {
+        "product_type":   row.get("product_type") or None,
+        "manufacturer":   row.get("ahri_manufacturer") or row.get("manufacturer") or None,
+        "condenser_model": row.get("condenser_model") or None,
+        "coil_model":     row.get("coil_model") or None,
+        "capacity_btu":   row.get("capacity"),
+        "seer":           row.get("seer"),
+        "eer95":          row.get("eer95"),
+        "hspf":           row.get("hspf"),
+        "afue":           row.get("afue"),
+        "ari_refno":      row.get("ari_refno") or None,
+        "trade_name":     row.get("trade_name") or None,
     }
 
 

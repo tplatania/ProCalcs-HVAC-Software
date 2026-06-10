@@ -97,6 +97,9 @@ def build_bom_from_wrightsoft_lines(
     # Day-15 — Wrightsoft fittings whose code is NOT in Tom's
     # standard template (designer used a non-canonical fitting).
     non_standard_count = 0
+    # Day-15 — Equipment lines whose model number matched a row in the
+    # 1.4M-row AHRI library, so we attached SEER/HSPF/AFUE/AHRI ref.
+    ahri_count = 0
     # Day-12 — collected for the discovered_mappings auto-learn write.
     # Each entry is the minimum needed for upsert_many. Populated
     # only on the passthrough branch (the catalog branches are already
@@ -370,6 +373,19 @@ def build_bom_from_wrightsoft_lines(
             line["non_standard_fitting"] = True
             non_standard_count += 1
 
+        # Day-15 — AHRI equipment enrichment. For Equipment-section
+        # lines that DIDN'T resolve via DFUnit (DFUnit hits already
+        # carry full spec data), ask the AHRI library whether the
+        # gen_id looks like a known condenser model. AHRI gives us
+        # AHRI cert number + SEER/HSPF/AFUE/capacity — the data
+        # contractors care about for spec sheets. Cheap miss: per-
+        # model lookups are sub-100ms and memoized.
+        if not dfunit_spec and (line.get("section") == "Equipment"):
+            ahri_row = wsc.lookup_ahri_by_model(gen_id)
+            if ahri_row:
+                line["ahri_spec"] = wsc.ahri_line_spec(ahri_row)
+                ahri_count += 1
+
         line_items.append(line)
 
     totals = _compute_totals(line_items)
@@ -410,6 +426,10 @@ def build_bom_from_wrightsoft_lines(
         # see a "Non-standard fittings detected" banner. Individual
         # lines carry non_standard_fitting=True.
         "wrightsoft_non_standard_fitting_count": non_standard_count,
+        # Day-15 — Equipment lines whose model matched the AHRI
+        # certified-equipment library. Each such line carries an
+        # ahri_spec dict with SEER/HSPF/AFUE/AHRI ref + capacity.
+        "wrightsoft_ahri_enriched_count": ahri_count,
         # Day-13 — lines a human has manually corrected for this
         # contractor (rows in contractor_overrides). Highest precedence
         # in the source hierarchy; also where Tom's per-contractor
