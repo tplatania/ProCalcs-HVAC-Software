@@ -373,14 +373,19 @@ def build_bom_from_wrightsoft_lines(
             line["non_standard_fitting"] = True
             non_standard_count += 1
 
-        # Day-15 — AHRI equipment enrichment. For Equipment-section
-        # lines that DIDN'T resolve via DFUnit (DFUnit hits already
-        # carry full spec data), ask the AHRI library whether the
-        # gen_id looks like a known condenser model. AHRI gives us
-        # AHRI cert number + SEER/HSPF/AFUE/capacity — the data
-        # contractors care about for spec sheets. Cheap miss: per-
-        # model lookups are sub-100ms and memoized.
-        if not dfunit_spec and (line.get("section") == "Equipment"):
+        # Day-15 — AHRI equipment enrichment. For lines that DIDN'T
+        # resolve via DFUnit (DFUnit hits already carry full spec data),
+        # ask the AHRI library whether the gen_id looks like a known
+        # condenser model. AHRI gives us SEER/HSPF/AFUE/capacity +
+        # AHRI cert number — the data contractors care about for spec
+        # sheets. Per-model lookups are memoized; a miss is cheap (one
+        # indexed query per process per model). We skip lines that
+        # obviously aren't equipment (descriptions that already look
+        # like duct parts) by requiring an uppercase-alphanumeric token
+        # of >= 6 chars — typical Wrightsoft model numbers.
+        if not dfunit_spec and gen_id and len(gen_id) >= 6 \
+                and any(c.isdigit() for c in gen_id) \
+                and any(c.isalpha() for c in gen_id):
             ahri_row = wsc.lookup_ahri_by_model(gen_id)
             if ahri_row:
                 line["ahri_spec"] = wsc.ahri_line_spec(ahri_row)
