@@ -153,6 +153,186 @@ def upsert_override():
         }), 500
 
 
+# ─── POST — bulk CSV/XLSX import (Day-16) ──────────────────────────
+#
+# Round-trip from "contractor sends a pricing Excel" to "future BOMs
+# price correctly" in one upload. Tolerates header variation and
+# dollar-formatted prices; reports per-row outcomes so Richard can
+# correct his sheet without guessing what failed.
+
+@contractor_override_bp.route("/import", methods=["POST"])
+def import_overrides():
+    """Bulk-upsert overrides from a CSV / XLS / XLSX upload.
+
+    Form fields:
+        file        — multipart upload, .csv / .xls / .xlsx
+        client_id   — contractor whose overrides we're loading
+
+    Expected headers (case-insensitive, common synonyms accepted):
+        supplier            (or 'src')
+        sku                 (or 'name' / 'wrightsoft_sku')
+        unit_price          (or 'price' / 'cost' / 'unit_cost')
+        corrected_sku       (optional)
+        corrected_supplier  (optional)
+        notes               (optional)
+
+    Returns: {inserted, updated, skipped, errors: [{row, reason}, …]}
+    """
+    if "file" not in request.files:
+        return jsonify({"success": False, "data": None,
+                        "error": "Missing 'file' upload"}), 400
+
+    client_id = (request.form.get("client_id") or "").strip()
+    if not client_id:
+        return jsonify({"success": False, "data": None,
+                        "error": "Missing 'client_id'"}), 400
+
+    upload = request.files["file"]
+    if not upload.filename:
+        return jsonify({"success": False, "data": None,
+                        "error": "Empty filename"}), 400
+
+    try:
+        rows = _parse_overrides_upload(upload.read(), upload.filename)
+    except ValueError as exc:
+        return jsonify({"success": False, "data": None,
+                        "error": str(exc)}), 400
+
+    actor = _actor()
+    inserted = updated = skipped = 0
+    errors: list[dict] = []
+
+    for i, row in enumerate(rows, start=2):  # row 1 = header
+        supplier = _str_or_none(row.get("supplier") or row.get("src"))
+        sku      = _str_or_none(row.get("sku") or row.get("name")
+                                or row.get("wrightsoft_sku"))
+        price_in = row.get("unit_price") or row.get("price") \
+                   or row.get("cost") or row.get("unit_cost")
+        unit_price = _parse_money(price_in)
+        corrected_sku      = _str_or_none(row.get("corrected_sku"))
+        corrected_supplier = _str_or_none(row.get("corrected_supplier"))
+        notes              = _str_or_none(row.get("notes"))
+
+        if not supplier or not sku:
+            skipped += 1
+            errors.append({"row": i,
+                           "reason": "missing supplier or sku"})
+            continue
+        if unit_price is None and not corrected_sku \
+                and not corrected_supplier and not notes:
+            # Pure no-op row — nothing to override.
+            skipped += 1
+            errors.append({"row": i,
+                           "reason": "no override fields populated"})
+            continue
+
+        try:
+            existing = ContractorOverride.lookup(
+                contractor_id=client_id, supplier=supplier, sku=sku)
+            ContractorOverride.upsert(
+                contractor_id=client_id,
+                supplier=supplier,
+                sku=sku,
+                corrected_sku=corrected_sku,
+                corrected_supplier=corrected_supplier,
+                unit_price=unit_price,
+                notes=notes,
+                updated_by=actor,
+            )
+            if existing is None:
+                inserted += 1
+            else:
+                updated += 1
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            skipped += 1
+            errors.append({"row": i, "reason": str(exc)[:200]})
+
+    try:
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.error("import_overrides commit failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to persist overrides"}), 500
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "client_id": client_id,
+            "inserted":  inserted,
+            "updated":   updated,
+            "skipped":   skipped,
+            "errors":    errors[:50],  # cap at 50 to keep payload sane
+            "total_seen": inserted + updated + skipped,
+        },
+        "error": None,
+    }), 200
+
+
+def _str_or_none(v) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s or None
+
+
+def _parse_money(v) -> float | None:
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    # Strip $ and thousands commas; keep decimal point and leading minus.
+    s = s.replace("$", "").replace(",", "").strip()
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_overrides_upload(file_bytes: bytes, filename: str) -> list[dict]:
+    """Return a list of header-keyed dicts (lowercased keys) from a
+    .csv / .xls / .xlsx upload. Raises ValueError with a human-readable
+    message when the file shape is unusable."""
+    import io
+    import csv
+
+    name = (filename or "").lower()
+    if name.endswith(".csv"):
+        text = file_bytes.decode("utf-8-sig", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        rows = [
+            {(k or "").strip().lower(): v for k, v in r.items()}
+            for r in reader
+        ]
+    elif name.endswith(".xlsx") or name.endswith(".xls"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise ValueError("XLS/XLSX upload not supported in this env") from exc
+        wb = load_workbook(filename=io.BytesIO(file_bytes),
+                           data_only=True, read_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        headers = [(str(h) if h is not None else "").strip().lower()
+                   for h in next(rows_iter, []) or []]
+        rows = []
+        for r in rows_iter:
+            if r is None:
+                continue
+            rows.append({h: v for h, v in zip(headers, r) if h})
+    else:
+        raise ValueError(
+            "Unrecognized file format — accepts .csv / .xls / .xlsx")
+
+    if not rows:
+        raise ValueError("Empty upload — no rows after header")
+    return rows
+
+
 # ─── DELETE — drop a single override ───────────────────────────────
 
 @contractor_override_bp.route("/<int:override_id>", methods=["DELETE"])
