@@ -482,21 +482,29 @@ def dfunit_line_spec(row: dict[str, Any]) -> dict[str, Any]:
 def _query_ahri_by_model(model: str) -> Optional[dict[str, Any]]:
     """Hit the catalog API for the first AHRI unit matching this
     condenser model. Returns the row dict, or None if not found or the
-    catalog isn't reachable. The cache layer is in lookup_ahri_by_model."""
+    catalog isn't reachable. The cache layer is in lookup_ahri_by_model.
+
+    Day-16 fix: each product-type call is wrapped independently so a
+    slow / timed-out HP lookup doesn't abort the AC + FURNACE attempts.
+    Trane condensers in particular live under AC (not HP) and the
+    HP-side scan was hitting the SDK 15 s timeout for some models."""
     client = _get_client()
     if client is None:
         return None
-    try:
-        # Try HP, then AC, then FURNACE — the most useful product types
-        # for residential Wrightsoft BOMs.
-        for product_type in ("HP", "AC", "FURNACE"):
+    # Try HP, then AC, then FURNACE — most useful product types for
+    # residential Wrightsoft BOMs. Each call is independent so the
+    # error on one type doesn't poison the next.
+    for product_type in ("HP", "AC", "FURNACE"):
+        try:
             rows = client.ahri(product_type, condenser_model=model, limit=1)
-            if rows:
-                row = dict(rows[0])
-                row["product_type"] = product_type
-                return row
-    except Exception as exc:  # noqa: BLE001 — best-effort enrichment
-        logger.warning("AHRI lookup failed for %s — %s", model, exc)
+        except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+            logger.warning("AHRI %s lookup failed for %s — %s",
+                           product_type, model, exc)
+            continue
+        if rows:
+            row = dict(rows[0])
+            row["product_type"] = product_type
+            return row
     return None
 
 

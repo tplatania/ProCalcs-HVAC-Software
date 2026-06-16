@@ -368,10 +368,25 @@ def build_bom_from_wrightsoft_lines(
         #   True  → standard (do nothing)
         #   False → flag the line so reviewers can audit
         #   None  → classifier disabled (no template loaded; skip)
-        std = wsc.is_standard_fitting_code(gen_id)
-        if std is False:
-            line["non_standard_fitting"] = True
-            non_standard_count += 1
+        #
+        # Day-16: skip lines that obviously aren't fittings — Equipment
+        # section, synthetic .rup-pipeline IDs (DUCT-*, REGISTERS,
+        # FITTINGS placeholders), and DFUnit-matched equipment lines.
+        # The non-standard classifier is meant for the per-fitting code
+        # lines (8E / 11H / etc.) that come out of the .xls export,
+        # not for model numbers or duct-system rollups.
+        _is_fitting_candidate = (
+            line.get("section") in (None, "", wsc.SECTION_OTHER,
+                                    "Duct System Equipment",
+                                    "Rheia Duct System Equipment")
+            and not dfunit_spec
+            and not gen_id.startswith(("DUCT-", "REGISTERS", "FITTINGS"))
+        )
+        if _is_fitting_candidate:
+            std = wsc.is_standard_fitting_code(gen_id)
+            if std is False:
+                line["non_standard_fitting"] = True
+                non_standard_count += 1
 
         # Day-15 — AHRI equipment enrichment. For lines that DIDN'T
         # resolve via DFUnit (DFUnit hits already carry full spec data),
