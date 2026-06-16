@@ -29,6 +29,25 @@ bom_bp = Blueprint('bom', __name__)
 MAX_RUP_BYTES = 20 * 1024 * 1024
 
 
+def _looks_like_rup(file_bytes: bytes) -> bool:
+    """Heuristic .rup detector for the /from-wrightsoft auto-route.
+    Wrightsoft .rup files start with a UTF-16-LE header that includes
+    the string 'Wrightsoft' or the product code 'rsu'/'rcs' near the
+    front of the file. We sniff the first 4KB so a misnamed upload
+    (Tom dragging the file without an extension) still routes correctly.
+    """
+    if not file_bytes:
+        return False
+    head = file_bytes[:4096]
+    try:
+        text = head.decode("utf-16-le", errors="ignore").lower()
+    except Exception:  # noqa: BLE001
+        return False
+    return any(tok in text for tok in (
+        "wrightsoft", "right-suite", "rightsuite", "manual j", "manual d",
+    ))
+
+
 def _catalog_xref_for_binary(file_bytes: bytes) -> dict:
     """Day-10 — count how many Wrightsoft catalog generic IDs appear
     in the .rup binary text. Empirically always near-zero because
@@ -619,6 +638,7 @@ def bom_from_wrightsoft():
     """
     try:
         # ── Multipart upload branch ───────────────────────────────────
+        source_pipeline_override = None  # set to "wrightsoft_rup" for .rup
         if 'file' in request.files:
             upload = request.files['file']
             file_bytes = upload.read()
@@ -628,13 +648,30 @@ def bom_from_wrightsoft():
             client_id = (request.form.get('client_id') or '').strip()
             job_id    = (request.form.get('job_id') or '').strip()
             output_mode = (request.form.get('output_mode') or 'full').strip() or 'full'
-            try:
-                lines = parse_wrightsoft_bom_rows(
-                    file_bytes, filename=upload.filename or "",
-                )
-            except ValueError as exc:
-                return jsonify({"success": False, "data": None,
-                                "error": str(exc)}), 400
+            fname = (upload.filename or "").lower()
+            # Day-16 — accept .rup directly (Tom's preferred upload).
+            # The .rup binary is the underlying design file; we extract
+            # equipment + duct + register + fitting counts via the same
+            # parser that powers /diagnostics/rup-inspect and shape them
+            # into the line-item contract this endpoint expects.
+            if fname.endswith(".rup") or _looks_like_rup(file_bytes):
+                try:
+                    from services.bom_from_rup import build_lines_from_rup
+                    lines = build_lines_from_rup(file_bytes,
+                                                 source_name=upload.filename or "")
+                    source_pipeline_override = "wrightsoft_rup"
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("rup parse failed: %s", exc, exc_info=True)
+                    return jsonify({"success": False, "data": None,
+                                    "error": f"Could not parse .rup file: {exc}"}), 400
+            else:
+                try:
+                    lines = parse_wrightsoft_bom_rows(
+                        file_bytes, filename=upload.filename or "",
+                    )
+                except ValueError as exc:
+                    return jsonify({"success": False, "data": None,
+                                    "error": str(exc)}), 400
         else:
             # ── JSON body branch ──────────────────────────────────────
             body = request.get_json(silent=True) or {}
@@ -683,7 +720,7 @@ def bom_from_wrightsoft():
                 job_id=job_id,
                 output_mode=output_mode,
                 parsed_design_data={
-                    "source_pipeline": "wrightsoft_bom",
+                    "source_pipeline": source_pipeline_override or "wrightsoft_bom",
                     "wrightsoft_lines": lines,
                 },
                 generated_bom=bom,
@@ -694,6 +731,17 @@ def bom_from_wrightsoft():
         except Exception as exc:  # noqa: BLE001
             logger.warning("Wrightsoft-BOM persistence failed for job %s — %s",
                            job_id, exc)
+
+        # Day-16 — surface that this BOM came from a .rup parse path
+        # so the SPA can show a "best-effort .rup parse — for canonical
+        # BOM upload the Wrightsoft .xls export" notice.
+        if source_pipeline_override:
+            bom["source_pipeline"] = source_pipeline_override
+            bom["rup_best_effort_notice"] = (
+                "BOM built from .rup binary (best-effort). For the canonical "
+                "rollup, upload the Wrightsoft BOM export (.xls / .csv) "
+                "produced by File → Bill of Materials in Wrightsoft."
+            )
 
         return jsonify({"success": True, "data": bom, "error": None}), 200
 
