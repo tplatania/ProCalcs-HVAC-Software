@@ -80,7 +80,12 @@ def _get_client():
             base_url=url,
             service_token=os.environ.get(_API_TOKEN_ENV) or None,
             client_id="procalcs-bom",
-            timeout_seconds=15.0,
+            # Day-16 — bumped 15→60s. Per-model AHRI lookups can take
+            # 20+ seconds on the 1.4M-row table (count() over filtered
+            # rows is the slow part, not the LIMITed SELECT). Results
+            # are memoized per process so this only happens once per
+            # distinct model.
+            timeout_seconds=60.0,
             cache_ttl_seconds=300.0,
         )
         logger.info("CatalogClient initialized → %s", url)
