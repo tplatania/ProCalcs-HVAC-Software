@@ -23,16 +23,32 @@ from weasyprint import HTML
 # styling in procalcs-designer/src/pages/bom-output.tsx so the PDF
 # and the web view look like the same product.
 _CATEGORY_META: Dict[str, Dict[str, str]] = {
-    "equipment":  {"label": "Equipment",   "color": "#a855f7", "bg": "#faf5ff"},
-    "duct":       {"label": "Duct",        "color": "#3b82f6", "bg": "#eff6ff"},
-    "fitting":    {"label": "Fittings",    "color": "#f59e0b", "bg": "#fffbeb"},
-    "consumable": {"label": "Consumables", "color": "#10b981", "bg": "#ecfdf5"},
+    "equipment":  {"label": "Equipment",                   "color": "#a855f7", "bg": "#faf5ff"},
+    "duct":       {"label": "Duct System Equipment",       "color": "#3b82f6", "bg": "#eff6ff"},
+    "rheia":      {"label": "Rheia Duct System Equipment", "color": "#06b6d4", "bg": "#ecfeff"},
+    "labor":      {"label": "Labor",                       "color": "#64748b", "bg": "#f8fafc"},
+    "fitting":    {"label": "Fittings",                    "color": "#f59e0b", "bg": "#fffbeb"},
+    "consumable": {"label": "Consumables",                 "color": "#10b981", "bg": "#ecfdf5"},
+    "other":      {"label": "Other",                       "color": "#94a3b8", "bg": "#f8fafc"},
 }
-_CATEGORY_ORDER = ["equipment", "duct", "fitting", "consumable"]
+_CATEGORY_ORDER = ["equipment", "duct", "rheia", "labor", "fitting", "consumable", "other"]
+
+# Day-16 — section→bucket map. The Wrightsoft pipeline tags every line
+# with a `section` (Equipment / Duct System Equipment / Rheia Duct
+# System Equipment / Labor / Other). Prefer that over the legacy
+# `category` field so the PDF mirrors the XLS layout instead of
+# bucketing everything as "Consumables".
+_SECTION_TO_BUCKET: Dict[str, str] = {
+    "Equipment":                    "equipment",
+    "Duct System Equipment":        "duct",
+    "Rheia Duct System Equipment":  "rheia",
+    "Labor":                        "labor",
+    "Other":                        "other",
+}
 
 
 def _normalize_category(raw: str) -> str:
-    """Flask returns any string as the category; clamp to the 4 UI
+    """Flask returns any string as the category; clamp to the UI
     buckets so the template doesn't need defensive logic."""
     key = (raw or "").strip().lower()
     if key in _CATEGORY_META:
@@ -44,12 +60,23 @@ def _normalize_category(raw: str) -> str:
     return "consumable"
 
 
+def _bucket_for_line(item: dict) -> str:
+    """Pick the PDF bucket for one line. Prefer the Wrightsoft-pipeline
+    `section` field (always set by build_bom_from_wrightsoft_lines and
+    bom_from_rup), fall back to the legacy `category` field for AI-path
+    BOMs that don't carry a section."""
+    section = (item.get("section") or "").strip()
+    if section in _SECTION_TO_BUCKET:
+        return _SECTION_TO_BUCKET[section]
+    return _normalize_category(item.get("category", ""))
+
+
 def _group_lines(line_items):
-    """Group line_items by normalized category, preserving order."""
+    """Group line_items by section/category, preserving order."""
     groups: Dict[str, list] = {cat: [] for cat in _CATEGORY_ORDER}
     for item in line_items or []:
-        cat = _normalize_category(item.get("category", ""))
-        groups[cat].append(item)
+        cat = _bucket_for_line(item)
+        groups.setdefault(cat, []).append(item)
     # Drop empty categories so the template doesn't render blank sections.
     return [
         {
