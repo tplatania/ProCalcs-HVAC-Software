@@ -208,6 +208,7 @@ def build_bom_from_wrightsoft_lines(
                 source="wrightsoft_dfunit",
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
+                wrightsoft_price=raw.get("wrightsoft_price"),
             )
             # Attach the spec dict so PDF / SPA can display capacity,
             # dimensions, weight without re-looking up DFUnit downstream.
@@ -228,6 +229,7 @@ def build_bom_from_wrightsoft_lines(
                 source="wrightsoft_mapped",
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
+                wrightsoft_price=raw.get("wrightsoft_price"),
             )
         elif wsf_src:
             # Wrightsoft told us who supplies this part (Src column) and
@@ -312,6 +314,7 @@ def build_bom_from_wrightsoft_lines(
                 source=emitted_source,
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
+                wrightsoft_price=raw.get("wrightsoft_price"),
             )
         else:
             # No catalog match AND no Src column — genuinely unmapped.
@@ -331,6 +334,7 @@ def build_bom_from_wrightsoft_lines(
                 source="wrightsoft_unmapped",
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
+                wrightsoft_price=raw.get("wrightsoft_price"),
             )
 
         # Day-13 — apply contractor-level overrides on every line that
@@ -375,12 +379,22 @@ def build_bom_from_wrightsoft_lines(
         # The non-standard classifier is meant for the per-fitting code
         # lines (8E / 11H / etc.) that come out of the .xls export,
         # not for model numbers or duct-system rollups.
+        # Day-16 hotfix: only fire on lines that look like Tom's standard
+        # fitting CODES (e.g. 8E, 11H — short alphanumeric tokens from
+        # the 30-row standard template), NOT Wrightsoft-canonical SKUs
+        # (FBTI-0804-4, DDVn07MI, etc.). Wrightsoft .xls SKUs always
+        # have a `src` column populated; raw fitting codes don't. Also
+        # exclude long SKUs (>=7 chars) and SKUs containing dashes —
+        # both are tell-tale signs of Wrightsoft's canonical naming.
         _is_fitting_candidate = (
             line.get("section") in (None, "", wsc.SECTION_OTHER,
                                     "Duct System Equipment",
                                     "Rheia Duct System Equipment")
             and not dfunit_spec
             and not gen_id.startswith(("DUCT-", "REGISTERS", "FITTINGS"))
+            and not wsf_src        # Wrightsoft-sourced lines are SKUs, not codes
+            and "-" not in gen_id  # Wrightsoft SKUs like FBTI-0804-4 use dashes
+            and len(gen_id) <= 6   # template codes are short (8E, 11H, 8AF)
         )
         if _is_fitting_candidate:
             std = wsc.is_standard_fitting_code(gen_id)
@@ -576,10 +590,18 @@ def _priced_line(
     source: str,
     get_unit_cost,
     get_markup_pct,
+    wrightsoft_price: Optional[float] = None,
 ) -> dict[str, Any]:
     """Apply markup + estimated-cost fallback to a single line. Shared
-    between the mapped and unmapped paths so the cost math is consistent."""
+    between the mapped and unmapped paths so the cost math is consistent.
+
+    Day-16: when our bundled catalog has no price for the SKU AND
+    Wrightsoft itself wrote a per-unit price in the source .xls, fall
+    back to that. Without this fallback, Richard's 81-line oracle BOM
+    came out as $12.75 vs Wrightsoft's $2,149.81."""
     unit_cost = float(get_unit_cost(description, category, profile) or 0.0)
+    if unit_cost == 0.0 and wrightsoft_price and wrightsoft_price > 0:
+        unit_cost = float(wrightsoft_price)
     is_estimate = False
     # Equipment-category items with no mapped catalog cost still get
     # the estimated-cost fallback from bom_service so they don't emit
@@ -725,6 +747,14 @@ _DESCRIPTION_HEADER_ALIASES = (
 _SRC_HEADER_ALIASES = (
     "src", "source", "supplier", "vendor",
 )
+# Wrightsoft's own per-unit pricing column. Day-16: when our bundled
+# catalog has no price for a Wrightsoft SKU, fall back to whatever
+# Wrightsoft itself wrote in the Price column. Without this fallback
+# Richard's 81-line oracle BOM came out as $12.75 vs Wrightsoft's
+# $2,149.81 because most fitting SKUs aren't in our catalog yet.
+_PRICE_HEADER_ALIASES = (
+    "price", "unit price", "unit_price", "cost", "unit cost", "unit_cost",
+)
 
 
 def parse_wrightsoft_bom_rows(
@@ -818,7 +848,7 @@ def _rows_to_generic_lines(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
     if not raw_rows:
         return []
 
-    header_idx, gid_col, qty_col, desc_col, src_col = _locate_header(raw_rows)
+    header_idx, gid_col, qty_col, desc_col, src_col, price_col = _locate_header(raw_rows)
     if header_idx < 0:
         raise ValueError(
             "Could not find header row — expected columns including one of "
@@ -863,27 +893,42 @@ def _rows_to_generic_lines(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
         src = _at(src_col) if src_col >= 0 else ""
         if src:
             line["src"] = src
+        # Day-16: pass through Wrightsoft's own per-unit price as a
+        # fallback when our catalog has no entry for this SKU. The
+        # builder will use it as unit_cost on the passthrough path so
+        # the customer-facing total matches Wrightsoft's own BOM.
+        if price_col >= 0:
+            price_raw = _at(price_col)
+            if price_raw:
+                try:
+                    price = float(price_raw.replace("$", "").replace(",", ""))
+                    if price > 0:
+                        line["wrightsoft_price"] = price
+                except ValueError:
+                    pass
         if current_section_hint:
             line["section_hint"] = current_section_hint
         out.append(line)
     return out
 
 
-def _locate_header(raw_rows: list[list[Any]]) -> tuple[int, int, int, int, int]:
+def _locate_header(raw_rows: list[list[Any]]) -> tuple[int, int, int, int, int, int]:
     """Scan the first 10 rows for one containing both a generic-id
     header alias AND a quantity header alias. Returns
     (header_row_index, gid_col, qty_col, description_col_or_-1,
-     src_col_or_-1). Returns (-1, 0, 0, -1, -1) if no header is found.
+     src_col_or_-1, price_col_or_-1). Returns (-1, 0, 0, -1, -1, -1)
+    if no header is found.
     """
     for idx, row in enumerate(raw_rows[:10]):
         norm = [str(c or "").strip().lower() for c in row]
         gid_col = _first_alias_index(norm, _GENERIC_ID_HEADER_ALIASES)
         qty_col = _first_alias_index(norm, _QUANTITY_HEADER_ALIASES)
         if gid_col >= 0 and qty_col >= 0:
-            desc_col = _first_alias_index(norm, _DESCRIPTION_HEADER_ALIASES)
-            src_col  = _first_alias_index(norm, _SRC_HEADER_ALIASES)
-            return idx, gid_col, qty_col, desc_col, src_col
-    return -1, 0, 0, -1, -1
+            desc_col  = _first_alias_index(norm, _DESCRIPTION_HEADER_ALIASES)
+            src_col   = _first_alias_index(norm, _SRC_HEADER_ALIASES)
+            price_col = _first_alias_index(norm, _PRICE_HEADER_ALIASES)
+            return idx, gid_col, qty_col, desc_col, src_col, price_col
+    return -1, 0, 0, -1, -1, -1
 
 
 # Section-divider lookup. Keys are lowercased; matched as substring
