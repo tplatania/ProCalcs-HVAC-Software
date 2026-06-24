@@ -673,8 +673,6 @@ def bom_from_wrightsoft():
                     return jsonify({"success": False, "data": None,
                                     "error": f"Could not parse .rup file: {exc}"}), 400
             else:
-                _rup_ducts_only_hint = False
-            else:
                 try:
                     lines = parse_wrightsoft_bom_rows(
                         file_bytes, filename=upload.filename or "",
