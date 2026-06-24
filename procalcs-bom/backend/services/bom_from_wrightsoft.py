@@ -393,14 +393,20 @@ def build_bom_from_wrightsoft_lines(
         # ask the AHRI library whether the gen_id looks like a known
         # condenser model. AHRI gives us SEER/HSPF/AFUE/capacity +
         # AHRI cert number — the data contractors care about for spec
-        # sheets. Per-model lookups are memoized; a miss is cheap (one
-        # indexed query per process per model). We skip lines that
-        # obviously aren't equipment (descriptions that already look
-        # like duct parts) by requiring an uppercase-alphanumeric token
-        # of >= 6 chars — typical Wrightsoft model numbers.
-        if not dfunit_spec and gen_id and len(gen_id) >= 6 \
-                and any(c.isdigit() for c in gen_id) \
-                and any(c.isalpha() for c in gen_id):
+        # sheets.
+        #
+        # Day-16 hotfix: gate STRICTLY on section=Equipment. The earlier
+        # gen-id-shape heuristic fired on fitting SKUs (DDVn07MI,
+        # FBTI-0804-4, FCLR-7) and turned an 81-line Wrightsoft BOM
+        # export into a 240-AHRI-call request that hit Cloud Run's
+        # request timeout. Fittings will never match the AHRI library
+        # (which only catalogs AC/HP/FURNACE units) so the lookup is
+        # pure cost with zero hit rate on those lines.
+        if (line.get("section") == "Equipment"
+                and not dfunit_spec
+                and gen_id and len(gen_id) >= 6
+                and any(c.isdigit() for c in gen_id)
+                and any(c.isalpha() for c in gen_id)):
             ahri_row = wsc.lookup_ahri_by_model(gen_id)
             if ahri_row:
                 line["ahri_spec"] = wsc.ahri_line_spec(ahri_row)
