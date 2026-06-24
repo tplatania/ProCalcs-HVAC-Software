@@ -660,10 +660,20 @@ def bom_from_wrightsoft():
                     lines = build_lines_from_rup(file_bytes,
                                                  source_name=upload.filename or "")
                     source_pipeline_override = "wrightsoft_rup"
+                    # Day-16 follow-up — detect ducts-only files at the
+                    # route level so the hint survives the line-item
+                    # builder (which strips unknown keys).
+                    if not any(li.get("section_hint") == "Equipment"
+                               for li in lines):
+                        _rup_ducts_only_hint = True
+                    else:
+                        _rup_ducts_only_hint = False
                 except Exception as exc:  # noqa: BLE001
                     logger.error("rup parse failed: %s", exc, exc_info=True)
                     return jsonify({"success": False, "data": None,
                                     "error": f"Could not parse .rup file: {exc}"}), 400
+            else:
+                _rup_ducts_only_hint = False
             else:
                 try:
                     lines = parse_wrightsoft_bom_rows(
@@ -672,6 +682,7 @@ def bom_from_wrightsoft():
                 except ValueError as exc:
                     return jsonify({"success": False, "data": None,
                                     "error": str(exc)}), 400
+                _rup_ducts_only_hint = False
         else:
             # ── JSON body branch ──────────────────────────────────────
             body = request.get_json(silent=True) or {}
@@ -742,13 +753,17 @@ def bom_from_wrightsoft():
                 "rollup, upload the Wrightsoft BOM export (.xls / .csv) "
                 "produced by File → Bill of Materials in Wrightsoft."
             )
-            # Day-16 follow-up — hoist the file-type hint from line[0]
-            # to the response top level so the SPA can banner it.
-            for li in (bom.get("line_items") or []):
-                hint = li.pop("rup_file_type_hint", None)
-                if hint:
-                    bom["rup_file_type_hint"] = hint
-                    break
+            # Day-16 follow-up — set the file-type hint when no
+            # equipment lines came out of the parser (Manual D / ADU
+            # Ducts files). Computed at route level (not inside
+            # bom_from_rup) because build_bom_from_wrightsoft_lines
+            # strips unknown keys from line dicts.
+            if _rup_ducts_only_hint:
+                bom["rup_file_type_hint"] = (
+                    "no equipment found — this looks like a Manual D "
+                    "or ducts-only file. For the full residential BOM "
+                    "with equipment, upload a Manual J file."
+                )
 
         return jsonify({"success": True, "data": bom, "error": None}), 200
 
