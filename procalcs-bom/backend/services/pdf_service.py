@@ -186,6 +186,18 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
                 **spec,
             })
 
+    # Day-16 — pricing coverage signal for the PDF hero. Mirrors the
+    # SPA's partial-pricing banner so the printed output is as honest
+    # as the screen: when most lines have $0 price, the grand total
+    # is labeled "Partial" with a count of priced vs total.
+    priced_count = sum(
+        1 for li in line_items
+        if (li.get("unit_price") or li.get("unit_cost") or 0) > 0
+    )
+    is_partial_pricing = (
+        len(line_items) > 0 and priced_count < len(line_items)
+    )
+
     return {
         "job_id":         bom.get("job_id", ""),
         "client_name":    bom.get("client_name", ""),
@@ -202,6 +214,9 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         "contractor_display_name": branding.get("display_name", ""),
         # Equipment specs (Day-15)
         "ahri_specs":              ahri_specs,
+        # Pricing coverage (Day-16)
+        "priced_count":            priced_count,
+        "is_partial_pricing":      is_partial_pricing,
         # Provenance — wired into the template behind has_provenance so
         # pre-rules-engine payloads render the prior layout untouched.
         "rules_count":    int(rules_count or 0),

@@ -173,15 +173,29 @@
     justify-content: space-between;
     align-items: center;
   }
+  .grand-total.partial {
+    border-color: #f59e0b;
+    background: #fffbeb;
+  }
   .grand-total .label {
     font-size: 11pt;
     font-weight: 600;
     color: #1e293b;
   }
+  .grand-total .label small {
+    display: block;
+    font-size: 8pt;
+    font-weight: 400;
+    color: #b45309;
+    margin-top: 2pt;
+  }
   .grand-total .amount {
     font-size: 20pt;
     font-weight: 700;
     color: #f97316;
+  }
+  .grand-total.partial .amount {
+    color: #b45309;
   }
 
   /* ===== Output mode note ===== */
@@ -359,8 +373,15 @@
 {% endfor %}
 
 <!-- ===== Grand total ===== -->
-<div class="grand-total">
-  <span class="label">Grand Total — {{ output_mode.replace('_', ' ').title() }}</span>
+<div class="grand-total{% if is_partial_pricing %} partial{% endif %}">
+  <span class="label">
+    {% if is_partial_pricing %}
+      Partial Total
+      <small>{{ priced_count }} of {{ item_count }} lines priced · upload contractor pricing for the full BOM</small>
+    {% else %}
+      Grand Total — {{ output_mode.replace('_', ' ').title() }}
+    {% endif %}
+  </span>
   <span class="amount">{{ grand_total | currency }}</span>
 </div>
 <div class="mode-note">{{ item_count }} line items · output mode: {{ output_mode }}</div>
