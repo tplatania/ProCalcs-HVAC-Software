@@ -742,6 +742,13 @@ def bom_from_wrightsoft():
                 "rollup, upload the Wrightsoft BOM export (.xls / .csv) "
                 "produced by File → Bill of Materials in Wrightsoft."
             )
+            # Day-16 follow-up — hoist the file-type hint from line[0]
+            # to the response top level so the SPA can banner it.
+            for li in (bom.get("line_items") or []):
+                hint = li.pop("rup_file_type_hint", None)
+                if hint:
+                    bom["rup_file_type_hint"] = hint
+                    break
 
         return jsonify({"success": True, "data": bom, "error": None}), 200
 

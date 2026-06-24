@@ -130,6 +130,32 @@ def build_lines_from_rup(file_bytes: bytes,
             "unit":         "RUN",
         })
 
+    # Day-16 follow-up — when DTYPREF is empty (common on Manual D /
+    # ADU Ducts files where Wrightsoft didn't tag duct types), fall
+    # back to round_diameters_present + rect_sizes_present so we still
+    # surface the actual duct sizes the designer used. Quantity stays
+    # at 1 per size as a placeholder — the .rup doesn't carry LF per
+    # size without a full per-run binary decode (deferred).
+    if not type_counts:
+        for diam in (duct.get("round_diameters_present") or []):
+            lines.append({
+                "generic_id":   f"DUCT-ROUND-{diam}",
+                "quantity":     1.0,
+                "description":  f'Round duct — {diam}" diameter (size from .rup)',
+                "src":          "WSF",
+                "section_hint": "Duct System Equipment",
+                "unit":         "SIZE",
+            })
+        for size in (duct.get("rect_sizes_present") or []):
+            lines.append({
+                "generic_id":   f"DUCT-RECT-{size}",
+                "quantity":     1.0,
+                "description":  f"Rectangular duct — {size}\" (size from .rup)",
+                "src":          "WSF",
+                "section_hint": "Duct System Equipment",
+                "unit":         "SIZE",
+            })
+
     # ── Register count placeholder ─────────────────────────────────
     # DREGINFO instance count is a clean signal — one record per
     # register location in the design. Caller can apply contractor
@@ -166,6 +192,18 @@ def build_lines_from_rup(file_bytes: bytes,
             "section_hint": "Duct System Equipment",
             "unit":         "EA",
         })
+
+    # Day-16 follow-up — Manual D / ADU Ducts files have no equipment
+    # by design. Tag the first line so the route handler can surface a
+    # banner: "this looks like a ducts-only file — for a residential
+    # BOM with equipment, upload a Manual J file instead."
+    is_ducts_only = (len(design.get("equipment") or []) == 0)
+    if is_ducts_only and lines:
+        lines[0]["rup_file_type_hint"] = (
+            "no equipment found — this looks like a Manual D / "
+            "ducts-only file. For the full residential BOM with "
+            "equipment, upload a Manual J file."
+        )
 
     logger.info(
         "Built %d BOM lines from .rup (%d equip, %d duct types, "
