@@ -681,6 +681,7 @@ def bom_from_wrightsoft():
                     return jsonify({"success": False, "data": None,
                                     "error": str(exc)}), 400
                 _rup_ducts_only_hint = False
+
         else:
             # ── JSON body branch ──────────────────────────────────────
             body = request.get_json(silent=True) or {}
@@ -691,6 +692,57 @@ def bom_from_wrightsoft():
             if not isinstance(lines, list):
                 return jsonify({"success": False, "data": None,
                                 "error": "'lines' must be a list"}), 400
+
+        # Day-16 follow-up — optional second .rup file co-uploaded
+        # alongside the .xls/.csv to add room/duct-system context the
+        # .xls export strips. Surfaced as rup_context on the response
+        # so the SPA can render a "Rooms served" chip strip without
+        # touching the per-line items.
+        rup_context = None
+        rup_upload = request.files.get('rup_context') if request.files else None
+        if rup_upload and source_pipeline_override != "wrightsoft_rup":
+            try:
+                rup_bytes = rup_upload.read()
+                if rup_bytes and (
+                    (rup_upload.filename or "").lower().endswith(".rup")
+                    or _looks_like_rup(rup_bytes)
+                ):
+                    from utils.rup_parser import parse_rup_bytes
+                    design = parse_rup_bytes(
+                        rup_bytes, source_name=rup_upload.filename or "")
+                    # Extract clean room list — prefer the BALDUCT-derived
+                    # rooms parsed into raw_rup_context (Day-14), fall
+                    # back to the text-regex rooms collection.
+                    rooms: list[str] = []
+                    raw = design.get("raw_rup_context") or ""
+                    import re as _re
+                    in_rooms = False
+                    for raw_line in raw.splitlines():
+                        if raw_line.startswith("=== ROOMS"):
+                            in_rooms = True
+                            continue
+                        if in_rooms:
+                            if raw_line.startswith("==="):
+                                break
+                            name = raw_line.strip()
+                            if name and not _re.fullmatch(r"[a-z]{1,3}\d{1,3}", name):
+                                rooms.append(name)
+                    if not rooms:
+                        rooms = [r.get("name", "") for r in (design.get("rooms") or [])
+                                 if r.get("name")]
+                    duct = design.get("duct_summary") or {}
+                    rup_context = {
+                        "filename":           rup_upload.filename or "",
+                        "rooms":              rooms[:200],
+                        "room_count":         len(rooms),
+                        "duct_type_counts":   duct.get("type_counts") or {},
+                        "round_diameters":    duct.get("round_diameters_present") or [],
+                        "rect_sizes":         duct.get("rect_sizes_present") or [],
+                        "equipment_count":    len(design.get("equipment") or []),
+                    }
+            except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+                logger.warning("rup_context parse skipped: %s", exc)
+                rup_context = None
 
         if not client_id or not job_id:
             return jsonify({"success": False, "data": None,
@@ -762,6 +814,12 @@ def bom_from_wrightsoft():
                     "or ducts-only file. For the full residential BOM "
                     "with equipment, upload a Manual J file."
                 )
+
+        # Day-16 follow-up — attach optional .rup-derived context to
+        # the .xls/.csv response so the SPA can show "Rooms served"
+        # + duct system shape without changing per-line data.
+        if rup_context:
+            bom["rup_context"] = rup_context
 
         return jsonify({"success": True, "data": bom, "error": None}), 200
 
