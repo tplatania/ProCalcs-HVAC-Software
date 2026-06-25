@@ -319,6 +319,48 @@
 </div>
 {% endif %}
 
+{% if quick_order_summary %}
+<!-- ===== Quick Order Summary (Day-17 / Tom's #1) ===== -->
+<div style="margin-top: 14pt; margin-bottom: 14pt; page-break-inside: avoid;">
+  <div style="background: #1e293b; color: #fff; padding: 6pt 10pt; border-top-left-radius: 5pt; border-top-right-radius: 5pt;">
+    <span style="font-size: 11pt; font-weight: 700; letter-spacing: 0.5pt;">QUICK ORDER SUMMARY</span>
+    <span style="font-size: 8pt; color: #cbd5e1; margin-left: 6pt;">— buy at these quantities; detailed runs below</span>
+  </div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1pt solid #1e293b; border-top: none;">
+    <thead>
+      <tr style="background: #f1f5f9;">
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">CATEGORY</th>
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">SIZE</th>
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">ITEM</th>
+        <th style="text-align: right; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">TOTAL</th>
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">ORDER AS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set ns = namespace(prev_cat='') %}
+      {% for r in quick_order_summary %}
+        <tr style="background: {{ '#fafbfc' if loop.index is even else '#ffffff' }};">
+          <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; {% if r.category != ns.prev_cat %}font-weight: 600;{% else %}color: #94a3b8;{% endif %}">
+            {% if r.category != ns.prev_cat %}{{ r.category }}{% set ns.prev_cat = r.category %}{% else %}&nbsp;{% endif %}
+          </td>
+          <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; font-family: monospace;">{{ r.size or '—' }}</td>
+          <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #475569; font-size: 8.5pt;">{{ r.label }}</td>
+          <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; font-weight: 600; tabular-nums;">{{ "%.2f"|format(r.total) }} {{ r.unit }}</td>
+          <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0;">
+            {% if r.per_container > 1 %}
+              <strong>{{ r.containers }} {{ r.container }}{{ '' if r.containers == 1 else 'es' if r.container == 'box' else 's' }}</strong>
+              <span style="color: #94a3b8; font-size: 7.5pt;">({{ r.per_container|int }} {{ r.unit }} each)</span>
+            {% else %}
+              <strong>{{ r.containers }} {{ r.container }}{{ '' if r.containers == 1 else 's' }}</strong>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- ===== Category tables ===== -->
 {% for group in groups %}
 <div class="category">

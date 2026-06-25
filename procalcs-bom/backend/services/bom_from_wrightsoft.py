@@ -504,6 +504,17 @@ def build_bom_from_wrightsoft_lines(
                 job_id, exc,
             )
 
+    # Day-17 — Quick Order Summary: group identical SKUs by family +
+    # size, sum quantities, apply standard packaging (flex = 25ft
+    # boxes, rect fiberglass = 10ft sticks). Tom's #1 ask: contractors
+    # see at a glance what to purchase without scanning the detailed
+    # row-per-run table below.
+    try:
+        from services.bom_quick_order import build_quick_order
+        bom["quick_order_summary"] = build_quick_order(line_items)
+    except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+        logger.warning("quick_order build skipped: %s", exc)
+
     logger.info(
         "Wrightsoft BOM built for job %s — %d lines "
         "(%d manual / %d mapped / %d discovered / %d passthrough / %d unmapped)",

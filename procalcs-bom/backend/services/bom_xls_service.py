@@ -214,6 +214,48 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     # Freeze header row so the column titles stick when scrolling
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
 
+    # ── Quick Order Summary (Day-17) ─────────────────────────────
+    qo_rows = bom.get("quick_order_summary") or []
+    if qo_rows:
+        ws3 = wb.create_sheet(title="Quick Order")
+        ws3.cell(row=1, column=1, value="QUICK ORDER SUMMARY").font = Font(size=14, bold=True)
+        ws3.merge_cells("A1:E1")
+        ws3.cell(row=2, column=1,
+                 value="Buy at these quantities — detailed runs on the BOM sheet."
+                 ).font = Font(italic=True, color="64748B")
+        ws3.merge_cells("A2:E2")
+        headers = ["Category", "Size", "Item", "Total", "Order As"]
+        for col_idx, label in enumerate(headers, start=1):
+            cell = ws3.cell(row=4, column=col_idx, value=label)
+            cell.fill = _HEADER_FILL
+            cell.font = _WHITE_BOLD
+        prev_cat = ""
+        for idx, r in enumerate(qo_rows, start=5):
+            cat = r.get("category", "")
+            cat_display = cat if cat != prev_cat else ""
+            prev_cat = cat
+            ws3.cell(row=idx, column=1, value=cat_display).font = Font(bold=(cat_display != ""))
+            ws3.cell(row=idx, column=2, value=r.get("size") or "")
+            ws3.cell(row=idx, column=3, value=r.get("label", ""))
+            total = r.get("total") or 0
+            unit  = r.get("unit", "ea")
+            ws3.cell(row=idx, column=4, value=f"{total:.2f} {unit}").alignment = Alignment(horizontal="right")
+            containers = r.get("containers") or 0
+            container  = r.get("container", "ea")
+            per_container = r.get("per_container") or 0
+            if per_container > 1:
+                plural = "es" if container == "box" else "s"
+                suffix = "" if containers == 1 else plural
+                order_label = f"{containers} {container}{suffix} ({int(per_container)} {unit} each)"
+            else:
+                suffix = "" if containers == 1 else "s"
+                order_label = f"{containers} {container}{suffix}"
+            ws3.cell(row=idx, column=5, value=order_label).font = Font(bold=True)
+        widths = {1: 22, 2: 10, 3: 50, 4: 14, 5: 28}
+        for i, w in widths.items():
+            ws3.column_dimensions[get_column_letter(i)].width = w
+        ws3.freeze_panes = ws3.cell(row=5, column=1)
+
     # ── Equipment Specifications (AHRI) — Day-15 ──────────────────
     # Collect any line carrying an ahri_spec and drop them into a
     # dedicated sheet so contractors can hand the spec sheet to the
