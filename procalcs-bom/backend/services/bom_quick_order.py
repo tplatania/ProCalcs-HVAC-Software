@@ -46,9 +46,13 @@ _PACKAGING: Dict[str, Dict[str, Any]] = {
     # Generic flex duct family
     "DDFl": {"per_box": 25.0, "unit": "ft", "container": "box",
              "category": "Flex duct"},
-    # Rectangular fiberglass duct board
-    "DRFg": {"per_box": 10.0, "unit": "ft", "container": "stick",
-             "category": "Rectangular duct"},
+    # Rectangular fiberglass duct — cut from 4'×8' sheet board.
+    # Per Tom (Jun 27): the duct is typically 4' long because the 8'
+    # side is what gets cut down and folded around the cross-section.
+    # Pre-made fiberglass items (mixing boxes, end caps) stay 'each'
+    # below — their SKUs live under FBEC / FJB / FPL etc.
+    "DRFg": {"per_box": 4.0, "unit": "ft", "container": "4-ft length",
+             "category": "Fiberglass duct (cut from 4×8 board)"},
     # Rectangular sheet metal duct
     "DRMt": {"per_box":  5.0, "unit": "ft", "container": "stick",
              "category": "Sheet metal duct"},
@@ -214,7 +218,10 @@ def build_quick_order(line_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     # Sort: ducts first, then fittings, then misc. Within each
     # category, sort by size token (8" before 10" before 12").
     _CATEGORY_ORDER = [
-        "Flex duct", "Rectangular duct", "Sheet metal duct",
+        "Flex duct",
+        "Fiberglass duct (cut from 4×8 board)",
+        "Rectangular duct",
+        "Sheet metal duct",
         "Ceiling boots", "Collars", "End caps",
         "Plenums / take-offs", "Take-offs",
         "Grilles / registers", "Junction boxes",
