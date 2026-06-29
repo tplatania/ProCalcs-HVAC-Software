@@ -234,60 +234,11 @@ class ClientProfile:
 # ===============================
 # Serialization Helpers
 # ===============================
-
-def _read_consumables_rules(raw, supplier_data: Optional[dict] = None) -> 'ConsumablesRules':
-    """Build a ConsumablesRules from a Firestore dict, handling three
-    on-disk shapes:
-      1. New shape  — {"items": [...]}             → use as-is
-      2. Old shape  — {"joints_per_mastic_gallon": ..., "include_mastic": ...}
-                       → rebuild the 4 default items, copying multipliers
-                         + enable flags + unit_prices (from supplier_data)
-      3. Empty/None → seed with the 4 defaults
-    """
-    if not raw:
-        return ConsumablesRules()  # default items
-    if isinstance(raw, dict) and isinstance(raw.get("items"), list):
-        items = []
-        for it in raw["items"]:
-            if not isinstance(it, dict):
-                continue
-            items.append(ConsumableItem(
-                key=str(it.get("key") or ""),
-                name=str(it.get("name") or ""),
-                description=str(it.get("description") or ""),
-                basis=str(it.get("basis") or "joints"),
-                per_container=float(it.get("per_container") or 0),
-                qty_per_job=float(it.get("qty_per_job") or 0),
-                container=str(it.get("container") or "ea"),
-                unit_price=float(it.get("unit_price") or 0),
-                enabled=bool(it.get("enabled", True)),
-            ))
-        return ConsumablesRules(items=items)
-
-    # Legacy shape — rebuild the 4 defaults using whatever multipliers /
-    # include flags were persisted. Unit prices migrate from the
-    # SupplierInfo block (mastic_cost_per_gallon, tape_cost_per_roll,
-    # screws_cost_per_box) since that's where the old editor stored them.
-    sup = supplier_data or {}
-    mastic_price = float(sup.get("mastic_cost_per_gallon") or 0)
-    tape_price   = float(sup.get("tape_cost_per_roll")     or 0)
-    screws_price = float(sup.get("screws_cost_per_box")    or 0)
-    items = _default_consumable_items()
-    by_key = {it.key: it for it in items}
-    by_key["mastic"].per_container    = float(raw.get("joints_per_mastic_gallon") or 75)
-    by_key["mastic"].unit_price       = mastic_price
-    by_key["mastic"].enabled          = bool(raw.get("include_mastic", True))
-    by_key["foil-tape"].per_container = float(raw.get("joints_per_foil_roll") or 30)
-    by_key["foil-tape"].unit_price    = tape_price
-    by_key["foil-tape"].enabled       = bool(raw.get("include_foil_tape", True))
-    by_key["flex-tape"].per_container = float(raw.get("flex_runs_per_flex_roll") or 40)
-    by_key["flex-tape"].unit_price    = tape_price
-    by_key["flex-tape"].enabled       = bool(raw.get("include_flex_tape", True))
-    by_key["screws"].per_container    = float(raw.get("fittings_per_screw_box") or 150)
-    by_key["screws"].unit_price       = screws_price
-    by_key["screws"].enabled          = bool(raw.get("include_screws", True))
-    return ConsumablesRules(items=items)
-
+# (Method definitions for ClientProfile follow at indent 4. They remain
+# attached to the class above via Python's rule that comments and blank
+# lines do not end a class body — do not insert any module-level
+# `def`/`class` statements between here and the end of from_dict() below,
+# or those methods will detach from ClientProfile.)
 
     def to_dict(self) -> dict:
         """Convert to Firestore-safe dictionary."""
@@ -451,3 +402,58 @@ def _read_consumables_rules(raw, supplier_data: Optional[dict] = None) -> 'Consu
             created_by=data.get('created_by', ''),
             notes=data.get('notes', ''),
         )
+
+
+# ===============================
+# Module-level helpers (define AFTER ClientProfile so they don't
+# accidentally end the class body — the methods above are only held
+# inside the class by the comments-don't-end-blocks rule.)
+# ===============================
+
+def _read_consumables_rules(raw, supplier_data: Optional[dict] = None) -> ConsumablesRules:
+    """Build a ConsumablesRules from a Firestore dict, handling:
+      1. New shape  — {"items": [...]}        → use as-is
+      2. Legacy shape — {"joints_per_mastic_gallon": ..., "include_mastic": ...}
+                        → rebuild the 4 defaults from old fields,
+                          pulling unit prices from supplier_data
+      3. Empty/None → seed with the 4 defaults
+    """
+    if not raw:
+        return ConsumablesRules()
+    if isinstance(raw, dict) and isinstance(raw.get("items"), list):
+        items = []
+        for it in raw["items"]:
+            if not isinstance(it, dict):
+                continue
+            items.append(ConsumableItem(
+                key=str(it.get("key") or ""),
+                name=str(it.get("name") or ""),
+                description=str(it.get("description") or ""),
+                basis=str(it.get("basis") or "joints"),
+                per_container=float(it.get("per_container") or 0),
+                qty_per_job=float(it.get("qty_per_job") or 0),
+                container=str(it.get("container") or "ea"),
+                unit_price=float(it.get("unit_price") or 0),
+                enabled=bool(it.get("enabled", True)),
+            ))
+        return ConsumablesRules(items=items)
+
+    sup = supplier_data or {}
+    mastic_price = float(sup.get("mastic_cost_per_gallon") or 0)
+    tape_price   = float(sup.get("tape_cost_per_roll")     or 0)
+    screws_price = float(sup.get("screws_cost_per_box")    or 0)
+    items = _default_consumable_items()
+    by_key = {it.key: it for it in items}
+    by_key["mastic"].per_container    = float(raw.get("joints_per_mastic_gallon") or 75)
+    by_key["mastic"].unit_price       = mastic_price
+    by_key["mastic"].enabled          = bool(raw.get("include_mastic", True))
+    by_key["foil-tape"].per_container = float(raw.get("joints_per_foil_roll") or 30)
+    by_key["foil-tape"].unit_price    = tape_price
+    by_key["foil-tape"].enabled       = bool(raw.get("include_foil_tape", True))
+    by_key["flex-tape"].per_container = float(raw.get("flex_runs_per_flex_roll") or 40)
+    by_key["flex-tape"].unit_price    = tape_price
+    by_key["flex-tape"].enabled       = bool(raw.get("include_flex_tape", True))
+    by_key["screws"].per_container    = float(raw.get("fittings_per_screw_box") or 150)
+    by_key["screws"].unit_price       = screws_price
+    by_key["screws"].enabled          = bool(raw.get("include_screws", True))
+    return ConsumablesRules(items=items)
