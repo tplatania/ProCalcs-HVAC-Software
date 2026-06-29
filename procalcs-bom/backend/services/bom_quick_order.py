@@ -156,16 +156,27 @@ def _format_size_label(size_token: str, sku: str) -> str:
 # when present, else 0 — which trips the existing "needs price /
 # $0 OK" affordance on the BOM result page, same as commodity stubs.
 
-_CONSUMABLES_DEFAULTS = {
-    "joints_per_mastic_gallon": 75,
-    "joints_per_foil_roll":     30,
-    "flex_runs_per_flex_roll":  40,
-    "fittings_per_screw_box":   150,
-    "include_mastic":           True,
-    "include_foil_tape":        True,
-    "include_flex_tape":        True,
-    "include_screws":           True,
-}
+# Default item list — mirrors models.client_profile._default_consumable_items().
+# Kept in sync as a static dict here so this service has no model import
+# coupling (avoids circulars when the model imports this service).
+_DEFAULT_ITEMS = [
+    {"key": "mastic",    "name": "Mastic",
+     "description": "Brushed onto joints to seal duct connections.",
+     "basis": "joints", "per_container": 75, "qty_per_job": 0,
+     "container": "gallon", "unit_price": 0, "enabled": True},
+    {"key": "foil-tape", "name": "Foil tape (UL-181A-P)",
+     "description": "Seals sheet metal and fiberglass-board seams.",
+     "basis": "joints", "per_container": 30, "qty_per_job": 0,
+     "container": "roll", "unit_price": 0, "enabled": True},
+    {"key": "flex-tape", "name": "Flex tape (UL-181B-FX)",
+     "description": "Seals flex-duct-to-collar connections.",
+     "basis": "flex_runs", "per_container": 40, "qty_per_job": 0,
+     "container": "roll", "unit_price": 0, "enabled": True},
+    {"key": "screws",    "name": "Sheet metal screws",
+     "description": "For fastening collars, boots, rectangular joints.",
+     "basis": "fittings", "per_container": 150, "qty_per_job": 0,
+     "container": "box", "unit_price": 0, "enabled": True},
+]
 
 # SKU-prefix → joint-classification, used to count joints + flex runs
 # from the BOM line_items.
@@ -186,45 +197,50 @@ def _classify_for_consumables(sku: str) -> str:
     return ""
 
 
-def _consumable_row(category_label: str, label: str, total: int,
+def _consumable_row(name: str, label: str, qty: int,
                     container: str, unit_price: float) -> Dict[str, Any]:
-    """Build a single Quick-Order rollup row for one consumable type."""
+    """Build a single Quick-Order rollup row for one consumable item."""
     return {
         "category":      "Install consumables",
         "label":         label,
-        "size":          category_label,  # reused column for the short name
-        "total":         float(total),
+        "size":          name,            # short label shown in 'size' col
+        "total":         float(qty),
         "unit":          container,
         "container":     container,
         "per_container": 1.0,
-        "containers":    int(total),
+        "containers":    int(qty),
         "run_count":     0,
         "sku_count":     1,
         "unit_price":    float(unit_price or 0),
-        "total_price":   float((unit_price or 0) * total),
+        "total_price":   float((unit_price or 0) * qty),
         "is_consumable": True,
     }
 
 
 def compute_consumables(line_items: List[Dict[str, Any]],
                         rules: Optional[Dict[str, Any]] = None,
-                        supplier: Optional[Dict[str, Any]] = None
+                        supplier: Optional[Dict[str, Any]] = None  # kept for back-compat; no longer used
                         ) -> List[Dict[str, Any]]:
     """Compute the install-consumables rollup rows.
 
-    rules    — dict shaped like ConsumablesRules.to_dict(); missing keys
-               fall back to _CONSUMABLES_DEFAULTS.
-    supplier — dict shaped like SupplierInfo.to_dict(); provides per-unit
-               costs (mastic_cost_per_gallon, tape_cost_per_roll, etc.).
-               Missing → unit_price 0, which is fine; the SPA's
-               '$0 OK / needs price' affordance handles it.
-    """
-    r = {**_CONSUMABLES_DEFAULTS, **(rules or {})}
-    s = supplier or {}
+    rules — dict shaped like the new ConsumablesRules.to_dict():
+        { "items": [ {key,name,description,basis,per_container,
+                      qty_per_job,container,unit_price,enabled}, … ] }
 
+      If `rules` is the legacy flat shape (joints_per_mastic_gallon etc.)
+      we coerce it to the new shape using the same logic the model uses,
+      so partial old-shape callers don't have to migrate first.
+
+    supplier — accepted for backward signature compatibility; unit price
+      now lives on each item, not on the supplier.
+    """
+    items = _coerce_items(rules, supplier)
+
+    # Aggregate counts once
     joints = 0
     flex_runs = 0
     fittings = 0
+    duct_lf = 0.0
     for li in line_items or []:
         sku = (li.get("generic_id") or li.get("sku") or "").strip()
         if not sku:
@@ -237,38 +253,76 @@ def compute_consumables(line_items: List[Dict[str, Any]],
             joints   += int(round(qty))
             fittings += int(round(qty))
         elif kind == "flex_run":
-            flex_runs += 1   # one connection per flex-duct line, regardless of LF
+            flex_runs += 1
+            duct_lf += qty
+        else:
+            # Other duct prefixes (DRFg/DRMt/DRSt) — count their LF too
+            u = sku.upper()
+            if u.startswith(("DRFG", "DRMT", "DRST")):
+                duct_lf += qty
+    counts = {
+        "joints":    joints,
+        "flex_runs": flex_runs,
+        "fittings":  fittings,
+        "duct_lf":   duct_lf,
+    }
 
     out: List[Dict[str, Any]] = []
-    if r["include_mastic"] and joints > 0:
-        gallons = math.ceil(joints / max(1, int(r["joints_per_mastic_gallon"])))
+    for it in items:
+        if not it.get("enabled", True):
+            continue
+        basis = it.get("basis", "joints")
+        if basis == "per_job":
+            qty = int(math.ceil(float(it.get("qty_per_job") or 0)))
+        else:
+            n = counts.get(basis, 0)
+            if n <= 0:
+                continue
+            per = float(it.get("per_container") or 0)
+            if per <= 0:
+                continue
+            qty = int(math.ceil(n / per))
+        if qty <= 0:
+            continue
+        name = it.get("name") or it.get("key") or "Consumable"
+        desc = it.get("description") or name
         out.append(_consumable_row(
-            "Mastic",
-            f"Duct mastic — seals ~{r['joints_per_mastic_gallon']} joints per gallon",
-            gallons, "gallon", float(s.get("mastic_cost_per_gallon") or 0),
-        ))
-    if r["include_foil_tape"] and joints > 0:
-        rolls = math.ceil(joints / max(1, int(r["joints_per_foil_roll"])))
-        out.append(_consumable_row(
-            "Foil tape",
-            f"UL-181A-P foil tape — ~{r['joints_per_foil_roll']} joints per roll",
-            rolls, "roll", float(s.get("tape_cost_per_roll") or 0),
-        ))
-    if r["include_flex_tape"] and flex_runs > 0:
-        rolls = math.ceil(flex_runs / max(1, int(r["flex_runs_per_flex_roll"])))
-        out.append(_consumable_row(
-            "Flex tape",
-            f"UL-181B-FX flex-duct tape — ~{r['flex_runs_per_flex_roll']} flex runs per roll",
-            rolls, "roll", float(s.get("tape_cost_per_roll") or 0),
-        ))
-    if r["include_screws"] and fittings > 0:
-        boxes = math.ceil(fittings / max(1, int(r["fittings_per_screw_box"])))
-        out.append(_consumable_row(
-            "Sheet metal screws",
-            f"Sheet metal screws — ~{r['fittings_per_screw_box']} attachments per box",
-            boxes, "box", float(s.get("screws_cost_per_box") or 0),
+            name, desc, qty,
+            container=str(it.get("container") or "ea"),
+            unit_price=float(it.get("unit_price") or 0),
         ))
     return out
+
+
+def _coerce_items(rules: Optional[Dict[str, Any]],
+                  supplier: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return a list of item dicts from `rules`, accepting either the
+    new shape ({items:[…]}) or the legacy flat shape. Always returns at
+    least the default item set when nothing useful was provided."""
+    if rules and isinstance(rules.get("items"), list):
+        return rules["items"]
+    if not rules:
+        return list(_DEFAULT_ITEMS)
+    # Legacy migration mirroring models.client_profile._read_consumables_rules
+    s = supplier or {}
+    mastic_price = float(s.get("mastic_cost_per_gallon") or 0)
+    tape_price   = float(s.get("tape_cost_per_roll")     or 0)
+    screws_price = float(s.get("screws_cost_per_box")    or 0)
+    items = [dict(x) for x in _DEFAULT_ITEMS]  # deep-ish copy
+    by_key = {it["key"]: it for it in items}
+    by_key["mastic"]["per_container"]    = float(rules.get("joints_per_mastic_gallon") or 75)
+    by_key["mastic"]["unit_price"]       = mastic_price
+    by_key["mastic"]["enabled"]          = bool(rules.get("include_mastic", True))
+    by_key["foil-tape"]["per_container"] = float(rules.get("joints_per_foil_roll") or 30)
+    by_key["foil-tape"]["unit_price"]    = tape_price
+    by_key["foil-tape"]["enabled"]       = bool(rules.get("include_foil_tape", True))
+    by_key["flex-tape"]["per_container"] = float(rules.get("flex_runs_per_flex_roll") or 40)
+    by_key["flex-tape"]["unit_price"]    = tape_price
+    by_key["flex-tape"]["enabled"]       = bool(rules.get("include_flex_tape", True))
+    by_key["screws"]["per_container"]    = float(rules.get("fittings_per_screw_box") or 150)
+    by_key["screws"]["unit_price"]       = screws_price
+    by_key["screws"]["enabled"]          = bool(rules.get("include_screws", True))
+    return items
 
 
 def build_quick_order(line_items: List[Dict[str, Any]],

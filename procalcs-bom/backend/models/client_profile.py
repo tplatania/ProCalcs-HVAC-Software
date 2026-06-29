@@ -93,38 +93,77 @@ class LaborRates:
 
 
 @dataclass
-class ConsumablesRules:
-    """Day-17 — per-job consumables math (mastic, foil tape, flex tape,
-    screws). Wrightsoft never itemizes these; every install needs them.
-    The Quick Order Summary computes them deterministically from the
-    fitting / joint counts on the BOM and lists them under their own
-    'Install consumables' category.
+class ConsumableItem:
+    """Day-17 — one install consumable on a contractor's BOM, e.g.
+    mastic, foil tape, strap, hanger, brush, mesh tape. Each item is
+    auto-quantified per-job from one of these bases:
 
-    Defaults below are placeholder rules-of-thumb proposed by Tom + me;
-    Richard ack'd them as 'good for now, refine after meeting a real
-    contractor' (Jun 29). When a contractor's actual practice differs
-    (some jobs use more mastic, some shops use bigger tape rolls), set
-    the override on their profile and the math reshapes per-job.
+      joints     — count of fitting line items that create sealed joints
+      flex_runs  — count of flex-duct line items (one connection each)
+      fittings   — count of all fitting line items (boots, collars, etc)
+      duct_lf    — total linear feet of duct
+      per_job    — flat quantity, ignores the BOM (e.g. 1 brush per job)
 
-    Math:
-      mastic gallons   = ceil(joints / joints_per_mastic_gallon)
-      foil tape rolls  = ceil(joints / joints_per_foil_roll)
-      flex tape rolls  = ceil(flex_runs / flex_runs_per_flex_roll)
-      screws boxes     = ceil(fittings / fittings_per_screw_box)
+    Quantity = ceil(count / per_container) for ratio bases,
+               qty_per_job              for per_job basis.
     """
-    # Coverage multipliers
-    joints_per_mastic_gallon: int = 75   # one gallon seals ~75 joints
-    joints_per_foil_roll:     int = 30   # one 60-yd roll covers ~30 joints
-    flex_runs_per_flex_roll:  int = 40   # one 60-yd flex-tape roll per ~40 flex connections
-    fittings_per_screw_box:   int = 150  # one 100-ct screw box per ~150 attachments
+    key: str = ""              # stable id for ordering/dedupe ("mastic")
+    name: str = ""             # display label ("Mastic")
+    description: str = ""      # optional helper text
+    basis: str = "joints"      # joints | flex_runs | fittings | duct_lf | per_job
+    per_container: float = 1.0 # used by ratio bases
+    qty_per_job: float = 0.0   # used by per_job basis
+    container: str = "ea"      # gallon | roll | box | ea | …
+    unit_price: float = 0.0    # $ per container
+    enabled: bool = True
 
-    # Whether each consumable is auto-added to the Quick Order Summary.
-    # Default everything on; a contractor who supplies their own mastic
-    # would flip mastic off rather than re-derive zeros each job.
-    include_mastic:    bool = True
-    include_foil_tape: bool = True
-    include_flex_tape: bool = True
-    include_screws:    bool = True
+
+@dataclass
+class ConsumablesRules:
+    """Day-17 — per-job consumables math.
+
+    Now a dynamic list: a contractor can add or remove items as their
+    actual install practice demands. Defaults below are the four
+    placeholder rules-of-thumb Tom + I proposed and Richard ack'd as
+    'good for now, refine after meeting a real contractor' (Jun 29).
+
+    Backward compatibility: when loading a profile written by an older
+    version of this schema, ConsumablesRules.from_legacy() rebuilds
+    these four items from the old `joints_per_mastic_gallon` etc.
+    fields so the next save persists the new shape transparently.
+    """
+    items: list = field(default_factory=lambda: list(_default_consumable_items()))
+
+
+def _default_consumable_items() -> list:
+    """Seed list — exposed as a function so callers (UI defaults,
+    backward-compat migration) all share one canonical source."""
+    return [
+        ConsumableItem(
+            key="mastic", name="Mastic",
+            description="Brushed onto joints to seal duct connections.",
+            basis="joints", per_container=75, container="gallon",
+            unit_price=0.0, enabled=True,
+        ),
+        ConsumableItem(
+            key="foil-tape", name="Foil tape (UL-181A-P)",
+            description="Seals sheet metal and fiberglass-board seams.",
+            basis="joints", per_container=30, container="roll",
+            unit_price=0.0, enabled=True,
+        ),
+        ConsumableItem(
+            key="flex-tape", name="Flex tape (UL-181B-FX)",
+            description="Seals flex-duct-to-collar connections.",
+            basis="flex_runs", per_container=40, container="roll",
+            unit_price=0.0, enabled=True,
+        ),
+        ConsumableItem(
+            key="screws", name="Sheet metal screws",
+            description="For fastening collars, boots, rectangular joints.",
+            basis="fittings", per_container=150, container="box",
+            unit_price=0.0, enabled=True,
+        ),
+    ]
 
 
 @dataclass
@@ -196,6 +235,60 @@ class ClientProfile:
 # Serialization Helpers
 # ===============================
 
+def _read_consumables_rules(raw, supplier_data: Optional[dict] = None) -> 'ConsumablesRules':
+    """Build a ConsumablesRules from a Firestore dict, handling three
+    on-disk shapes:
+      1. New shape  — {"items": [...]}             → use as-is
+      2. Old shape  — {"joints_per_mastic_gallon": ..., "include_mastic": ...}
+                       → rebuild the 4 default items, copying multipliers
+                         + enable flags + unit_prices (from supplier_data)
+      3. Empty/None → seed with the 4 defaults
+    """
+    if not raw:
+        return ConsumablesRules()  # default items
+    if isinstance(raw, dict) and isinstance(raw.get("items"), list):
+        items = []
+        for it in raw["items"]:
+            if not isinstance(it, dict):
+                continue
+            items.append(ConsumableItem(
+                key=str(it.get("key") or ""),
+                name=str(it.get("name") or ""),
+                description=str(it.get("description") or ""),
+                basis=str(it.get("basis") or "joints"),
+                per_container=float(it.get("per_container") or 0),
+                qty_per_job=float(it.get("qty_per_job") or 0),
+                container=str(it.get("container") or "ea"),
+                unit_price=float(it.get("unit_price") or 0),
+                enabled=bool(it.get("enabled", True)),
+            ))
+        return ConsumablesRules(items=items)
+
+    # Legacy shape — rebuild the 4 defaults using whatever multipliers /
+    # include flags were persisted. Unit prices migrate from the
+    # SupplierInfo block (mastic_cost_per_gallon, tape_cost_per_roll,
+    # screws_cost_per_box) since that's where the old editor stored them.
+    sup = supplier_data or {}
+    mastic_price = float(sup.get("mastic_cost_per_gallon") or 0)
+    tape_price   = float(sup.get("tape_cost_per_roll")     or 0)
+    screws_price = float(sup.get("screws_cost_per_box")    or 0)
+    items = _default_consumable_items()
+    by_key = {it.key: it for it in items}
+    by_key["mastic"].per_container    = float(raw.get("joints_per_mastic_gallon") or 75)
+    by_key["mastic"].unit_price       = mastic_price
+    by_key["mastic"].enabled          = bool(raw.get("include_mastic", True))
+    by_key["foil-tape"].per_container = float(raw.get("joints_per_foil_roll") or 30)
+    by_key["foil-tape"].unit_price    = tape_price
+    by_key["foil-tape"].enabled       = bool(raw.get("include_foil_tape", True))
+    by_key["flex-tape"].per_container = float(raw.get("flex_runs_per_flex_roll") or 40)
+    by_key["flex-tape"].unit_price    = tape_price
+    by_key["flex-tape"].enabled       = bool(raw.get("include_flex_tape", True))
+    by_key["screws"].per_container    = float(raw.get("fittings_per_screw_box") or 150)
+    by_key["screws"].unit_price       = screws_price
+    by_key["screws"].enabled          = bool(raw.get("include_screws", True))
+    return ConsumablesRules(items=items)
+
+
     def to_dict(self) -> dict:
         """Convert to Firestore-safe dictionary."""
         return {
@@ -253,14 +346,20 @@ class ClientProfile:
                 "per_duct_lf_hours":           self.labor.per_duct_lf_hours,
             },
             "consumables_rules": {
-                "joints_per_mastic_gallon": self.consumables_rules.joints_per_mastic_gallon,
-                "joints_per_foil_roll":     self.consumables_rules.joints_per_foil_roll,
-                "flex_runs_per_flex_roll":  self.consumables_rules.flex_runs_per_flex_roll,
-                "fittings_per_screw_box":   self.consumables_rules.fittings_per_screw_box,
-                "include_mastic":           self.consumables_rules.include_mastic,
-                "include_foil_tape":        self.consumables_rules.include_foil_tape,
-                "include_flex_tape":        self.consumables_rules.include_flex_tape,
-                "include_screws":           self.consumables_rules.include_screws,
+                "items": [
+                    {
+                        "key":           it.key,
+                        "name":          it.name,
+                        "description":   it.description,
+                        "basis":         it.basis,
+                        "per_container": it.per_container,
+                        "qty_per_job":   it.qty_per_job,
+                        "container":     it.container,
+                        "unit_price":    it.unit_price,
+                        "enabled":       it.enabled,
+                    }
+                    for it in self.consumables_rules.items
+                ],
             },
             "default_output_mode": self.default_output_mode,
             "include_labor":       self.include_labor,
@@ -340,15 +439,9 @@ class ClientProfile:
                 per_heat_kit_install_hours=float((data.get('labor') or {}).get('per_heat_kit_install_hours', 0.0) or 0.0),
                 per_duct_lf_hours=float((data.get('labor') or {}).get('per_duct_lf_hours', 0.0) or 0.0),
             ),
-            consumables_rules=ConsumablesRules(
-                joints_per_mastic_gallon=int((data.get('consumables_rules') or {}).get('joints_per_mastic_gallon', 75) or 75),
-                joints_per_foil_roll=int((data.get('consumables_rules') or {}).get('joints_per_foil_roll', 30) or 30),
-                flex_runs_per_flex_roll=int((data.get('consumables_rules') or {}).get('flex_runs_per_flex_roll', 40) or 40),
-                fittings_per_screw_box=int((data.get('consumables_rules') or {}).get('fittings_per_screw_box', 150) or 150),
-                include_mastic=bool((data.get('consumables_rules') or {}).get('include_mastic', True)),
-                include_foil_tape=bool((data.get('consumables_rules') or {}).get('include_foil_tape', True)),
-                include_flex_tape=bool((data.get('consumables_rules') or {}).get('include_flex_tape', True)),
-                include_screws=bool((data.get('consumables_rules') or {}).get('include_screws', True)),
+            consumables_rules=_read_consumables_rules(
+                data.get('consumables_rules'),
+                supplier_data=supplier_data,
             ),
             part_name_overrides=overrides,
             default_output_mode=data.get('default_output_mode', 'full'),
