@@ -72,25 +72,32 @@ def _bucket_for_line(item: dict) -> str:
 
 
 def _group_lines(line_items):
-    """Group line_items by section/category, preserving order."""
+    """Group line_items by section/category, preserving order. Each
+    group carries a `start_index` so the template can render a global
+    row number (1..N) across sections — matches the XLS and SPA
+    renderers' continuous numbering."""
     groups: Dict[str, list] = {cat: [] for cat in _CATEGORY_ORDER}
     for item in line_items or []:
         cat = _bucket_for_line(item)
         groups.setdefault(cat, []).append(item)
-    # Drop empty categories so the template doesn't render blank sections.
-    return [
-        {
-            "key":      cat,
-            "meta":     _CATEGORY_META[cat],
-            "lines":    groups.get(cat, []),
-            "subtotal": sum(
+    out = []
+    running_index = 0
+    for cat in _CATEGORY_ORDER:
+        lines = groups.get(cat, [])
+        if not lines:
+            continue
+        out.append({
+            "key":         cat,
+            "meta":        _CATEGORY_META[cat],
+            "lines":       lines,
+            "start_index": running_index,
+            "subtotal":    sum(
                 (it.get("total_price") or it.get("total_cost") or 0)
-                for it in groups.get(cat, [])
+                for it in lines
             ),
-        }
-        for cat in _CATEGORY_ORDER
-        if groups.get(cat, [])
-    ]
+        })
+        running_index += len(lines)
+    return out
 
 
 # Lazy-built Jinja environment. Template lives next to the services
