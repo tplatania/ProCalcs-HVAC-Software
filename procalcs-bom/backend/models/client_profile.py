@@ -93,6 +93,41 @@ class LaborRates:
 
 
 @dataclass
+class ConsumablesRules:
+    """Day-17 — per-job consumables math (mastic, foil tape, flex tape,
+    screws). Wrightsoft never itemizes these; every install needs them.
+    The Quick Order Summary computes them deterministically from the
+    fitting / joint counts on the BOM and lists them under their own
+    'Install consumables' category.
+
+    Defaults below are placeholder rules-of-thumb proposed by Tom + me;
+    Richard ack'd them as 'good for now, refine after meeting a real
+    contractor' (Jun 29). When a contractor's actual practice differs
+    (some jobs use more mastic, some shops use bigger tape rolls), set
+    the override on their profile and the math reshapes per-job.
+
+    Math:
+      mastic gallons   = ceil(joints / joints_per_mastic_gallon)
+      foil tape rolls  = ceil(joints / joints_per_foil_roll)
+      flex tape rolls  = ceil(flex_runs / flex_runs_per_flex_roll)
+      screws boxes     = ceil(fittings / fittings_per_screw_box)
+    """
+    # Coverage multipliers
+    joints_per_mastic_gallon: int = 75   # one gallon seals ~75 joints
+    joints_per_foil_roll:     int = 30   # one 60-yd roll covers ~30 joints
+    flex_runs_per_flex_roll:  int = 40   # one 60-yd flex-tape roll per ~40 flex connections
+    fittings_per_screw_box:   int = 150  # one 100-ct screw box per ~150 attachments
+
+    # Whether each consumable is auto-added to the Quick Order Summary.
+    # Default everything on; a contractor who supplies their own mastic
+    # would flip mastic off rather than re-derive zeros each job.
+    include_mastic:    bool = True
+    include_foil_tape: bool = True
+    include_flex_tape: bool = True
+    include_screws:    bool = True
+
+
+@dataclass
 class BrandPreferences:
     """Preferred equipment and material brands per category."""
     ac_brand: str = ""               # e.g. "Carrier", "Goodman"
@@ -140,6 +175,9 @@ class ClientProfile:
     # AND at least one per-task rate > 0), the rules engine emits
     # deterministic Labor lines instead of letting the AI estimate.
     labor: LaborRates = field(default_factory=LaborRates)
+    # Day-17 — consumables coverage rules (mastic, tape, screws). Defaults
+    # apply to every contractor unless they override on their profile.
+    consumables_rules: ConsumablesRules = field(default_factory=ConsumablesRules)
     part_name_overrides: list = field(default_factory=list)  # list of PartNameOverride
     markup_tiers: list = field(default_factory=list)          # list of MarkupTier
 
@@ -213,6 +251,16 @@ class ClientProfile:
                 "per_erv_install_hours":       self.labor.per_erv_install_hours,
                 "per_heat_kit_install_hours":  self.labor.per_heat_kit_install_hours,
                 "per_duct_lf_hours":           self.labor.per_duct_lf_hours,
+            },
+            "consumables_rules": {
+                "joints_per_mastic_gallon": self.consumables_rules.joints_per_mastic_gallon,
+                "joints_per_foil_roll":     self.consumables_rules.joints_per_foil_roll,
+                "flex_runs_per_flex_roll":  self.consumables_rules.flex_runs_per_flex_roll,
+                "fittings_per_screw_box":   self.consumables_rules.fittings_per_screw_box,
+                "include_mastic":           self.consumables_rules.include_mastic,
+                "include_foil_tape":        self.consumables_rules.include_foil_tape,
+                "include_flex_tape":        self.consumables_rules.include_flex_tape,
+                "include_screws":           self.consumables_rules.include_screws,
             },
             "default_output_mode": self.default_output_mode,
             "include_labor":       self.include_labor,
@@ -291,6 +339,16 @@ class ClientProfile:
                 per_erv_install_hours=float((data.get('labor') or {}).get('per_erv_install_hours', 0.0) or 0.0),
                 per_heat_kit_install_hours=float((data.get('labor') or {}).get('per_heat_kit_install_hours', 0.0) or 0.0),
                 per_duct_lf_hours=float((data.get('labor') or {}).get('per_duct_lf_hours', 0.0) or 0.0),
+            ),
+            consumables_rules=ConsumablesRules(
+                joints_per_mastic_gallon=int((data.get('consumables_rules') or {}).get('joints_per_mastic_gallon', 75) or 75),
+                joints_per_foil_roll=int((data.get('consumables_rules') or {}).get('joints_per_foil_roll', 30) or 30),
+                flex_runs_per_flex_roll=int((data.get('consumables_rules') or {}).get('flex_runs_per_flex_roll', 40) or 40),
+                fittings_per_screw_box=int((data.get('consumables_rules') or {}).get('fittings_per_screw_box', 150) or 150),
+                include_mastic=bool((data.get('consumables_rules') or {}).get('include_mastic', True)),
+                include_foil_tape=bool((data.get('consumables_rules') or {}).get('include_foil_tape', True)),
+                include_flex_tape=bool((data.get('consumables_rules') or {}).get('include_flex_tape', True)),
+                include_screws=bool((data.get('consumables_rules') or {}).get('include_screws', True)),
             ),
             part_name_overrides=overrides,
             default_output_mode=data.get('default_output_mode', 'full'),

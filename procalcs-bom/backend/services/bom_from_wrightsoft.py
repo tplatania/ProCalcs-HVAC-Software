@@ -511,7 +511,32 @@ def build_bom_from_wrightsoft_lines(
     # row-per-run table below.
     try:
         from services.bom_quick_order import build_quick_order
-        bom["quick_order_summary"] = build_quick_order(line_items)
+        # Day-17 — pass contractor's consumables rules + supplier prices
+        # so mastic/tape/screws roll up with the contractor's actual
+        # multipliers, falling back to system defaults when unset.
+        cr = profile.consumables_rules
+        consumables_rules = {
+            "joints_per_mastic_gallon": cr.joints_per_mastic_gallon,
+            "joints_per_foil_roll":     cr.joints_per_foil_roll,
+            "flex_runs_per_flex_roll":  cr.flex_runs_per_flex_roll,
+            "fittings_per_screw_box":   cr.fittings_per_screw_box,
+            "include_mastic":           cr.include_mastic,
+            "include_foil_tape":        cr.include_foil_tape,
+            "include_flex_tape":        cr.include_flex_tape,
+            "include_screws":           cr.include_screws,
+        }
+        sup = profile.supplier
+        supplier_prices = {
+            "mastic_cost_per_gallon": sup.mastic_cost_per_gallon,
+            "tape_cost_per_roll":     sup.tape_cost_per_roll,
+            "screws_cost_per_box":    sup.screws_cost_per_box,
+            "strapping_cost_per_roll": sup.strapping_cost_per_roll,
+        }
+        bom["quick_order_summary"] = build_quick_order(
+            line_items,
+            consumables_rules=consumables_rules,
+            supplier=supplier_prices,
+        )
     except Exception as exc:  # noqa: BLE001 — best-effort enrichment
         logger.warning("quick_order build skipped: %s", exc)
 

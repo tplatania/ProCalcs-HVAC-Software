@@ -143,7 +143,138 @@ def _format_size_label(size_token: str, sku: str) -> str:
 
 # ─── Public API ────────────────────────────────────────────────────
 
-def build_quick_order(line_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+# ─── Install consumables (Day-17, Tom's meeting + Richard Jun 29) ───
+#
+# Wrightsoft never itemizes mastic, foil tape, flex tape, or screws —
+# but every install needs them. Compute deterministically from the
+# fitting / flex-run counts on the BOM. Multipliers come from the
+# contractor's ClientProfile.consumables_rules; the defaults below
+# match the dataclass defaults so a missing profile still produces
+# a sensible rollup.
+#
+# Per-unit cost (gallon, roll, box) comes from ClientProfile.supplier
+# when present, else 0 — which trips the existing "needs price /
+# $0 OK" affordance on the BOM result page, same as commodity stubs.
+
+_CONSUMABLES_DEFAULTS = {
+    "joints_per_mastic_gallon": 75,
+    "joints_per_foil_roll":     30,
+    "flex_runs_per_flex_roll":  40,
+    "fittings_per_screw_box":   150,
+    "include_mastic":           True,
+    "include_foil_tape":        True,
+    "include_flex_tape":        True,
+    "include_screws":           True,
+}
+
+# SKU-prefix → joint-classification, used to count joints + flex runs
+# from the BOM line_items.
+_JOINT_PREFIXES = ("FBTI", "FBEC", "FCLR", "FRGR", "FJB", "FPL", "FTO")
+_FLEX_PREFIXES  = ("DDVn", "DDFl")
+
+
+def _classify_for_consumables(sku: str) -> str:
+    """Return 'flex_run' for a flex-duct row, 'joint' for any fitting
+    row, '' otherwise. Used to count consumable inputs."""
+    u = (sku or "").upper()
+    for p in _FLEX_PREFIXES:
+        if u.startswith(p.upper()):
+            return "flex_run"
+    for p in _JOINT_PREFIXES:
+        if u.startswith(p):
+            return "joint"
+    return ""
+
+
+def _consumable_row(category_label: str, label: str, total: int,
+                    container: str, unit_price: float) -> Dict[str, Any]:
+    """Build a single Quick-Order rollup row for one consumable type."""
+    return {
+        "category":      "Install consumables",
+        "label":         label,
+        "size":          category_label,  # reused column for the short name
+        "total":         float(total),
+        "unit":          container,
+        "container":     container,
+        "per_container": 1.0,
+        "containers":    int(total),
+        "run_count":     0,
+        "sku_count":     1,
+        "unit_price":    float(unit_price or 0),
+        "total_price":   float((unit_price or 0) * total),
+        "is_consumable": True,
+    }
+
+
+def compute_consumables(line_items: List[Dict[str, Any]],
+                        rules: Optional[Dict[str, Any]] = None,
+                        supplier: Optional[Dict[str, Any]] = None
+                        ) -> List[Dict[str, Any]]:
+    """Compute the install-consumables rollup rows.
+
+    rules    — dict shaped like ConsumablesRules.to_dict(); missing keys
+               fall back to _CONSUMABLES_DEFAULTS.
+    supplier — dict shaped like SupplierInfo.to_dict(); provides per-unit
+               costs (mastic_cost_per_gallon, tape_cost_per_roll, etc.).
+               Missing → unit_price 0, which is fine; the SPA's
+               '$0 OK / needs price' affordance handles it.
+    """
+    r = {**_CONSUMABLES_DEFAULTS, **(rules or {})}
+    s = supplier or {}
+
+    joints = 0
+    flex_runs = 0
+    fittings = 0
+    for li in line_items or []:
+        sku = (li.get("generic_id") or li.get("sku") or "").strip()
+        if not sku:
+            continue
+        qty = float(li.get("quantity") or 0)
+        if qty <= 0:
+            continue
+        kind = _classify_for_consumables(sku)
+        if kind == "joint":
+            joints   += int(round(qty))
+            fittings += int(round(qty))
+        elif kind == "flex_run":
+            flex_runs += 1   # one connection per flex-duct line, regardless of LF
+
+    out: List[Dict[str, Any]] = []
+    if r["include_mastic"] and joints > 0:
+        gallons = math.ceil(joints / max(1, int(r["joints_per_mastic_gallon"])))
+        out.append(_consumable_row(
+            "Mastic",
+            f"Duct mastic — seals ~{r['joints_per_mastic_gallon']} joints per gallon",
+            gallons, "gallon", float(s.get("mastic_cost_per_gallon") or 0),
+        ))
+    if r["include_foil_tape"] and joints > 0:
+        rolls = math.ceil(joints / max(1, int(r["joints_per_foil_roll"])))
+        out.append(_consumable_row(
+            "Foil tape",
+            f"UL-181A-P foil tape — ~{r['joints_per_foil_roll']} joints per roll",
+            rolls, "roll", float(s.get("tape_cost_per_roll") or 0),
+        ))
+    if r["include_flex_tape"] and flex_runs > 0:
+        rolls = math.ceil(flex_runs / max(1, int(r["flex_runs_per_flex_roll"])))
+        out.append(_consumable_row(
+            "Flex tape",
+            f"UL-181B-FX flex-duct tape — ~{r['flex_runs_per_flex_roll']} flex runs per roll",
+            rolls, "roll", float(s.get("tape_cost_per_roll") or 0),
+        ))
+    if r["include_screws"] and fittings > 0:
+        boxes = math.ceil(fittings / max(1, int(r["fittings_per_screw_box"])))
+        out.append(_consumable_row(
+            "Sheet metal screws",
+            f"Sheet metal screws — ~{r['fittings_per_screw_box']} attachments per box",
+            boxes, "box", float(s.get("screws_cost_per_box") or 0),
+        ))
+    return out
+
+
+def build_quick_order(line_items: List[Dict[str, Any]],
+                      consumables_rules: Optional[Dict[str, Any]] = None,
+                      supplier: Optional[Dict[str, Any]] = None
+                      ) -> List[Dict[str, Any]]:
     """Return the Quick Order Summary rollup.
 
     Each entry:
@@ -227,6 +358,7 @@ def build_quick_order(line_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "Grilles / registers", "Junction boxes",
         "Duct runs (from .rup)", "Registers (from .rup)",
         "Fittings (from .rup)", "Other items",
+        "Install consumables",
     ]
     cat_rank = {c: i for i, c in enumerate(_CATEGORY_ORDER)}
 
@@ -241,6 +373,10 @@ def build_quick_order(line_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return (cat_rank.get(cat, 999), cat, size_n, s)
 
     rows.sort(key=_sort_key)
+
+    # Append install consumables at the bottom — mastic, tape, screws.
+    # Quantities derived from the joint / flex-run counts above.
+    rows.extend(compute_consumables(line_items, consumables_rules, supplier))
     return rows
 
 
