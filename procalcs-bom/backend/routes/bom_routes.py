@@ -699,6 +699,7 @@ def bom_from_wrightsoft():
         # so the SPA can render a "Rooms served" chip strip without
         # touching the per-line items.
         rup_context = None
+        rup_equipment_lines: list = []  # Day-17 — merged into `lines` below
         rup_upload = request.files.get('rup_context') if request.files else None
         if rup_upload and source_pipeline_override != "wrightsoft_rup":
             try:
@@ -708,8 +709,38 @@ def bom_from_wrightsoft():
                     or _looks_like_rup(rup_bytes)
                 ):
                     from utils.rup_parser import parse_rup_bytes
+                    from services.bom_from_rup import _MFR_NAME_TO_SRC
                     design = parse_rup_bytes(
                         rup_bytes, source_name=rup_upload.filename or "")
+                    # Day-17 — Wrightsoft's BOM.xls export doesn't carry
+                    # equipment (AHU/condenser/furnace/ERV). When the
+                    # user attaches the source .rup, the EQUIP block
+                    # has them. Convert each into the same lines-list
+                    # shape build_bom_from_wrightsoft_lines consumes,
+                    # tagged section_hint=Equipment so the rules engine
+                    # places them in the Equipment section. Identical
+                    # construction to bom_from_rup.build_bom_from_rup
+                    # so AHRI / DFUnit lookups fire the same way.
+                    for unit in design.get("equipment", []) or []:
+                        model = (unit.get("model") or "").strip()
+                        if not model:
+                            continue
+                        mfr_name = unit.get("manufacturer") or ""
+                        src = (
+                            _MFR_NAME_TO_SRC.get(mfr_name)
+                            or _MFR_NAME_TO_SRC.get(mfr_name.title())
+                            or "WSF"
+                        )
+                        qty = float(unit.get("count") or 1)
+                        type_label = (unit.get("type") or "equipment").replace("_", " ").title()
+                        rup_equipment_lines.append({
+                            "generic_id":   model,
+                            "quantity":     qty,
+                            "description":  f"{type_label} — {mfr_name} {model}".strip(" —"),
+                            "src":          src,
+                            "section_hint": "Equipment",
+                            "unit":         "EA",
+                        })
                     # Extract clean room list — prefer the BALDUCT-derived
                     # rooms parsed into raw_rup_context (Day-14), fall
                     # back to the text-regex rooms collection.
@@ -756,12 +787,18 @@ def bom_from_wrightsoft():
         profile = ClientProfile.from_dict(profile_data)
 
         # ── Build BOM through the mapping pipeline ────────────────────
+        # Day-17 — if a .rup was attached, prepend its equipment rows
+        # so the Equipment section populates on what would otherwise
+        # be a duct-only BOM (Wrightsoft's BOM.xls excludes equipment).
+        merged_lines = (rup_equipment_lines + lines) if rup_equipment_lines else lines
         bom = build_bom_from_wrightsoft_lines(
-            lines=lines,
+            lines=merged_lines,
             profile=profile,
             job_id=job_id,
             output_mode=output_mode,
         )
+        if rup_equipment_lines:
+            bom["rup_equipment_merged"] = len(rup_equipment_lines)
 
         # ── Persist as a bom_run so the BOM shows up in Run History
         # next to /generate output. Best-effort: a DB failure must
