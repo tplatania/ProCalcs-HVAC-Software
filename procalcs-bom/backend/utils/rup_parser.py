@@ -113,23 +113,48 @@ def extract_utf16_strings(data: bytes, min_len: int = 4) -> List[str]:
     Ported from experiments/rup_extractor.py. This tolerates the binary
     chunks interspersed between ASCII text that Wrightsoft's format has —
     straight utf-16-le decode produces garbled runs that str.split on.
+
+    Day-17 — Wrightsoft writes some UTF-16 string fields at ODD byte
+    offsets (empirically: half of the Trane condenser/AHU model
+    numbers in 79th Ct's .rup land at odd offsets). The original
+    single-pass walker started at byte 0 and advanced 2 bytes at a
+    time, so it silently dropped every odd-aligned string — meaning
+    contractors lost ~50% of their equipment models depending on how
+    Wrightsoft happened to lay the file out that day. Fix: walk BOTH
+    even and odd starting offsets, union the results, dedupe.
     """
-    strings: List[str] = []
-    current: List[str] = []
-    i = 0
-    end = len(data) - 1
-    while i < end:
-        val = int.from_bytes(data[i:i + 2], "little")
-        if 32 <= val <= 126 or val in (9, 10, 13):
-            current.append(chr(val))
-        else:
-            if len(current) >= min_len:
-                strings.append("".join(current))
-            current = []
-        i += 2
-    if len(current) >= min_len:
-        strings.append("".join(current))
-    return strings
+    def _walk(start: int) -> List[tuple]:
+        # Returns list of (start_byte_offset, string) for every printable
+        # UTF-16 run found at this alignment.
+        out: List[tuple] = []
+        current: List[str] = []
+        run_start = start
+        i = start
+        end = len(data) - 1
+        while i < end:
+            val = int.from_bytes(data[i:i + 2], "little")
+            if 32 <= val <= 126 or val in (9, 10, 13):
+                if not current:
+                    run_start = i
+                current.append(chr(val))
+            else:
+                if len(current) >= min_len:
+                    out.append((run_start, "".join(current)))
+                current = []
+            i += 2
+        if len(current) >= min_len:
+            out.append((run_start, "".join(current)))
+        return out
+
+    # Merge both alignments interleaved by byte offset so the
+    # downstream !BEG=…/!END=… section parser sees odd-aligned
+    # equipment models INSIDE the section they belong to — not at
+    # the end of the stream. Duplicate strings are preserved (their
+    # different offsets matter for occurrence-count math in
+    # _extract_equipment_models).
+    even = _walk(0)
+    odd  = _walk(1)
+    return [s for _off, s in sorted(even + odd, key=lambda t: t[0])]
 
 
 _IDENT = re.compile(r"[A-Za-z0-9_]+")
@@ -397,27 +422,40 @@ def _parse_equipment(
         for spec in _extract_equipment_models(sections):
             models_by_type.setdefault(spec["type"], []).append(spec)
 
-    for idx, name in enumerate(ahus):
-        entry: Dict[str, Any] = {
-            "name":         name.strip(),
-            "type":         "air_handler",
-            "cfm":          None,
-            "tonnage":      None,
-            "model":        None,
-            "manufacturer": None,
-        }
-        if idx == 0:
-            if cfm_values:
-                entry["cfm"] = cfm_values[0]
-            entry["tonnage"] = tonnage
-        # When the EQUIP section gave us air-handler models, attach the
-        # first-found one to the first AHU. Per-AHU attribution would
-        # require linking SYSTEM records to AHU IDs — out of scope here.
-        ah_models = models_by_type["air_handler"]
-        if idx == 0 and ah_models:
-            entry["manufacturer"] = ah_models[0]["manufacturer"]
-            entry["model"]        = ah_models[0]["model"]
-        equipment.append(entry)
+    # Day-17 — emit AHUs as one entry per discovered (mfr, model) AHU
+    # spec, with count=how many EQUIP entries had that model, rather
+    # than one anonymous entry per "AHU - N" string. Wrightsoft
+    # repeats the same model across multiple SYSTEM records when the
+    # contractor uses two of the same air handler — we should reflect
+    # that as count=2 on one entry, not as one named entry + N empties.
+    #
+    # Previously: only idx==0 got a model attached, idx>=1 got
+    # name='AHU - 2/3/...' with model=None — and downstream
+    # bom_from_rup skips modelless rows, so 50%+ of the AHUs vanished.
+    ah_models = models_by_type["air_handler"]
+    if ah_models:
+        for spec in ah_models:
+            equipment.append({
+                "name":         spec.get("name") or "Air Handler",
+                "type":         "air_handler",
+                "cfm":          cfm_values[0] if cfm_values else None,
+                "tonnage":      tonnage,
+                "model":        spec["model"],
+                "manufacturer": spec["manufacturer"],
+                "count":        spec.get("count", 1),
+            })
+    else:
+        # No model data in EQUIP — fall back to named AHU entries so
+        # the AHU-pipe pattern still surfaces something for scope.
+        for idx, name in enumerate(ahus):
+            equipment.append({
+                "name":         name.strip(),
+                "type":         "air_handler",
+                "cfm":          cfm_values[0] if idx == 0 and cfm_values else None,
+                "tonnage":      tonnage if idx == 0 else None,
+                "model":        None,
+                "manufacturer": None,
+            })
 
     # Emit non-AHU equipment as separate entries so downstream
     # consumers (rules engine, AI prompt) see them explicitly. Each
