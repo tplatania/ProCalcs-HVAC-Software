@@ -243,12 +243,22 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
             containers = r.get("containers") or 0
             container  = r.get("container", "ea")
             per_container = r.get("per_container") or 0
+            # Day-17 — shared pluralization rule: ea → never pluralizes;
+            # box → "boxes"; everything else → +s. Applied uniformly
+            # whether per_container > 1 or == 1 so consumable rows
+            # (gallons / rolls / boxes) and duct rows (boxes / sticks)
+            # both render correctly.
+            if containers == 1:
+                suffix = ""
+            elif container == "ea":
+                suffix = ""
+            elif container == "box":
+                suffix = "es"
+            else:
+                suffix = "s"
             if per_container > 1:
-                plural = "es" if container == "box" else "s"
-                suffix = "" if containers == 1 else plural
                 order_label = f"{containers} {container}{suffix} ({int(per_container)} {unit} each)"
             else:
-                suffix = "" if containers == 1 else "s"
                 order_label = f"{containers} {container}{suffix}"
             ws3.cell(row=idx, column=5, value=order_label).font = Font(bold=True)
         widths = {1: 22, 2: 10, 3: 50, 4: 14, 5: 28}

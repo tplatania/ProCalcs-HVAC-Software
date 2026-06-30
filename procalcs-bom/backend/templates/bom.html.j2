@@ -347,11 +347,16 @@
           <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #475569; font-size: 8.5pt;">{{ r.label }}</td>
           <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; font-weight: 600; tabular-nums;">{{ "%.2f"|format(r.total) }} {{ r.unit }}</td>
           <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0;">
+            {# Day-17 — pluralization rule shared with SPA + XLS:
+               ea → never pluralizes; box → "boxes"; everything else → +s.
+               Applied to BOTH per-container paths so consumable rows
+               (per_container == 1) get the same treatment as duct rows. #}
+            {% set _plural_suffix = ('' if r.containers == 1 else ('es' if r.container == 'box' else ('' if r.container == 'ea' else 's'))) %}
             {% if r.per_container > 1 %}
-              <strong>{{ r.containers }} {{ r.container }}{{ '' if r.containers == 1 else 'es' if r.container == 'box' else 's' }}</strong>
+              <strong>{{ r.containers }} {{ r.container }}{{ _plural_suffix }}</strong>
               <span style="color: #94a3b8; font-size: 7.5pt;">({{ r.per_container|int }} {{ r.unit }} each)</span>
             {% else %}
-              <strong>{{ r.containers }} {{ r.container }}{{ '' if r.containers == 1 else 's' }}</strong>
+              <strong>{{ r.containers }} {{ r.container }}{{ _plural_suffix }}</strong>
             {% endif %}
           </td>
         </tr>
