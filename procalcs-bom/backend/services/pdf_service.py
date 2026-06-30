@@ -226,6 +226,8 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         "is_partial_pricing":      is_partial_pricing,
         # Quick Order Summary (Day-17)
         "quick_order_summary":     bom.get("quick_order_summary") or [],
+        # Per-piece Duct Cuts summary (Day-17, Richard Jun 30)
+        "duct_cuts_summary":       bom.get("duct_cuts_summary") or [],
         # Provenance — wired into the template behind has_provenance so
         # pre-rules-engine payloads render the prior layout untouched.
         "rules_count":    int(rules_count or 0),

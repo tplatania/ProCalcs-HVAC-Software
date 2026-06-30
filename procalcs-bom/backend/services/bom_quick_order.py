@@ -325,6 +325,96 @@ def _coerce_items(rules: Optional[Dict[str, Any]],
     return items
 
 
+# ─── Per-piece duct cuts summary (Day-17, Richard Jun 30) ──────────
+#
+# Richard: "ung pieces na ductworks dun natin macalculate ung mastics,
+# tapes, foils required, kasi it will tell us how many duct
+# connections" — the per-piece view IS the joint-count source because
+# every cut creates two end connections needing fastener + mastic +
+# tape. We list every individual duct cut grouped by family + size
+# so the crew can read joint counts directly off the BOM.
+
+_DUCT_FAMILY_FOR_CUTS = [
+    ("DDVN", "Flex duct"),
+    ("DDFL", "Flex duct"),
+    ("DRFG", "Rectangular fiberglass duct"),
+    ("DRMT", "Sheet metal duct"),
+    ("DRST", "Sheet metal duct"),
+]
+
+
+def _duct_family(sku: str) -> Optional[str]:
+    u = (sku or "").upper()
+    for prefix, family in _DUCT_FAMILY_FOR_CUTS:
+        if u.startswith(prefix):
+            return family
+    return None
+
+
+def build_duct_cuts_summary(line_items: List[Dict[str, Any]]
+                            ) -> List[Dict[str, Any]]:
+    """One entry per (family + size). Each carries a `cuts` list with
+    one item per individual cut + a joints column (= 2 per cut, both
+    ends).
+
+    Output shape:
+      [
+        {"family": "Flex duct", "size": "4\"",
+         "cuts": [{"length": 12.65, "joints": 2}, ...],
+         "cut_count": 4, "total_length": 96.0, "total_joints": 8},
+        ...
+      ]
+    """
+    # Group line items by (family, size)
+    groups: Dict[tuple, Dict[str, Any]] = {}
+    for li in line_items or []:
+        sku = (li.get("generic_id") or li.get("sku") or "").strip()
+        if not sku:
+            continue
+        family = _duct_family(sku)
+        if family is None:
+            continue
+        qty = float(li.get("quantity") or 0)
+        if qty <= 0:
+            continue
+        size_token = _extract_size_token(sku)
+        size_label = _format_size_label(size_token, sku)
+        key = (family, size_label, size_token)
+        g = groups.setdefault(key, {
+            "family":       family,
+            "size":         size_label,
+            "_size_token":  size_token,
+            "cuts":         [],
+            "total_length": 0.0,
+            "total_joints": 0,
+            "cut_count":    0,
+        })
+        g["cuts"].append({"length": qty, "joints": 2})
+        g["total_length"] += qty
+        g["total_joints"] += 2
+        g["cut_count"] += 1
+
+    rows = list(groups.values())
+    _CUT_FAMILY_ORDER = [
+        "Flex duct",
+        "Rectangular fiberglass duct",
+        "Sheet metal duct",
+    ]
+    fam_rank = {f: i for i, f in enumerate(_CUT_FAMILY_ORDER)}
+
+    def _key(r):
+        size_n = 9999
+        m = re.match(r"(\d+)", r["size"])
+        if m:
+            size_n = int(m.group(1))
+        return (fam_rank.get(r["family"], 999), size_n, r["size"])
+
+    rows.sort(key=_key)
+    for r in rows:
+        r.pop("_size_token", None)
+    return rows
+
+
 def build_quick_order(line_items: List[Dict[str, Any]],
                       consumables_rules: Optional[Dict[str, Any]] = None,
                       supplier: Optional[Dict[str, Any]] = None

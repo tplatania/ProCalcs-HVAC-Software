@@ -266,6 +266,38 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
             ws3.column_dimensions[get_column_letter(i)].width = w
         ws3.freeze_panes = ws3.cell(row=5, column=1)
 
+    # ── Duct Cuts (per piece) — Day-17 / Richard Jun 30 ───────────
+    cuts_groups = bom.get("duct_cuts_summary") or []
+    if cuts_groups:
+        ws4 = wb.create_sheet(title="Duct Cuts")
+        ws4.cell(row=1, column=1, value="DUCT CUTS (PER PIECE)").font = Font(size=14, bold=True)
+        ws4.merge_cells("A1:E1")
+        ws4.cell(row=2, column=1,
+                 value="Each end of every run is a sealed joint — fastener + mastic + tape."
+                 ).font = Font(italic=True, color="64748B")
+        ws4.merge_cells("A2:E2")
+        for col_idx, label in enumerate(["Family", "Size", "Cut", "Length (ft)", "Joints"], start=1):
+            cell = ws4.cell(row=4, column=col_idx, value=label)
+            cell.fill = _HEADER_FILL
+            cell.font = _WHITE_BOLD
+        row = 5
+        for g in cuts_groups:
+            ws4.cell(row=row, column=1, value=g.get("family", "")).font = _BOLD
+            ws4.cell(row=row, column=2, value=g.get("size", "")).font = _BOLD
+            ws4.cell(row=row, column=3, value=f"{g.get('cut_count', 0)} cuts").font = _BOLD
+            ws4.cell(row=row, column=4, value=float(g.get("total_length") or 0)).font = _BOLD
+            ws4.cell(row=row, column=5, value=int(g.get("total_joints") or 0)).font = _BOLD
+            row += 1
+            for i, c in enumerate(g.get("cuts", []), start=1):
+                ws4.cell(row=row, column=3, value=f"#{i}")
+                ws4.cell(row=row, column=4, value=float(c.get("length") or 0))
+                ws4.cell(row=row, column=5, value=int(c.get("joints") or 0))
+                row += 1
+        widths4 = {1: 28, 2: 10, 3: 14, 4: 14, 5: 12}
+        for i, w in widths4.items():
+            ws4.column_dimensions[get_column_letter(i)].width = w
+        ws4.freeze_panes = ws4.cell(row=5, column=1)
+
     # ── Equipment Specifications (AHRI) — Day-15 ──────────────────
     # Collect any line carrying an ahri_spec and drop them into a
     # dedicated sheet so contractors can hand the spec sheet to the

@@ -366,6 +366,49 @@
 </div>
 {% endif %}
 
+{% if duct_cuts_summary %}
+<!-- ===== Day-17 — Per-piece Duct Cuts (Richard Jun 30) =====
+     Every flex / rigid duct cut listed with length + joints. Each
+     cut is two end joints needing fastener + mastic + tape. -->
+<div style="margin-top: 14pt; margin-bottom: 14pt;">
+  <div style="background: #334155; color: #fff; padding: 6pt 10pt; border-top-left-radius: 5pt; border-top-right-radius: 5pt;">
+    <span style="font-size: 11pt; font-weight: 700; letter-spacing: 0.5pt;">DUCT CUTS (PER PIECE)</span>
+    <span style="font-size: 8pt; color: #cbd5e1; margin-left: 6pt;">— each end of every run is a sealed joint</span>
+  </div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1pt solid #334155; border-top: none;">
+    <thead style="display: table-header-group;">
+      <tr style="background: #f1f5f9;">
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">FAMILY</th>
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">SIZE</th>
+        <th style="text-align: left; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">CUT</th>
+        <th style="text-align: right; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">LENGTH</th>
+        <th style="text-align: right; padding: 4pt 8pt; border-bottom: 0.5pt solid #cbd5e1;">JOINTS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in duct_cuts_summary %}
+      <tr style="background: #f8fafc; font-weight: 600;">
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0;">{{ g.family }}</td>
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; font-family: monospace;">{{ g.size }}</td>
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #64748b; font-size: 8pt;">{{ g.cut_count }} cut{{ '' if g.cut_count == 1 else 's' }}</td>
+        <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; tabular-nums;">{{ "%.2f"|format(g.total_length) }} ft</td>
+        <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; tabular-nums;">{{ g.total_joints }}</td>
+      </tr>
+      {% for c in g.cuts %}
+      <tr>
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0;">&nbsp;</td>
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0;">&nbsp;</td>
+        <td style="padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #94a3b8; font-size: 8pt;">#{{ loop.index }}</td>
+        <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #475569; font-size: 8.5pt;">{{ "%.2f"|format(c.length) }} ft</td>
+        <td style="text-align: right; padding: 3pt 8pt; border-bottom: 0.5pt solid #e2e8f0; color: #475569; font-size: 8.5pt;">{{ c.joints }}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- ===== Category tables ===== -->
 {% for group in groups %}
 <div class="category">

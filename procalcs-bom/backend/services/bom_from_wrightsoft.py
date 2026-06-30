@@ -510,6 +510,15 @@ def build_bom_from_wrightsoft_lines(
     # see at a glance what to purchase without scanning the detailed
     # row-per-run table below.
     try:
+        from services.bom_quick_order import build_quick_order, build_duct_cuts_summary
+        # Day-17 — per-piece duct cuts summary (Richard Jun 30).
+        # Each cut creates two end joints needing fastener + mastic
+        # + tape. Surfaces alongside the aggregated Quick Order so
+        # the crew can count joints off the BOM directly.
+        bom["duct_cuts_summary"] = build_duct_cuts_summary(line_items)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("duct_cuts_summary build skipped: %s", exc)
+    try:
         from services.bom_quick_order import build_quick_order
         # Day-17 — pass contractor's consumables rules + supplier prices
         # so mastic/tape/screws roll up with the contractor's actual
