@@ -397,7 +397,10 @@ def _parse_equipment(
     """
     equipment: List[Dict[str, Any]] = []
 
-    ahu_match = re.search(r"(AHU - \d+(?:\|AHU - \d+)+)", full_text)
+    # Day-17 (Ally follow-up) — accept both "AHU - N|AHU - N" and
+    # "AHU #N|AHU #N" separator styles. Wrightsoft outputs one or
+    # the other depending on project template.
+    ahu_match = re.search(r"(AHU[ ]*[-#][ ]*\d+(?:\|AHU[ ]*[-#][ ]*\d+)+)", full_text)
     ahus = sorted(set(ahu_match.group(1).split("|"))) if ahu_match else []
 
     # Aggregate signals — CFMs, tonnage, SEER — exposed on the first AHU
@@ -418,9 +421,27 @@ def _parse_equipment(
         "air_handler": [], "condenser": [], "heat_kit": [], "erv": [],
         "furnace": [],
     }
+    section_hits: List[Dict[str, Any]] = []
     if sections is not None:
-        for spec in _extract_equipment_models(sections):
-            models_by_type.setdefault(spec["type"], []).append(spec)
+        section_hits = _extract_equipment_models(sections)
+
+    # Day-17 (Ally follow-up) — also scan for model tokens that live
+    # OUTSIDE any EQUIP entry as free-standing strings. Some file
+    # variants (e.g. Ally Residence) put placed-instance models here
+    # rather than inside EQUIP entries, so the section-only scan
+    # returned zero equipment on those files. Merge results, dedupe
+    # by (type, mfr, model), taking the max count so both paths
+    # contribute rather than clobber.
+    free_hits = _scan_free_models(full_text.split("\n"))
+    by_key: Dict[tuple, Dict[str, Any]] = {}
+    for spec in section_hits + free_hits:
+        key = (spec["type"], spec["manufacturer"], spec["model"])
+        if key in by_key:
+            by_key[key]["count"] = max(by_key[key]["count"], spec.get("count", 1))
+        else:
+            by_key[key] = {**spec, "count": spec.get("count", 1)}
+    for spec in by_key.values():
+        models_by_type.setdefault(spec["type"], []).append(spec)
 
     # Day-17 — emit AHUs as one entry per discovered (mfr, model) AHU
     # spec, with count=how many EQUIP entries had that model, rather
@@ -502,6 +523,91 @@ _EQUIP_TYPE_KEYWORDS = (
 # 5-20 chars, contains both letters and digits. Excludes pure
 # Wrightsoft tags ("RCU-A-CB"), section markers, and serials.
 _MODEL_TOKEN_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-]{4,19}$")
+
+# Day-17 (Ally follow-up) — model prefix → (equipment type, mfr).
+# Used by _scan_free_models to classify models that live outside
+# any EQUIP section entry (Wrightsoft puts placed instances in
+# ZEQUIP for some file variants; on others they're just standalone
+# UTF-16 strings floating between sections). Pattern-match by
+# manufacturer's known SKU prefix so we don't need proximity to a
+# manufacturer name to classify. Order matters — first match wins.
+_MODEL_PATTERNS: List[tuple] = [
+    # Trane
+    (re.compile(r"^5TAM[A-Z0-9]+$"),    "air_handler", "TRANE"),
+    (re.compile(r"^5TEM[A-Z0-9]+$"),    "air_handler", "TRANE"),
+    (re.compile(r"^5TFC[A-Z0-9]+$"),    "air_handler", "TRANE"),
+    (re.compile(r"^5TTV[A-Z0-9]+$"),    "condenser",   "TRANE"),
+    (re.compile(r"^5TWA[A-Z0-9]+$"),    "condenser",   "TRANE"),
+    (re.compile(r"^5T[A-Z][A-Z]\d[A-Z0-9]+$"), "condenser", "TRANE"),   # 4T… / 2T… variants
+    (re.compile(r"^BAYE[A-Z0-9()+/]+$"), "heat_kit",   "TRANE"),
+    # Goodman
+    (re.compile(r"^GSX[A-Z0-9]+$"),     "condenser",   "GOODMAN"),
+    (re.compile(r"^GSZ[A-Z0-9]+$"),     "condenser",   "GOODMAN"),
+    (re.compile(r"^GMV[A-Z0-9]+$"),     "furnace",     "GOODMAN"),
+    (re.compile(r"^GMS[A-Z0-9]+$"),     "furnace",     "GOODMAN"),
+    (re.compile(r"^AVPTC[A-Z0-9]+$"),   "air_handler", "GOODMAN"),
+    (re.compile(r"^ARUF[A-Z0-9]+$"),    "air_handler", "GOODMAN"),
+    (re.compile(r"^HKR[A-Z0-9]+$"),     "heat_kit",    "GOODMAN"),
+    # Carrier / Bryant (both use similar prefixes)
+    (re.compile(r"^24[A-Z0-9]+$"),      "condenser",   "CARRIER"),
+    (re.compile(r"^25[A-Z0-9]+$"),      "condenser",   "CARRIER"),
+    (re.compile(r"^FV4[A-Z0-9]+$"),     "air_handler", "CARRIER"),
+    (re.compile(r"^FE4[A-Z0-9]+$"),     "air_handler", "CARRIER"),
+    (re.compile(r"^58[A-Z0-9]+$"),      "furnace",     "CARRIER"),
+    (re.compile(r"^59[A-Z0-9]+$"),      "furnace",     "CARRIER"),
+    # Rheem
+    (re.compile(r"^RA1[A-Z0-9]+$"),     "condenser",   "RHEEM"),
+    (re.compile(r"^RH1[A-Z0-9]+$"),     "air_handler", "RHEEM"),
+]
+
+
+def _scan_free_models(strings: List[str]) -> List[Dict[str, Any]]:
+    """Walk every extracted UTF-16 string, find tokens that match a
+    known-manufacturer model prefix regardless of surrounding context,
+    and group by (type, mfr, model) with occurrence counts.
+
+    Complements _extract_equipment_models: that function only sees
+    models inside EQUIP-section entries; some Wrightsoft file variants
+    store placed-instance models as free-standing strings that never
+    appear inside a section. Ally Residence is the canonical example
+    — its 5TAM/5TTV/BAYE models float outside EQUIP entirely.
+
+    Filters garbage: token must be uppercase-only, ≥8 chars (real
+    Trane/Goodman/Carrier models are 8+), contain digits.
+    """
+    hits: List[Dict[str, Any]] = []
+    for s in strings:
+        for tok in s.replace(",", " ").replace("|", " ").split():
+            tok_up = tok.strip().upper()
+            # Real Trane / Goodman / Carrier models are 10-22 chars.
+            # Below 10 we match truncated fragments like "5TTV0X48"
+            # (which is really the first 8 chars of "5TTV0X48A1"
+            # written elsewhere in the file with a boundary).
+            if len(tok_up) < 10 or len(tok_up) > 22:
+                continue
+            if not any(c.isdigit() for c in tok_up):
+                continue
+            # Reject anything with lowercase letters (garbled runs)
+            if tok_up != tok.strip():
+                continue
+            for pattern, eq_type, mfr in _MODEL_PATTERNS:
+                if pattern.match(tok_up):
+                    hits.append({
+                        "type":         eq_type,
+                        "manufacturer": mfr,
+                        "model":        tok_up,
+                        "name":         eq_type.replace("_", " ").title(),
+                    })
+                    break
+    # Group by (type, mfr, model) with occurrence count
+    grouped: Dict[tuple, Dict[str, Any]] = {}
+    for h in hits:
+        key = (h["type"], h["manufacturer"], h["model"])
+        if key in grouped:
+            grouped[key]["count"] += 1
+        else:
+            grouped[key] = {**h, "count": 1}
+    return list(grouped.values())
 
 # Known manufacturer 4-char codes + display names. When the EQUIP
 # entry contains one of these, use it as the manufacturer.
