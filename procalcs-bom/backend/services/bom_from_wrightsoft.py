@@ -143,7 +143,15 @@ def build_bom_from_wrightsoft_lines(
             or raw.get("description")
             or gen_id
         )
-        unit = catalog_row.get("Units") or raw.get("unit") or "EA"
+        # Day-18 — sanitize the catalog's Units column. Some mapped_parts
+        # rows carry the literal string "0" (truthy in Python) instead of
+        # a proper unit label; without this filter, those SKUs would
+        # display 'Unit: 0' on the BOM. Treat "0", "", and whitespace as
+        # missing and fall through to raw / "EA".
+        _catalog_unit = (catalog_row.get("Units") or "").strip()
+        if _catalog_unit in ("", "0"):
+            _catalog_unit = None
+        unit = _catalog_unit or raw.get("unit") or "EA"
         # Day-18 — Richard flagged that BOM rows show 'Unit: EA' + 'Unit $:
         # $1.68' for duct runs, which reads as "per each" when it's
         # actually per foot (qty is measured in LF, so 37 × $1.68 = $62.16
