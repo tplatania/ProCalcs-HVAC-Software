@@ -144,6 +144,17 @@ def build_bom_from_wrightsoft_lines(
             or gen_id
         )
         unit = catalog_row.get("Units") or raw.get("unit") or "EA"
+        # Day-18 — Richard flagged that BOM rows show 'Unit: EA' + 'Unit $:
+        # $1.68' for duct runs, which reads as "per each" when it's
+        # actually per foot (qty is measured in LF, so 37 × $1.68 = $62.16
+        # only reconciles as per-ft). Root cause: mapped_parts.csv rows
+        # for duct SKUs carry Units="EA" from Wrightsoft, but the priced
+        # quantity is linear feet. Infer the correct unit from the SKU
+        # prefix: any duct family → 'ft'; leave everything else alone.
+        if unit.upper() == "EA":
+            _prefix = (gen_id or "").upper()
+            if _prefix.startswith(("DDVN", "DDFL", "DRFG", "DRMT", "DRST")):
+                unit = "ft"
         # Section resolution: catalog first (most precise), then
         # Wrightsoft's section-divider hint preserved by the parser,
         # then "Other" as last resort. section_for_generic returns
