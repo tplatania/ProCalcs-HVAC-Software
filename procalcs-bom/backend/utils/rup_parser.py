@@ -433,13 +433,29 @@ def _parse_equipment(
     # by (type, mfr, model), taking the max count so both paths
     # contribute rather than clobber.
     free_hits = _scan_free_models(full_text.split("\n"))
+
+    # Day-18 — merge strategy: section_hits are AUTHORITATIVE when they
+    # exist (they went through the double-manufacturer-marker filter
+    # that distinguishes per-instance EQUIP entries from catalog
+    # templates). free_hits are the fallback for files whose models
+    # float outside EQUIP entries entirely (Ally Residence case).
+    #
+    # Prior version used max(section, free) which let the free scan's
+    # unfiltered occurrence count clobber the section scan — that's why
+    # 79th Ct's BAYEAAC08BK1 stayed at 5 (free scan finds the template
+    # occurrence too) even after the section filter dropped it to 4.
+    section_keys = {(s["type"], s["manufacturer"], s["model"]) for s in section_hits}
     by_key: Dict[tuple, Dict[str, Any]] = {}
-    for spec in section_hits + free_hits:
+    for spec in section_hits:
         key = (spec["type"], spec["manufacturer"], spec["model"])
-        if key in by_key:
-            by_key[key]["count"] = max(by_key[key]["count"], spec.get("count", 1))
-        else:
-            by_key[key] = {**spec, "count": spec.get("count", 1)}
+        by_key[key] = {**spec, "count": spec.get("count", 1)}
+    for spec in free_hits:
+        key = (spec["type"], spec["manufacturer"], spec["model"])
+        if key in section_keys:
+            # Model is already accounted for by section scan; don't
+            # let unfiltered free-scan occurrences inflate the count.
+            continue
+        by_key[key] = {**spec, "count": spec.get("count", 1)}
     for spec in by_key.values():
         models_by_type.setdefault(spec["type"], []).append(spec)
 
@@ -667,13 +683,22 @@ def _extract_equipment_models(sections: Dict[str, List[str]]) -> List[Dict[str, 
                 break
         if equip_type is None:
             continue
-        # Find manufacturer (first known-mfr token in the body)
+        # Find manufacturer (first known-mfr token in the body) AND
+        # count how many body lines carry a manufacturer token —
+        # per-instance EQUIP entries reference the manufacturer twice
+        # (once as a display name, once as a code marker), catalog
+        # template entries reference it only once. This is how we
+        # distinguish 79th Ct's spurious 5th BAYEAAC08BK1 (a template
+        # ref) from the 4 real per-AHU instances (each has the double-
+        # manufacturer marker). Day-18 — Richard flagged the +1.
         manufacturer = None
+        mfr_line_count = 0
         for tok in lines[1:]:
             up = tok.strip().upper()
             if up in _KNOWN_MANUFACTURERS:
-                manufacturer = _KNOWN_MANUFACTURERS[up]
-                break
+                if manufacturer is None:
+                    manufacturer = _KNOWN_MANUFACTURERS[up]
+                mfr_line_count += 1
         # Find model tokens (alphanumeric, 5-20 chars, mixed)
         models = []
         for tok in lines[1:]:
@@ -684,6 +709,15 @@ def _extract_equipment_models(sections: Dict[str, List[str]]) -> List[Dict[str, 
                 models.append(up)
         if not models or not manufacturer:
             # Catalog template without project-specific config; skip.
+            continue
+        # Day-18 — catalog templates (mfr referenced once) look identical
+        # to per-instance entries at the model level. Require the double-
+        # marker signal to count this entry toward the instance rollup.
+        # Fallback (mfr_line_count < 2) yields templates that still get
+        # counted by _scan_free_models globally when the model actually
+        # appears as a per-AHU placement elsewhere in the file, so
+        # legitimate models aren't dropped — just not double-counted.
+        if mfr_line_count < 2:
             continue
         # First model after the type label is usually the OUTDOOR unit
         # (for split AC) or the unit itself (for furnace/heat-kit).
