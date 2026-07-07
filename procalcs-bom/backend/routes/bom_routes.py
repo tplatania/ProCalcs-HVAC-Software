@@ -867,6 +867,162 @@ def bom_from_wrightsoft():
 
 
 # ===============================
+# POST — Wrightsoft BOM v2: bundle-driven path (Day-19)
+# ===============================
+#
+# The Windows extraction station runs RightSuite's COM interface
+# (`IRRXDocument.ValidateProject`) and produces a per-zone equipment
+# schedule as JSON. This endpoint accepts that JSON alongside the
+# Wrightsoft `.xls` line-items export and merges the COM-derived
+# equipment into the .xls-driven BOM. Fuller / more accurate than
+# the .rup byte-parsing path — Wrightsoft names manufacturers and
+# specs directly (no regex prefix table, no empirical byte scanning,
+# no AHRI round-trip for capacity/SEER/HSPF/AFUE).
+#
+# Multipart:
+#   file             — Wrightsoft BOM export (.xls / .csv), required
+#   equipment_bundle — ValidateProject JSON, required
+#   client_id        — string, required
+#   job_id           — string, required
+#   output_mode      — full | materials_only | ... (default: full)
+#   project_name     — string, optional; select one project when the
+#                      bundle contains multiple. When omitted and the
+#                      bundle has exactly one project, that one is used.
+#
+# Response shape identical to /from-wrightsoft with extra top-level
+# markers so the SPA can render the "v2" affordances:
+#   data.source_pipeline = "wrightsoft_bundle_v2"
+#   data.com_equipment_count = <int>  — how many equipment lines
+#                                       came from ValidateProject
+#   data.com_project_name = <str>     — which project was selected
+
+@bom_bp.route('/from-wrightsoft-bundle', methods=['POST'])
+def bom_from_wrightsoft_bundle():
+    try:
+        # ── Required inputs ──────────────────────────────────────
+        if 'file' not in request.files:
+            return jsonify({"success": False, "data": None,
+                            "error": "Missing 'file' (Wrightsoft .xls export)"}), 400
+        if 'equipment_bundle' not in request.files:
+            return jsonify({"success": False, "data": None,
+                            "error": "Missing 'equipment_bundle' (ValidateProject JSON)"}), 400
+
+        xls_upload = request.files['file']
+        bundle_upload = request.files['equipment_bundle']
+        xls_bytes = xls_upload.read()
+        bundle_bytes = bundle_upload.read()
+
+        if not xls_bytes:
+            return jsonify({"success": False, "data": None,
+                            "error": "Empty Wrightsoft .xls upload"}), 400
+        if not bundle_bytes:
+            return jsonify({"success": False, "data": None,
+                            "error": "Empty equipment_bundle upload"}), 400
+
+        client_id   = (request.form.get('client_id') or '').strip()
+        job_id      = (request.form.get('job_id') or '').strip()
+        output_mode = (request.form.get('output_mode') or 'full').strip() or 'full'
+        project_name = (request.form.get('project_name') or '').strip() or None
+
+        if not client_id or not job_id:
+            return jsonify({"success": False, "data": None,
+                            "error": "client_id and job_id are required"}), 400
+
+        # ── Parse the equipment bundle ───────────────────────────
+        import json as _json
+        try:
+            bundle = _json.loads(bundle_bytes.decode('utf-8-sig'))
+        except Exception as exc:
+            return jsonify({"success": False, "data": None,
+                            "error": f"equipment_bundle is not valid JSON: {exc}"}), 400
+
+        from services.wrightsoft_bundle_adapter import parse_validateproject_bundle
+        try:
+            equipment_lines = parse_validateproject_bundle(
+                bundle, project_name=project_name)
+        except ValueError as exc:
+            return jsonify({"success": False, "data": None,
+                            "error": str(exc)}), 400
+
+        resolved_project = project_name or (
+            list(bundle.keys())[0] if isinstance(bundle, dict) and len(bundle) == 1
+            else project_name
+        )
+
+        # ── Parse the .xls line items ────────────────────────────
+        try:
+            xls_lines = parse_wrightsoft_bom_rows(
+                xls_bytes,
+                source_name=xls_upload.filename or "",
+            )
+        except Exception as exc:
+            logger.error("wrightsoft xls parse failed: %s", exc, exc_info=True)
+            return jsonify({"success": False, "data": None,
+                            "error": f"Could not parse Wrightsoft .xls: {exc}"}), 400
+
+        # ── Prepend equipment lines to the xls lines ─────────────
+        # Same shape as build_bom_from_wrightsoft_lines expects; the
+        # equipment lines flow through the SKU translation / pricing
+        # pipeline identically to xls-derived rows.
+        merged_lines = equipment_lines + xls_lines
+
+        # ── Resolve profile + build ──────────────────────────────
+        profile_data = get_profile_by_id(client_id)
+        if not profile_data:
+            return jsonify({"success": False, "data": None,
+                            "error": f"No profile found for client_id '{client_id}'"}), 404
+        profile = ClientProfile.from_dict(profile_data)
+
+        bom = build_bom_from_wrightsoft_lines(
+            lines=merged_lines,
+            profile=profile,
+            job_id=job_id,
+            output_mode=output_mode,
+        )
+
+        # ── Persist as bom_run so ?run=<id> works and Run History
+        # picks it up. Same best-effort contract as /from-wrightsoft.
+        try:
+            from models import BomRun
+            from extensions import db
+            from flask import has_request_context
+            created_by_email = None
+            if has_request_context():
+                user = getattr(g, "current_user", None)
+                if user is not None:
+                    created_by_email = getattr(user, "email", None)
+            run = BomRun.record(
+                client_id=client_id,
+                job_id=job_id,
+                output_mode=output_mode,
+                parsed_design_data={
+                    "source_pipeline":  "wrightsoft_bundle_v2",
+                    "wrightsoft_lines": merged_lines,
+                    "com_project_name": resolved_project,
+                },
+                generated_bom=bom,
+                created_by_email=created_by_email,
+            )
+            db.session.commit()
+            bom["run_id"] = run.id
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Wrightsoft-bundle persistence failed for job %s — %s",
+                           job_id, exc)
+
+        # ── v2 markers so the SPA can render bundle-specific UI ──
+        bom["source_pipeline"] = "wrightsoft_bundle_v2"
+        bom["com_equipment_count"] = len(equipment_lines)
+        bom["com_project_name"] = resolved_project
+
+        return jsonify({"success": True, "data": bom, "error": None}), 200
+
+    except Exception as e:
+        logger.error("bom_from_wrightsoft_bundle failed: %s", e, exc_info=True)
+        return jsonify({"success": False, "data": None,
+                        "error": "Failed to build BOM from Wrightsoft bundle."}), 500
+
+
+# ===============================
 # GET — Catalog coverage diagnostic (Day-11)
 # ===============================
 #
