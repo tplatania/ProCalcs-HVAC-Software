@@ -953,7 +953,7 @@ def bom_from_wrightsoft_bundle():
         try:
             xls_lines = parse_wrightsoft_bom_rows(
                 xls_bytes,
-                source_name=xls_upload.filename or "",
+                filename=xls_upload.filename or "",
             )
         except Exception as exc:
             logger.error("wrightsoft xls parse failed: %s", exc, exc_info=True)
