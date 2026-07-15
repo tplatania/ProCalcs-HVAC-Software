@@ -116,18 +116,32 @@ class ContractorOverride(db.Model):
     ) -> Optional["ContractorOverride"]:
         """Read path called on every Wrightsoft line. Returns the
         single matching row or None. Case-insensitive on supplier (the
-        4-char Src code) because Wrightsoft mixes case occasionally."""
+        4-char Src code) because Wrightsoft mixes case occasionally.
+
+        Day-22 — supplier matching is prefix-tolerant. The .rup
+        pipeline looks lines up by the 4-char Wrightsoft Src code
+        ("DAIK") while the SPA's edit drawer saves the display name
+        ("DAIKIN"), so an exact filter silently orphaned UI-saved
+        overrides on .rup-sourced BOMs. We fetch the (contractor,
+        sku) candidates and match supplier by exact-first, then
+        either-direction prefix ("DAIK" ~ "DAIKIN")."""
         if not contractor_id or not supplier or not sku:
             return None
-        return (
+        want = supplier.strip().upper()
+        rows = (
             db.session.query(cls)
-            .filter_by(
-                contractor_id=contractor_id,
-                supplier=supplier.strip().upper(),
-                sku=sku.strip(),
-            )
-            .one_or_none()
+            .filter_by(contractor_id=contractor_id, sku=sku.strip())
+            .all()
         )
+        exact = [r for r in rows if (r.supplier or "").upper() == want]
+        if exact:
+            return exact[0]
+        prefix = [
+            r for r in rows
+            if (r.supplier or "").upper().startswith(want)
+            or want.startswith((r.supplier or "").upper())
+        ]
+        return prefix[0] if prefix else None
 
     @classmethod
     def upsert(

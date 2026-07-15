@@ -576,11 +576,23 @@ def _apply_contractor_overrides(line_items: list[dict], client_id: str) -> int:
     if not overrides:
         return 0
 
-    # Index for O(1) lookup by (supplier_upper, sku) — the same key
-    # the upsert path uses, so case-folding stays consistent.
-    by_key: dict[tuple[str, str], "ContractorOverride"] = {
-        ((o.supplier or "").upper(), o.sku or ""): o for o in overrides
-    }
+    # Index by sku; supplier match is exact-first then prefix-tolerant
+    # (Day-22): the .rup pipeline carries 4-char Src codes ("DAIK")
+    # while UI-saved overrides carry display names ("DAIKIN").
+    by_sku: dict[str, list["ContractorOverride"]] = {}
+    for o in overrides:
+        by_sku.setdefault(o.sku or "", []).append(o)
+
+    def _match(sup: str, sku: str) -> "ContractorOverride | None":
+        rows = by_sku.get(sku) or []
+        for r in rows:
+            if (r.supplier or "").upper() == sup:
+                return r
+        for r in rows:
+            rs = (r.supplier or "").upper()
+            if rs.startswith(sup) or sup.startswith(rs):
+                return r
+        return None
 
     applied = 0
     for li in line_items:
@@ -588,7 +600,7 @@ def _apply_contractor_overrides(line_items: list[dict], client_id: str) -> int:
         sku = (li.get("sku") or "")
         if not sup or not sku:
             continue
-        ov = by_key.get((sup, sku))
+        ov = _match(sup, sku)
         if ov is None:
             continue
 
