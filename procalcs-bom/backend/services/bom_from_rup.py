@@ -116,13 +116,30 @@ def _plan_memo_lookup(source_name: str):
     hits = [k for k in _memo_cache if k.endswith(f"::{plan}")]
     if len(hits) > 1:
         low = (source_name or "").lower()
-        hits = [k for k in hits
-                if any(tok in low for tok in k.split("::")[0].lower().split()[:2])] or []
-    if len(hits) != 1:
+        narrowed = [k for k in hits
+                    if any(tok in low for tok in k.split("::")[0].lower().split()[:2])]
+        if narrowed:
+            hits = narrowed
+    if not hits:
         return
-    for sku, e in _memo_cache[hits[0]].items():
-        if e.get("agreement", 0) >= 0.9 and e.get("n", 0) >= 2:
-            yield sku, e["qty"], e["agreement"]
+    if len(hits) == 1:
+        for sku, e in _memo_cache[hits[0]].items():
+            if e.get("agreement", 0) >= 0.9 and e.get("n", 0) >= 2:
+                yield sku, e["qty"], e["agreement"]
+        return
+    # Ambiguous community (lot filenames often omit it) — merge across
+    # communities and emit only SKUs whose quantity AGREES everywhere
+    # (builders reuse the same plan across communities; e.g. T076 is
+    # identical in Glades and Riverwalk). Disagreement → skip the SKU.
+    all_skus = set().union(*(_memo_cache[k].keys() for k in hits))
+    for sku in sorted(all_skus):
+        entries = [_memo_cache[k][sku] for k in hits if sku in _memo_cache[k]]
+        if not entries or any(e.get("agreement", 0) < 0.9 or e.get("n", 0) < 2
+                              for e in entries):
+            continue
+        qtys = {e["qty"] for e in entries}
+        if len(qtys) == 1:
+            yield sku, entries[0]["qty"], min(e["agreement"] for e in entries)
 
 
 def build_lines_from_rup(file_bytes: bytes,
