@@ -639,6 +639,10 @@ def bom_from_wrightsoft():
     try:
         # ── Multipart upload branch ───────────────────────────────────
         source_pipeline_override = None  # set to "wrightsoft_rup" for .rup
+        _rup_extras = {}  # Day-21 — structural extras snapshotted from
+                          # line[0] before build_bom_from_wrightsoft_lines
+                          # strips unknown keys. Populated in the .rup
+                          # branch below; stays {} for .xls uploads.
         if 'file' in request.files:
             upload = request.files['file']
             file_bytes = upload.read()
@@ -657,8 +661,25 @@ def bom_from_wrightsoft():
             if fname.endswith(".rup") or _looks_like_rup(file_bytes):
                 try:
                     from services.bom_from_rup import build_lines_from_rup
+                    # Day-22 — Rheia register-driven takeoff fires for
+                    # contractors whose profile supplier is Rheia (the
+                    # Rheia section is absent from the .rup binary and
+                    # must be derived; see bom_from_rup for the rules).
+                    _rheia = False
+                    try:
+                        _p = get_profile_by_id(client_id) if client_id else None
+                        _sup = ""
+                        if _p is not None:
+                            _sup = (getattr(_p, "supplier_name", None)
+                                    or (_p.get("supplierName") if isinstance(_p, dict) else "")
+                                    or (_p.get("supplier_name") if isinstance(_p, dict) else "")
+                                    or "")
+                        _rheia = "rheia" in str(_sup).lower()
+                    except Exception:  # noqa: BLE001 — never block the BOM
+                        _rheia = False
                     lines = build_lines_from_rup(file_bytes,
-                                                 source_name=upload.filename or "")
+                                                 source_name=upload.filename or "",
+                                                 rheia_takeoff=_rheia)
                     source_pipeline_override = "wrightsoft_rup"
                     # Day-16 follow-up — detect ducts-only files at the
                     # route level so the hint survives the line-item
@@ -668,6 +689,19 @@ def bom_from_wrightsoft():
                         _rup_ducts_only_hint = True
                     else:
                         _rup_ducts_only_hint = False
+                    # Day-21 — bom_from_rup attaches structural extras
+                    # (rup_balduct per-register CFMs from Increment 2,
+                    # rup_unbuilt_hint from §1.4, rup_duct_geometry
+                    # placeholder from K scaffold) to line[0]. Snapshot
+                    # them here before build_bom_from_wrightsoft_lines
+                    # transforms each line and strips unknown keys.
+                    _rup_extras = {}
+                    if lines:
+                        for key in ("rup_balduct", "rup_unbuilt_hint",
+                                     "rup_duct_geometry", "rup_file_type_hint"):
+                            val = lines[0].get(key)
+                            if val is not None:
+                                _rup_extras[key] = val
                 except Exception as exc:  # noqa: BLE001
                     logger.error("rup parse failed: %s", exc, exc_info=True)
                     return jsonify({"success": False, "data": None,
@@ -681,6 +715,7 @@ def bom_from_wrightsoft():
                     return jsonify({"success": False, "data": None,
                                     "error": str(exc)}), 400
                 _rup_ducts_only_hint = False
+                _rup_extras = {}
 
         else:
             # ── JSON body branch ──────────────────────────────────────
@@ -840,6 +875,13 @@ def bom_from_wrightsoft():
                 "rollup, upload the Wrightsoft BOM export (.xls / .csv) "
                 "produced by File → Bill of Materials in Wrightsoft."
             )
+            # Day-21 — promote structural extras snapshotted from
+            # line[0] before the line builder stripped them. Feeds the
+            # SPA's Duct Cuts card (rup_balduct), the un-built hint
+            # banner (rup_unbuilt_hint), and the future geometry
+            # payload (rup_duct_geometry, once K's spec drops).
+            for _k, _v in (_rup_extras or {}).items():
+                bom.setdefault(_k, _v)
             # Day-16 follow-up — set the file-type hint when no
             # equipment lines came out of the parser (Manual D / ADU
             # Ducts files). Computed at route level (not inside

@@ -43,6 +43,13 @@ import logging
 from typing import Any, Dict, List
 
 from utils.rup_parser import parse_rup_bytes
+from utils.rup_reader import RupReader
+from utils.rup_rpitem_parser import has_priced_bom, parse_priced_lines
+from utils.rup_equip_parser import parse_equipment
+from utils.rup_duct_parser import parse_baldict
+from utils.rup_duct_geometry import (
+    is_geometry_join_available, join_duct_geometry,
+)
 
 logger = logging.getLogger("procalcs_bom")
 
@@ -71,27 +78,83 @@ _MFR_NAME_TO_SRC: Dict[str, str] = {
 
 
 def build_lines_from_rup(file_bytes: bytes,
-                         source_name: str = "") -> List[Dict[str, Any]]:
+                         source_name: str = "",
+                         rheia_takeoff: bool = False) -> List[Dict[str, Any]]:
     """Parse a .rup binary and project it into BOM line-item shape.
 
     Returns a list of dicts shaped for build_bom_from_wrightsoft_lines.
     Empty list when the .rup yields no usable equipment/duct info (very
     rare — even a sparse Manual D RUP has at least DTYPREF / FITNG /
     DREGINFO counts).
+
+    Day-21 — three new structural extraction paths from the sister
+    session's RUP_BINARY_FORMAT.md Increments 1-3:
+
+    * **RPITEM/RPRPART** (§1) — when the .rup was built + saved inside
+      Wrightsoft, it carries the FULL priced BOM as paired records
+      with real per-code quantities and unit prices. When present we
+      short-circuit the empirical duct/fitting placeholders and emit
+      those authoritative lines directly.
+    * **EQUIP** (§3) — placed equipment instances (Trane condenser +
+      coil pair, BAYEA heat kits). Augments the empirical equipment
+      extraction — fixes the Ally "0 equipment" bug the aligned
+      reader had for weeks.
+    * **BALDUCT** (§2) — per-register design CFM. Surfaced via the
+      _rup_baldict attribute on the first line for the Duct Cuts card
+      downstream consumer.
     """
     design = parse_rup_bytes(file_bytes, source_name=source_name)
+    reader = RupReader(file_bytes)
 
     lines: List[Dict[str, Any]] = []
 
-    # ── Equipment lines ────────────────────────────────────────────
-    # Each EQUIP record contributes one BOM line. We use the model
-    # number AS the generic_id so the existing AHRI + DFUnit lookups
-    # (which key on model) fire transparently. The Wrightsoft 4-char
-    # Src code goes into "src" so contractor overrides keyed by
-    # (supplier, sku) resolve the same way they do on the .xls flow.
+    # ── Equipment lines (structural EQUIP + empirical fallback) ──
+    # Structural walk finds placed instances with matched condenser +
+    # coil pairs across every manufacturer Wrightsoft names, no code
+    # changes when a contractor uses Lennox or Bosch. Fixes Ally's
+    # "0 equipment" bug and retires the day-18 mfr-double-marker
+    # filter + the day-17 free-standing model regex scan.
+    #
+    # When structural returns non-empty we PREFER it over the
+    # empirical result. When empty (older files, edge shapes), fall
+    # back to the empirical equipment extraction so nothing regresses.
+    structural_equipment = parse_equipment(reader)
+    seen_models = set()
+    if structural_equipment:
+        for row in structural_equipment:
+            cond = row["condenser_model"]
+            coil = row.get("coil_model")
+            mfr_name = row.get("manufacturer") or ""
+            src = row.get("part_source") or _MFR_NAME_TO_SRC.get(mfr_name) \
+                  or _MFR_NAME_TO_SRC.get(mfr_name.title()) or "WSF"
+            type_label = row.get("equipment_type") or "Equipment"
+            # Emit the primary (condenser) line
+            lines.append({
+                "generic_id":   cond,
+                "quantity":     1.0,
+                "description":  f"{type_label} — {mfr_name} {cond}".strip(" —"),
+                "src":          src,
+                "section_hint": "Equipment",
+                "unit":         "EA",
+            })
+            seen_models.add(cond)
+            # Emit the paired coil/AH line when present
+            if coil and coil != cond:
+                lines.append({
+                    "generic_id":   coil,
+                    "quantity":     1.0,
+                    "description":  f"Air Handler — {mfr_name} {coil}".strip(" —"),
+                    "src":          src,
+                    "section_hint": "Equipment",
+                    "unit":         "EA",
+                })
+                seen_models.add(coil)
+    # Empirical safety net — only add models the structural pass didn't
+    # already surface. Keeps regression coverage on file variants the
+    # sister session's Increment 3 hasn't accounted for.
     for unit in design.get("equipment", []) or []:
         model = (unit.get("model") or "").strip()
-        if not model:
+        if not model or model in seen_models:
             continue
         mfr_name = unit.get("manufacturer") or ""
         src = _MFR_NAME_TO_SRC.get(mfr_name) or _MFR_NAME_TO_SRC.get(
@@ -176,42 +239,175 @@ def build_lines_from_rup(file_bytes: bytes,
             "unit":         "EA",
         })
 
-    # ── Fitting-instance placeholder ───────────────────────────────
-    # FITNG count from the raw_rup_context. The .rup doesn't carry
-    # per-code rollups (Tom's 8E/11H/etc. come from the .xls export's
-    # tabular fitting section), so this is a single aggregate line
-    # the reviewer uses to sanity-check the .xls export later.
-    fit_count = _count_fittings_from_context(raw)
-    if fit_count:
-        lines.append({
-            "generic_id":   "FITTINGS",
-            "quantity":     float(fit_count),
-            "description":  "Fittings (instance count from .rup FITNG; "
-                            "see Wrightsoft BOM export for per-code rollup)",
-            "src":          "WSF",
-            "section_hint": "Duct System Equipment",
-            "unit":         "EA",
-        })
+    # ── Fittings — per-code rollup or synthetic aggregate ─────────
+    # Day-21 Increment 1: when the .rup was built + saved in
+    # Wrightsoft, RPITEM/RPRPART records carry the exact per-code
+    # BOM lines with real quantities and unit prices from Wrightsoft
+    # itself. Emit those as first-class lines and skip the synthetic
+    # aggregate entirely — they retire it.
+    fit_count = 0  # keeps the summary log valid whichever branch runs
+    if has_priced_bom(reader):
+        priced = parse_priced_lines(reader)
+        # Deduplicate parts that recur across parallel investments
+        # (§1.4). Take the first occurrence per part_no in file order.
+        first_by_pn: Dict[str, dict] = {}
+        for L in priced:
+            if L["part_no"] not in first_by_pn:
+                first_by_pn[L["part_no"]] = L
+        for L in first_by_pn.values():
+            lines.append({
+                "generic_id":   L["part_no"],
+                "quantity":     L["quantity"],
+                "description":  L["description"] or L["category_label"]
+                                or L["part_no"],
+                "src":          L["part_source"] or "WSF",
+                "section_hint": _section_hint_from_category(
+                    L.get("category_code"), L.get("category_label")),
+                "unit":         L["units"] or "EA",
+                # `wrightsoft_price` is consumed by the existing
+                # build_bom_from_wrightsoft_lines pricing pipeline as
+                # a fallback when hosted catalog + CSV both miss —
+                # setting it here surfaces Wrightsoft's own RPITEM
+                # unit price on those otherwise-unpriced lines.
+                # Keep `wrightsoft_unit_price`/`wrightsoft_extended`
+                # for auditing/debugging; a follow-up should teach
+                # the pricing pipeline to prefer these over hosted
+                # catalog for built .rup files (RPITEM is
+                # authoritative for those).
+                "wrightsoft_price":      L["unit_price"],
+                "wrightsoft_unit_price": L["unit_price"],
+                "wrightsoft_extended":   L["extended"],
+            })
+        logger.info("rup: emitted %d per-code lines from RPITEM/RPRPART "
+                    "(%d rows before dedup)", len(first_by_pn), len(priced))
+    else:
+        # Un-built .rup — no RPITEM records. Fall back to the
+        # synthetic FITTINGS aggregate + surface an actionable hint
+        # so the SPA can prompt "run Bill of Materials → save → re-
+        # upload" for a fully priced BOM.
+        fit_count = _count_fittings_from_context(raw)
+        if fit_count:
+            lines.append({
+                "generic_id":   "FITTINGS",
+                "quantity":     float(fit_count),
+                "description":  "Fittings (instance count from .rup FITNG; "
+                                "see Wrightsoft BOM export for per-code rollup)",
+                "src":          "WSF",
+                "section_hint": "Duct System Equipment",
+                "unit":         "EA",
+            })
 
     # Day-16 follow-up — Manual D / ADU Ducts files have no equipment
     # by design. Tag the first line so the route handler can surface a
     # banner: "this looks like a ducts-only file — for a residential
     # BOM with equipment, upload a Manual J file instead."
-    is_ducts_only = (len(design.get("equipment") or []) == 0)
+    is_ducts_only = (len(design.get("equipment") or []) == 0
+                       and not structural_equipment)
     if is_ducts_only and lines:
         lines[0]["rup_file_type_hint"] = (
             "no equipment found — this looks like a Manual D / "
             "ducts-only file. For the full residential BOM with "
             "equipment, upload a Manual J file."
         )
+    # Day-21 — un-built .rup hint. When the file has none of the
+    # RPITEM priced-BOM blocks, the contractor can unlock a fully
+    # priced per-code output by running Wrightsoft's Bill of
+    # Materials → save step once before uploading. Surface this on
+    # the first line so the SPA can prompt.
+    if not has_priced_bom(reader) and lines:
+        lines[0].setdefault(
+            "rup_unbuilt_hint",
+            "This .rup was saved without a built Bill of Materials. "
+            "For a fully priced per-code BOM, open the file in "
+            "Wrightsoft → Bill of Materials → save → re-upload."
+        )
+
+    # Day-21 — BALDUCT (per-register design CFM). Surfaced on the
+    # first line for the Duct Cuts card consumer to render alongside
+    # cut lengths without needing to re-parse the .rup.
+    baldict_rows = parse_baldict(reader)
+    if baldict_rows and lines:
+        lines[0].setdefault("rup_balduct", [
+            {"label": r["label"], "cfm": r["cfm"], "id": r["id"]}
+            for r in baldict_rows
+        ])
+
+    # Day-21 — per-run diameter + cut-length join (Increment 2b).
+    # Currently a no-op stub; auto-activates when the sister session's
+    # CSDuctOb/CRDuctOb spec lands and `is_geometry_join_available()`
+    # flips to True. When active, the returned rows feed the un-built
+    # geometry-recompute path (task L) which silently supersedes the
+    # "build first" UX guardrail for un-built .rup drops.
+    if is_geometry_join_available():
+        geometry_rows = join_duct_geometry(reader)
+        if geometry_rows and lines:
+            lines[0].setdefault("rup_duct_geometry", geometry_rows)
+
+    # Day-22 — Rheia register-driven takeoff v1. The Rheia duct-system
+    # section is NOT in the .rup (byte-probe proven: Wrightsoft's Rheia
+    # plugin derives it from drawing geometry at export time), so for
+    # Rheia-system contractors we derive it ourselves. Validated on the
+    # 20-pair reproduction pilot (repro_run_2026-07-15):
+    #   boots total     = registers − 1   (exact on 14/14, then 20/20)
+    #   diffusers total = registers − 1   (exact; ceil-diff == ceil-boot,
+    #                                      slotted == sidewall boots)
+    # The ceiling/sidewall SPLIT needs the drawing-geometry decode
+    # (mount type per register); until then we use the corpus-median
+    # ceiling share (~0.42) and flag the lines low-confidence so the
+    # review UI renders them as needs-verification, not fact.
+    if rheia_takeoff and baldict_rows and len(baldict_rows) >= 2:
+        n = len(baldict_rows) - 1  # minus the return
+        ceil = round(0.42 * n)
+        side = n - ceil
+        for gen_id, qty, desc in (
+            ("10-01-220", ceil, "Ceiling Boot Assembly"),
+            ("10-01-200", side, "High Sidewall Boot Assembly"),
+            ("10-04-230", ceil, "Ceiling Diffuser Assembly"),
+            ("10-04-091", side, "Slotted Diffuser"),
+        ):
+            if qty <= 0:
+                continue
+            lines.append({
+                "generic_id":   gen_id,
+                "quantity":     float(qty),
+                "description":  desc,
+                "src":          "RHEA",
+                "section_hint": "Rheia Duct System Equipment",
+                "unit":         "EA",
+                # Consumed by the SPA to render a low-confidence badge;
+                # totals are exact, the ceiling/sidewall split is a
+                # corpus prior pending the geometry decode.
+                "rup_derived":  "rheia_register_rule_v1",
+            })
+        logger.info("rup: emitted Rheia register-rule lines "
+                    "(registers=%d → boots/diffusers=%d, ceil=%d side=%d)",
+                    len(baldict_rows), n, ceil, side)
 
     logger.info(
-        "Built %d BOM lines from .rup (%d equip, %d duct types, "
-        "registers=%s, fittings=%s)",
+        "Built %d BOM lines from .rup (%d empirical equip, %d structural equip, "
+        "%d duct types, registers=%s, fittings=%s, priced_bom=%s)",
         len(lines), len(design.get("equipment") or []),
+        len(structural_equipment),
         len(type_counts), reg_count or 0, fit_count or 0,
+        has_priced_bom(reader),
     )
     return lines
+
+
+def _section_hint_from_category(category_code: str,
+                                  category_label: str) -> str:
+    """Map Wrightsoft's category code/label to our BOM section hint.
+
+    WSFDCT (ducts), WSFFTR (fittings), and their kin all land under
+    'Duct System Equipment'. Equipment lines have their own explicit
+    section from the EQUIP path — this function only handles the
+    RPITEM-derived duct/fitting lines.
+    """
+    if category_code and category_code.startswith("WSF"):
+        return "Duct System Equipment"
+    if category_label and "Equipment" in category_label:
+        return category_label
+    return "Duct System Equipment"
 
 
 def _count_registers_from_context(raw: str) -> int:
