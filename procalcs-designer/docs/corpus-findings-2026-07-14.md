@@ -69,3 +69,12 @@ pairs.jsonl, summary.json); script committed at
 - **Rheia's own Design Checklist** (in corpus) confirms manifold
   holes == registers and 3"/4" run sizing; elbow rules are public
   Rheia docs.
+
+## Final v6 scoreboard (2026-07-16, all 1,076 pairs, engine as deployed)
+
+**recall 0.783 / precision 0.857 / qty-accuracy 0.889** (medians;
+means within 0.03). v1 baseline 48h earlier: 0.41 / 1.00 / 1.00.
+Includes plan-memo with merged-community fallback. Honest holdout
+reference: 0.739 recall (memo learned excluding the scored lot).
+Document sweep complete: 21,362 docs, zero contractor-side pricing —
+pricing questions confirmed not-in-data exhaustively.
