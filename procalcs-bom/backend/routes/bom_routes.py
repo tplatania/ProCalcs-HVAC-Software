@@ -825,7 +825,24 @@ def bom_from_wrightsoft():
         # Day-17 — if a .rup was attached, prepend its equipment rows
         # so the Equipment section populates on what would otherwise
         # be a duct-only BOM (Wrightsoft's BOM.xls excludes equipment).
+        # Day-22 — dedupe by generic_id: the route-level empirical
+        # equipment (CERIData design block) and bom_from_rup's
+        # structural EQUIP lines describe the same units, which
+        # emitted each model twice on .rup uploads (HKTSD05X1 ×2 on
+        # the T333 smoke draft). First occurrence wins — the route's
+        # empirical rows lead and carry the richer description.
         merged_lines = (rup_equipment_lines + lines) if rup_equipment_lines else lines
+        if rup_equipment_lines:
+            seen_ids: set = set()
+            deduped: list = []
+            for li in merged_lines:
+                gid = (li.get("generic_id") or "").strip().upper()
+                if gid and li.get("section_hint") == "Equipment":
+                    if gid in seen_ids:
+                        continue
+                    seen_ids.add(gid)
+                deduped.append(li)
+            merged_lines = deduped
         bom = build_bom_from_wrightsoft_lines(
             lines=merged_lines,
             profile=profile,
