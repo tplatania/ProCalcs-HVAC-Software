@@ -669,13 +669,20 @@ def bom_from_wrightsoft():
                     try:
                         _p = get_profile_by_id(client_id) if client_id else None
                         _sup = ""
-                        if _p is not None:
-                            _sup = (getattr(_p, "supplier_name", None)
-                                    or (_p.get("supplierName") if isinstance(_p, dict) else "")
-                                    or (_p.get("supplier_name") if isinstance(_p, dict) else "")
+                        if isinstance(_p, dict):
+                            # Firestore doc nests it: supplier.supplier_name
+                            _sup = ((_p.get("supplier") or {}).get("supplier_name")
+                                    or _p.get("supplierName")
+                                    or _p.get("supplier_name")
                                     or "")
+                        elif _p is not None:
+                            _sup = getattr(_p, "supplier_name", "") or ""
                         _rheia = "rheia" in str(_sup).lower()
-                    except Exception:  # noqa: BLE001 — never block the BOM
+                        logger.info("rup rheia-gate: client=%s supplier=%r -> %s",
+                                    client_id, _sup, _rheia)
+                    except Exception as _exc:  # noqa: BLE001 — never block the BOM
+                        logger.warning("rup rheia-gate failed for %s: %s",
+                                       client_id, _exc)
                         _rheia = False
                     lines = build_lines_from_rup(file_bytes,
                                                  source_name=upload.filename or "",
