@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { EditLineDrawer, type EditableLine } from "@/components/wrightsoft-bom/edit-line-drawer";
+import type { ContractorOverride } from "@/lib/api-hooks";
 import {
   FileText,
   Download,
@@ -27,6 +30,7 @@ import {
   Cpu,
   XCircle,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,91 +40,37 @@ import {
   loadParsedRup,
   clearParsedRup,
   type BomResponse,
-  type BomLineItem,
   type StoredParseResult,
 } from "@/lib/api-hooks";
+import {
+  mapLineItem,
+  buildCsvRows,
+  serializeCsv,
+  computeProvenanceCounts,
+  CATEGORIES,
+  type BomLine,
+  type Category,
+  type Source,
+} from "@/lib/bom-mapping";
 
-// ─── Display shapes ──────────────────────────────────────────────────────
+// ─── Category presentation ───────────────────────────────────────────────
+// (Pure data lives in bom-mapping.ts; visual metadata stays here because
+//  it depends on lucide icon imports + Tailwind class strings.)
 
-interface BomLine {
-  id: string;
-  category: Category;
-  clientName: string;
-  standardName: string;
-  qty: number;
-  unit: string;
-  unitCost: number;
-  markupPct: number;
-  total: number;
-}
-
-const CATEGORY_META = {
+const CATEGORY_META: Record<Category, { label: string; icon: typeof Thermometer; color: string; bg: string }> = {
   equipment:  { label: "Equipment",   icon: Thermometer, color: "text-purple-500",  bg: "bg-purple-500/10" },
   duct:       { label: "Duct",        icon: Wind,        color: "text-blue-500",    bg: "bg-blue-500/10"   },
   fitting:    { label: "Fittings",    icon: Wrench,      color: "text-amber-500",   bg: "bg-amber-500/10"  },
   consumable: { label: "Consumables", icon: Package,     color: "text-green-500",   bg: "bg-green-500/10"  },
-} as const;
-
-type Category = keyof typeof CATEGORY_META;
-
-// Normalize unknown categories from the Flask backend into the 4 buckets
-// the UI can render. Any unrecognized category falls back to consumable.
-function normalizeCategory(raw: string | undefined): Category {
-  if (!raw) return "consumable";
-  const key = raw.toLowerCase().trim();
-  if (key === "equipment") return "equipment";
-  if (key === "duct") return "duct";
-  if (key === "fitting") return "fitting";
-  if (key === "register") return "fitting"; // registers visually live under fittings
-  if (key === "consumable") return "consumable";
-  return "consumable";
-}
-
-// Map a Flask-shaped line_item into the BomLine display shape. Prices
-// are shown when available (full/materials_only/client_proposal modes),
-// otherwise unit_cost + total_cost are used (cost_estimate mode).
-function mapLineItem(item: BomLineItem, index: number): BomLine {
-  const cat = normalizeCategory(item.category);
-  const unitCost = item.unit_price ?? item.unit_cost ?? 0;
-  const total = item.total_price ?? item.total_cost ?? 0;
-  return {
-    id: `${cat}-${index}`,
-    category: cat,
-    clientName: item.description || "(unnamed)",
-    standardName: item.description || "(unnamed)",
-    qty: item.quantity ?? 0,
-    unit: item.unit || "EA",
-    unitCost,
-    markupPct: item.markup_pct ?? 0,
-    total,
-  };
-}
+};
 
 // ─── CSV export helper ───────────────────────────────────────────────────
 
+// CSV row construction + escaping live in bom-mapping.ts so they're
+// unit-tested. This wrapper handles only the browser side: Blob, anchor
+// click, and revoke.
 function downloadCsv(bom: BomResponse): void {
-  const rows = [
-    ["Category", "Description", "Qty", "Unit", "Unit Cost", "Unit Price", "Markup %", "Total"],
-  ];
-  for (const item of bom.line_items) {
-    rows.push([
-      item.category ?? "",
-      (item.description ?? "").replace(/"/g, '""'),
-      String(item.quantity ?? 0),
-      item.unit ?? "",
-      String(item.unit_cost ?? ""),
-      String(item.unit_price ?? ""),
-      String(item.markup_pct ?? ""),
-      String(item.total_price ?? item.total_cost ?? 0),
-    ]);
-  }
-  rows.push([]);
-  rows.push(["Total Cost", "", "", "", "", "", "", String(bom.totals.total_cost ?? "")]);
-  rows.push(["Total Price", "", "", "", "", "", "", String(bom.totals.total_price ?? "")]);
-
-  const csv = rows
-    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-    .join("\r\n");
+  const csv = serializeCsv(buildCsvRows(bom));
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -418,22 +368,37 @@ function BomResultView({
 }) {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<"all" | Category>("all");
+  const [filterSource, setFilterSource] = useState<"all" | Source>("all");
   const [expandedCategories, setExpandedCategories] = useState<Set<Category>>(
     new Set(["equipment", "duct", "fitting", "consumable"])
   );
   const renderPdf = useRenderBomPdf();
 
+  // Local mirror of bom so the edit-drawer can patch line items in
+  // place without round-tripping through the prop. Resets whenever
+  // the parent passes a fresh bom (e.g. after Regenerate).
+  const [localBom, setLocalBom] = useState<BomResponse>(bom);
+  useEffect(() => { setLocalBom(bom); }, [bom]);
+
+  // Edit-drawer state. editingIdx is the index into localBom.line_items
+  // so we can patch the right row on save.
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+
   const lines: BomLine[] = useMemo(
-    () => (bom.line_items ?? []).map((item, i) => mapLineItem(item, i)),
-    [bom]
+    () => (localBom.line_items ?? []).map((item, i) => mapLineItem(item, i)),
+    [localBom]
   );
+
+  const {
+    rules: rulesCount,
+    verified: verifiedCount,
+    ai: aiCount,
+    hasProvenance,
+  } = useMemo(() => computeProvenanceCounts(localBom), [localBom]);
 
   const byCategory = useMemo(() => {
     return Object.fromEntries(
-      (Object.keys(CATEGORY_META) as Category[]).map((cat) => [
-        cat,
-        lines.filter((l) => l.category === cat),
-      ])
+      CATEGORIES.map((cat) => [cat, lines.filter((l) => l.category === cat)])
     ) as Record<Category, BomLine[]>;
   }, [lines]);
 
@@ -446,10 +411,13 @@ function BomResultView({
     });
   };
 
+  // Re-derive grand total from the local lines so edits to unit_price
+  // ripple to the footer. Falls back to the server-provided total when
+  // there are no edits.
+  const linesGrandTotal = lines.reduce((s, l) => s + l.total, 0);
   const grandTotal =
-    bom.totals.total_price ??
-    bom.totals.total_cost ??
-    lines.reduce((s, l) => s + l.total, 0);
+    linesGrandTotal ||
+    (localBom.totals.total_price ?? localBom.totals.total_cost ?? 0);
 
   const generatedDate = useMemo(() => {
     try {
@@ -548,6 +516,53 @@ function BomResultView({
         </CardContent>
       </Card>
 
+      {/* Provenance summary — only shown when the upstream rules engine
+          has reported per-source counts. Lets designers see at a glance
+          which lines are deterministic (rules) vs estimated (AI). */}
+      {hasProvenance && (
+        <Card className="border-muted">
+          <CardContent className="p-4 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm">
+                <span className="font-semibold">{rulesCount}</span>{" "}
+                <span className="text-muted-foreground">
+                  rules-engine line{rulesCount === 1 ? "" : "s"} (deterministic)
+                </span>
+              </span>
+            </div>
+            {verifiedCount > 0 && (
+              <>
+                <Separator orientation="vertical" className="h-6 hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm">
+                    <span className="font-semibold">{verifiedCount}</span>{" "}
+                    <span className="text-muted-foreground">
+                      catalog-verified line{verifiedCount === 1 ? "" : "s"} (AI proposal confirmed by catalog)
+                    </span>
+                  </span>
+                </div>
+              </>
+            )}
+            <Separator orientation="vertical" className="h-6 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="text-sm">
+                <span className="font-semibold">{aiCount}</span>{" "}
+                <span className="text-muted-foreground">
+                  AI-estimated line{aiCount === 1 ? "" : "s"} (review)
+                </span>
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground sm:ml-auto no-print">
+              Green lines come from the catalog (rules engine or AI-then-verified).
+              Amber lines are pure AI inference — spot-check before sending to the client.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Category summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 no-print">
         {(Object.entries(CATEGORY_META) as [Category, typeof CATEGORY_META[Category]][]).map(
@@ -615,7 +630,21 @@ function BomResultView({
             ))}
           </SelectContent>
         </Select>
-        {(search || filterCategory !== "all") && (
+        {hasProvenance && (
+          <Select value={filterSource} onValueChange={(v) => setFilterSource(v as any)}>
+            <SelectTrigger className="h-9 text-sm w-40">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="rules">Rules engine only</SelectItem>
+              <SelectItem value="verified">Catalog-verified only</SelectItem>
+              <SelectItem value="ai">AI-estimated only</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {(search || filterCategory !== "all" || filterSource !== "all") && (
           <Button
             variant="ghost"
             size="sm"
@@ -623,6 +652,7 @@ function BomResultView({
             onClick={() => {
               setSearch("");
               setFilterCategory("all");
+              setFilterSource("all");
             }}
           >
             Clear
@@ -636,12 +666,16 @@ function BomResultView({
           .filter(([cat]) => filterCategory === "all" || filterCategory === cat)
           .map(([cat, catLines]) => {
             const meta = CATEGORY_META[cat];
-            const visibleLines = catLines.filter(
-              (l) =>
-                !search ||
-                l.standardName.toLowerCase().includes(search.toLowerCase()) ||
-                l.clientName.toLowerCase().includes(search.toLowerCase())
-            );
+            const visibleLines = catLines.filter((l) => {
+              if (filterSource !== "all" && l.source !== filterSource) return false;
+              if (!search) return true;
+              const needle = search.toLowerCase();
+              return (
+                l.standardName.toLowerCase().includes(needle) ||
+                l.clientName.toLowerCase().includes(needle) ||
+                (l.sku ?? "").toLowerCase().includes(needle)
+              );
+            });
             if (visibleLines.length === 0) return null;
             const subtotal = visibleLines.reduce((s, l) => s + l.total, 0);
             const expanded = expandedCategories.has(cat);
@@ -689,6 +723,14 @@ function BomResultView({
                         <thead>
                           <tr className="border-b bg-muted/30 text-muted-foreground">
                             <th className="text-left px-5 py-2.5 font-medium">Description</th>
+                            {hasProvenance && (
+                              <th className="text-left px-2 py-2.5 font-medium hidden lg:table-cell">
+                                Source
+                              </th>
+                            )}
+                            <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">
+                              SKU
+                            </th>
                             <th className="text-right px-3 py-2.5 font-medium">Qty</th>
                             <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">
                               Unit
@@ -703,9 +745,26 @@ function BomResultView({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/50">
-                          {visibleLines.map((line) => (
-                            <tr key={line.id} className="hover:bg-muted/20 transition-colors">
+                          {visibleLines.map((line) => {
+                            // line.id is "${cat}-${idx}" where idx is the
+                            // position in localBom.line_items.
+                            const lineIdx = Number(line.id.split("-").pop());
+                            return (
+                            <tr
+                              key={line.id}
+                              onClick={() => setEditingIdx(lineIdx)}
+                              className="hover:bg-emerald-500/[0.06] cursor-pointer transition-colors"
+                              title="Click to edit SKU / supplier / unit cost"
+                            >
                               <td className="px-5 py-2.5 font-medium">{line.clientName}</td>
+                              {hasProvenance && (
+                                <td className="px-2 py-2.5 hidden lg:table-cell">
+                                  <SourceBadge source={line.source} />
+                                </td>
+                              )}
+                              <td className="px-3 py-2.5 hidden md:table-cell font-mono text-[11px] text-muted-foreground">
+                                {line.sku ?? "—"}
+                              </td>
                               <td className="px-3 py-2.5 text-right">{line.qty}</td>
                               <td className="px-3 py-2.5 text-right text-muted-foreground hidden sm:table-cell">
                                 {line.unit}
@@ -720,12 +779,13 @@ function BomResultView({
                                 ${line.total.toFixed(2)}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                         <tfoot>
                           <tr className="border-t bg-muted/20">
                             <td
-                              colSpan={5}
+                              colSpan={hasProvenance ? 7 : 6}
                               className="px-5 py-2.5 font-semibold text-right hidden md:table-cell"
                             >
                               {meta.label} Subtotal
@@ -773,6 +833,123 @@ function BomResultView({
           </span>
         </CardContent>
       </Card>
+
+      {/* Edit drawer — reused from the Wrightsoft BOM page. AI-line
+          edits persist per-contractor via the same contractor_overrides
+          table; the backend applies them on the next BOM Engine run. */}
+      <EditLineDrawer
+        open={editingIdx !== null}
+        onOpenChange={(next) => { if (!next) setEditingIdx(null); }}
+        clientId={localBom.client_id}
+        line={editingIdx == null ? null : toEditable(localBom.line_items[editingIdx])}
+        onSaved={(saved) => {
+          if (editingIdx == null) return;
+          setLocalBom((prev) => {
+            const next = { ...prev, line_items: [...(prev.line_items as any[])] };
+            const li = { ...next.line_items[editingIdx] };
+            if (saved.id) {
+              li.override_id         = saved.id;
+              li.override_updated_at = saved.updated_at;
+              li.override_updated_by = saved.updated_by;
+            }
+            if (saved.corrected_sku)      li.sku          = saved.corrected_sku;
+            if (saved.corrected_supplier) li.manufacturer = saved.corrected_supplier;
+            if (saved.unit_price != null) {
+              const qty       = li.quantity ?? 0;
+              const markupPct = li.markup_pct ?? 0;
+              li.unit_cost  = saved.unit_price;
+              li.total_cost = Math.round(saved.unit_price * qty * 100) / 100;
+              const newUnitPrice = Math.round(saved.unit_price * (1 + markupPct / 100) * 100) / 100;
+              li.unit_price  = newUnitPrice;
+              li.total_price = Math.round(newUnitPrice * qty * 100) / 100;
+            }
+            // Promote AI-sourced lines to a verified-by-human tag so the
+            // SPA's three-state badge flips green after edit.
+            const src = li.source ?? "";
+            if (src.startsWith("ai")) {
+              li.source = "catalog_verified_manual";
+            }
+            next.line_items[editingIdx] = li;
+            return next;
+          });
+        }}
+      />
     </div>
+  );
+}
+
+// Project a raw line_item dict into the EditableLine shape the drawer
+// expects. AI lines may have nulls for supplier/sku — the drawer
+// accepts that and requires the user to fill them before save (which
+// is the catalog-building moment).
+function toEditable(li: any): EditableLine {
+  return {
+    manufacturer: li.manufacturer ?? null,
+    sku:          li.sku ?? null,
+    description:  li.description ?? null,
+    quantity:     li.quantity ?? null,
+    unit:         li.unit ?? null,
+    section:      li.section ?? null,
+    unit_cost:    li.unit_cost ?? null,
+    source:       li.source ?? null,
+    override_id:         li.override_id ?? null,
+    override_updated_by: li.override_updated_by ?? null,
+    override_updated_at: li.override_updated_at ?? null,
+  };
+}
+
+
+// ─── Source badge (Rules / Verified / AI) with hover tooltip ───────
+//
+// Reminds the team what each provenance tag actually means without
+// requiring them to re-read the long-form explanation banner. The
+// copy here is the single source of truth — if the meanings change
+// in bom_service.py, update here too.
+const SOURCE_META = {
+  rules: {
+    label: "Rules",
+    Icon:  ShieldCheck,
+    cls:   "border-emerald-600/30 text-emerald-700 dark:text-emerald-400",
+    title: "Deterministic",
+    body:  "Emitted straight from the catalog by an explicit rule. " +
+           "Quantities and SKUs are deterministic — no AI involved.",
+  },
+  verified: {
+    label: "Verified",
+    Icon:  ShieldCheck,
+    cls:   "border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
+    title: "AI proposal, catalog-verified",
+    body:  "AI proposed this line, but its SKU was confirmed against " +
+           "Tom's bundled Wrightsoft catalog after the fact. Same " +
+           "trust level as Rules.",
+  },
+  ai: {
+    label: "AI",
+    Icon:  Sparkles,
+    cls:   "border-amber-600/30 text-amber-700 dark:text-amber-400",
+    title: "Pure AI inference",
+    body:  "AI estimated this line and the catalog couldn't confirm " +
+           "the SKU. Either no SKU was emitted, or the SKU isn't in " +
+           "the bundled catalog yet. Spot-check before sending to a " +
+           "customer.",
+  },
+} as const;
+
+function SourceBadge({ source }: { source: "rules" | "verified" | "ai" }) {
+  const meta = SOURCE_META[source] ?? SOURCE_META.ai;
+  const { Icon } = meta;
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className={`text-[10px] gap-1 cursor-help ${meta.cls}`}>
+          <Icon className="w-3 h-3" />
+          {meta.label}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-xs text-xs">
+        <div className="font-semibold mb-0.5">{meta.title}</div>
+        <div className="text-muted-foreground">{meta.body}</div>
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -1,0 +1,229 @@
+# Contractor rules ledger — Reliable Heating and Cooling
+#
+# One entry per rule. This ledger is the substitute for the master
+# contractor-profile record that does NOT exist on Richard's side
+# (confirmed 2026-07-13: "what do you mean using contractor profiles?").
+#
+# source:  derived            — inferred from corpus analysis, unverified
+#          richard-slack      — stated by Richard in Slack
+#          richard-meeting    — stated by Richard in a meeting/walkthrough
+#          richard-qa-form    — answered via the QA review UI
+#          team-meeting       — stated by Tom/Catherine/team
+# status:  unconfirmed | confirmed | denied | superseded
+#
+# Rules are conditional and plural by design — Richard's "no single
+# rule for all" is honored by scoping rules (community, system type)
+# rather than forcing one global default.
+
+meta:
+  contractor_id: reliable-heating-and-cooling
+  contractor_name: Reliable Heating and Cooling
+  created: 2026-07-15
+  corpus_basis: "Zoho archive sync 2026-07-14/15 — 12 communities, ~4,300+ files (sync completing)"
+
+rules:
+  # ── Business scope ────────────────────────────────────────────────
+  - id: reliable.bom.scope
+    statement: >
+      BOMs are produced ONLY for Rheia projects. Standard projects get
+      no BOM today — automating standard-project BOMs is the goal of
+      the BOM module.
+    source: team-meeting
+    evidence: "Gerald, from team meeting night of 2026-07-14"
+    status: confirmed
+    confirmed_at: 2026-07-14
+    notes: >
+      Corpus corroborates: Windham Park has 151 rups but only ~15 BOM
+      xls; heavy-Rheia communities (Aulin 313/300) are near 1:1.
+
+  - id: reliable.profile.no_master_record
+    statement: >
+      No master record of contractor profiles/rules exists on
+      Richard's side. The corpus-derived ledger (this file) is the
+      only consolidated record.
+    source: richard-slack
+    evidence: "Richard 2026-07-13: 'what do you mean using contractor profiles?'"
+    status: confirmed
+    confirmed_at: 2026-07-13
+
+  # ── Workflow facts (from Richard directly) ────────────────────────
+  - id: reliable.heat_strip.manual_insertion
+    statement: >
+      Heat strips are inserted manually per project — Wrightsoft does
+      not auto-populate them from the load calc.
+    source: richard-meeting
+    evidence: "Richard's BOM walkthrough (Slack conversation, early July 2026)"
+    status: confirmed
+    confirmed_at: 2026-07-08
+
+  - id: reliable.data.everything_in_ws
+    statement: >
+      All project design data lives in Wrightsoft ("everything is in
+      WS" — Tom). Interpreted: the INPUTS to a BOM are fully in the
+      .rup; the transformation rules are not.
+    source: team-meeting
+    evidence: "Tom, quoted by Gerald"
+    status: confirmed
+
+  # ── Equipment defaults (derived — need Richard confirmation) ──────
+  - id: reliable.erv.default
+    statement: "Broan B150E75NT is the default ERV."
+    source: derived
+    evidence: "94.6% of 221 matched Rheia projects (2026-07-14 partial corpus)"
+    status: unconfirmed
+    caveat: "Rheia-project sample only; standard projects may differ."
+
+  - id: reliable.heat_strip.default
+    statement: "HKTSD05X1 (Goodman 5kW) is the default electric heat kit."
+    source: derived
+    evidence: "79.2% of matched projects; HKSTD05X1 (Daikin) on 18.1%"
+    status: unconfirmed
+    open_question: "What rule selects strip size / Daikin variant? (QA aggregate H-1)"
+
+  - id: reliable.air_handler.default
+    statement: "Goodman AHVE24BP1300A is the default air handler."
+    source: derived
+    evidence: "72.4% of matched projects"
+    status: unconfirmed
+
+  - id: reliable.condenser.default
+    statement: "Goodman GZV6SA1810A (1.5-ton HP) is the default condenser; GZV6SA2410A (2-ton) when load requires."
+    source: derived
+    evidence: "54.8% / 17.6% of matched projects"
+    status: unconfirmed
+    open_question: "Trigger for Daikin alternates (DFVE24BP*/DZ6VSA*, ~11%)?"
+
+  - id: reliable.brand.tiers
+    statement: >
+      Brand hierarchy: Goodman (primary equipment), Broan (ventilation),
+      Daikin (alternate line). No Trane/Bryant/Carrier in production.
+    source: derived
+    evidence: "Corpus brand distribution: Goodman 646 placements, Daikin 140, zero Trane"
+    status: unconfirmed
+    notes: "79th Ct 'Edge Case' file (Trane) is a P99+ outlier, not representative."
+
+  # ── Duct system (Rheia projects) ──────────────────────────────────
+  - id: reliable.rheia.duct_system
+    statement: >
+      Rheia small-diameter duct system is used on Rheia projects: 12
+      core SKUs (10-00-190 3-in duct, 10-01-010 ferrule, boot
+      assemblies, diffusers, takeoffs, hangers) appear on 100% of
+      BOM-bearing projects.
+    source: derived
+    evidence: "12 SKUs at 100% appearance across 221 matched pairs"
+    status: unconfirmed
+    caveat: >
+      100% appearance is partially selection bias (BOMs only exist for
+      Rheia projects) — but conditional claim holds: IF Rheia project
+      THEN these SKUs.
+
+  - id: reliable.rheia.pricing_gap
+    statement: >
+      RHEA-sourced SKUs carry no price in Reliable's Wrightsoft
+      (wrightsoft_price=None on every occurrence). Pricing lives
+      outside WS — need Richard/Rheia price sheet.
+    source: derived
+    evidence: "0 of ~2,600 RHEA line occurrences priced in corpus xls"
+    status: unconfirmed
+    open_question: "QA aggregate P-1..P-12: per-unit prices for the 12 core SKUs"
+
+  # ── Open structural questions ─────────────────────────────────────
+  - id: reliable.ws.report_toggles
+    statement: >
+      UNKNOWN: which Wrightsoft report/BOM toggles Richard keeps fixed
+      vs. varies per project. Toggle state may or may not be
+      recoverable from the .rup (investigation pending).
+    source: derived
+    evidence: "Gap identified 2026-07-14; no parser coverage yet"
+    status: unconfirmed
+    open_question: >
+      Ask Richard: 'when you export a Master BOM, do you always tick
+      the same checkboxes on the report screen, or does it change by
+      project?'
+
+  # ── From the Phase-1 reproduction pilot (2026-07-15) ──────────────
+  - id: reliable.erv.always_added
+    statement: >
+      A Broan B150E75NT ERV is added to (nearly) every proposal at
+      BOM time — it is NOT in the .rup design file (byte-probe
+      proven absent).
+    source: derived
+    evidence: "19/20 stratified pilot pairs; 94.6% of full corpus"
+    status: unconfirmed
+    open_question: >
+      QA card: "Every plan gets a B150E75NT ERV unless ___?"
+      (the 1/20 exception was a plan that used B150E75NS instead —
+      possibly a spec revision, worth asking which is current).
+
+  - id: reliable.dehumidifier.lot_trigger
+    statement: >
+      A Broan B33DHW dehumidifier is added on ~45% of projects. The
+      trigger is LOT-level, not community or plan: within every
+      Aulin/Greenleaf plan the split is ~50/50, but Vintner Reserve
+      never gets one.
+    source: derived
+    evidence: >
+      Corpus scan 2026-07-15: Aulin 48/109, Greenleaf 144/226,
+      Vintner 0/65; within-plan splits T331 16/37, T332 23/44,
+      T333 21/43, T075 45/69, T076 54/90, T077 45/67.
+    status: unconfirmed
+    open_question: >
+      QA card: "What decides a B33DHW dehumidifier on a lot —
+      orientation, floor level, code cycle, client option, or a
+      spec change partway through the community? (Vintner Reserve
+      never has one — why is it exempt?)"
+
+  - id: reliable.rheia.boots_equal_registers_minus_one
+    statement: >
+      Rheia boot assemblies total = drawn registers − 1; diffusers
+      total = registers − 1; ceiling diffusers pair 1:1 with ceiling
+      boots and slotted diffusers with sidewall/pass-through boots.
+    source: derived
+    evidence: "Exact on 20/20 pilot pairs (repro_run_2026-07-15)"
+    status: unconfirmed
+    notes: "Implemented as engine rule (rheia_register_rule_v1); the −1 is presumed the return."
+
+  - id: reliable.rheia.hanger_bar_rule_unknown
+    statement: >
+      Hanger Bar Assembly (00-00-240) quantity has NO deterministic
+      derivation from the .rup: 1.37–2.0× home-run count across
+      pairs; no per-run spacing divisor (3–8 ft) fits; two-variable
+      fit (runs + footage) leaves errors up to 15.
+    source: derived
+    evidence: "repro pilot 2026-07-15, 20 pairs with decoded home-run data"
+    status: unconfirmed
+    open_question: >
+      QA card: "How do you count hanger bars — per run, per N feet
+      of tubing, per floor/joist type? Park View runs ~2.0 per run
+      while most communities run ~1.4 — what's different there?"
+
+  # ── From the client spec sheets (full-corpus pass, 2026-07-15) ─────
+  - id: reliable.goodman_daikin.equivalence
+    statement: >
+      The Goodman↔Daikin brand alternation is an EQUIVALENCE, not a
+      preference: lot folders carry an AHRI directory export named
+      "R32 FIT HP WITH GOODMAN EQUIVALENT.xlsx" (62 copies) listing
+      Daikin DH6VSA/DFVE combos — Goodman DZ6VSA/GZV6SA units are the
+      same Daikin-platform hardware under the R32 refrigerant
+      transition. The alt-equipment QA question likely answers itself:
+      whichever badge is available/spec'd, ratings match via AHRI ref.
+    source: derived
+    evidence: "62 identical AHRI exports across Aulin lot folders"
+    status: unconfirmed
+    notes: "Confirm with Richard in one line rather than a full card."
+
+  - id: reliable.rheia.official_design_process
+    statement: >
+      Rheia's own Design Checklist (found in corpus:
+      'Rheia Design Checklist_T076 Magnolia_09.29.22.xlsx') confirms:
+      manifold hole count == register count (matches our
+      boots=registers rule); ducts are sized 3" OR 4" per run (DUCT
+      record duct_code can split 10-00-190 vs 20-00-190 footage);
+      elbow/riser rules live in public Rheia docs ('When to Include
+      Elbows in a Design', Engineering Design Manual at
+      rheiacomfort.com); runs may be deleted for rooms <10 CFM with
+      builder approval.
+    source: derived
+    evidence: "Rheia checklist xlsx in Towns at Riverwalk T076 folder"
+    status: confirmed
+    notes: "This is Rheia's own document — treat as authoritative for the duct-system derivation rules."

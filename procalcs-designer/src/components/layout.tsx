@@ -19,6 +19,17 @@ import {
   Activity,
   Sun,
   Moon,
+  Beaker,
+  ListChecks,
+  GitCompareArrows,
+  Play,
+  Tag,
+  PackagePlus,
+  Sparkles,
+  FileSearch,
+  GitBranch,
+  DollarSign,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,9 +58,25 @@ const navigation = [
   { name: "SKU Catalog", href: "/sku-catalog", icon: PackageSearch, section: "BOM Management" },
   { name: "BOM Engine", href: "/bom-engine", icon: Cpu, section: "Processing" },
   { name: "BOM Output", href: "/bom-output", icon: FileStack, section: "Processing" },
+  { name: "Rules Preview", href: "/diagnostics/rules-preview", icon: Beaker, section: "Diagnostics" },
+  { name: "Run History",   href: "/diagnostics/run-history",   icon: ListChecks, section: "Diagnostics" },
+  { name: "Run Diff",      href: "/diagnostics/run-diff",      icon: GitCompareArrows, section: "Diagnostics" },
+  { name: "Eval Batch",    href: "/diagnostics/eval-batch",    icon: Play, section: "Diagnostics" },
+  { name: "Regression Suites", href: "/diagnostics/regression-suites", icon: Tag, section: "Diagnostics" },
+  { name: "Confidence Trend",  href: "/diagnostics/confidence-trend",  icon: Activity, section: "Diagnostics" },
+  { name: "Wrightsoft BOM (v1)",  href: "/diagnostics/wrightsoft-bom",     icon: PackagePlus, section: "Diagnostics" },
+  { name: "Wrightsoft BOM (v2)",  href: "/diagnostics/wrightsoft-bom-v2",  icon: Sparkles,    section: "Diagnostics" },
+  { name: "Catalog Coverage",  href: "/diagnostics/catalog-coverage",  icon: Database, section: "Diagnostics" },
+  { name: "SKU Backlog",       href: "/diagnostics/sku-backlog",       icon: PackagePlus, section: "Diagnostics" },
+  { name: "RUP Inspector",     href: "/diagnostics/rup-inspect",       icon: FileSearch, section: "Diagnostics" },
+  { name: "DFUnit Explorer",   href: "/diagnostics/dfunit-explorer",   icon: Cpu, section: "Diagnostics" },
+  { name: "Mapping Browser",   href: "/diagnostics/mapping-browser",   icon: GitBranch, section: "Diagnostics" },
+  { name: "Pricing Import",    href: "/pricing/import",                icon: Upload,       section: "Pricing" },
+  { name: "Pricing Overrides", href: "/pricing/overrides",             icon: DollarSign,   section: "Pricing" },
+  { name: "Consumables",       href: "/pricing/consumables",           icon: Beaker,       section: "Pricing" },
 ];
 
-const sections = ["Overview", "BOM Management", "Processing"];
+const sections = ["Overview", "BOM Management", "Processing", "Pricing", "Diagnostics"];
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
@@ -59,9 +86,14 @@ export function Layout({ children }: LayoutProps) {
   const { data: currentUser } = useCurrentUser();
   const logout = useLogout();
 
-  const activeItem = navigation.find(
-    (item) => location === item.href || (item.href !== "/" && location.startsWith(item.href))
-  );
+  // Longest-prefix wins so /diagnostics/wrightsoft-bom-v2 highlights
+  // the v2 entry only, not both v2 AND v1 (v1's shorter prefix would
+  // otherwise also match).
+  const activeItem = [...navigation]
+    .filter((item) =>
+      location === item.href || (item.href !== "/" && location.startsWith(item.href))
+    )
+    .sort((a, b) => b.href.length - a.href.length)[0];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -107,9 +139,9 @@ export function Layout({ children }: LayoutProps) {
                 {collapsed && <div className="h-3" />}
                 <div className="space-y-0.5">
                   {items.map((item) => {
-                    const isActive =
-                      location === item.href ||
-                      (item.href !== "/" && location.startsWith(item.href));
+                    // Same longest-prefix rule as activeItem above —
+                    // only the winning nav entry lights up.
+                    const isActive = activeItem?.href === item.href;
 
                     const linkEl = (
                       <Link key={item.name} href={item.href}>

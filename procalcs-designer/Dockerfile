@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build for procalcs-designer.
 #   Stage 1 (builder): install all deps, build SPA (Vite → dist/) + server (esbuild → dist-server/)
-#   Stage 2 (runtime): node:20-alpine with only dist/, dist-server/, and prod node_modules
+#   Stage 2 (runtime): node:24-alpine with only dist/, dist-server/, and prod node_modules
 
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Install deps first (cache layer)
@@ -20,7 +20,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080

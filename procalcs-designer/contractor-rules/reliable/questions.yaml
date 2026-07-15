@@ -1,0 +1,154 @@
+# Question ledger — Reliable BOM learning loop
+#
+# Gerald's loop (2026-07-15): every corpus pass generates clarification
+# questions; later passes close them with evidence or open new ones.
+# Richard sees ONLY the stubborn tail, once, when the loop converges.
+#
+# Closure tiers (evidence bar — amendment 1):
+#   closed-deterministic  exact mechanism, corpus-exact evidence
+#   closed-documentary    an artifact in the corpus answers it
+#   provisional           correlational answer — becomes a one-line
+#                         CONFIRMATION for Richard, never silently closed
+#   open                  unanswered, still corpus-answerable in principle
+#   not-in-data           provably unanswerable from the archive → Richard
+#
+# Materiality rule (amendment 2): a question enters only if its answer
+# changes BOM output. Stopping rule (amendment 3): loop converges when a
+# pass closes 0 and opens 0 material questions.
+#
+# Passes: P0=20-pair pilot · P1=full-corpus run · P2=plan-memo +
+# correlation pass (2026-07-15 overnight)
+
+questions:
+  - id: q.takeoff_quantities
+    asked_in: P0
+    question: "What determines duct-board takeoff inside/outside quantities?"
+    status: closed-deterministic
+    closed_in: P1
+    answer: "= home-run count, integer-exact on 762/762 clean pairs."
+
+  - id: q.duct_footage_source
+    asked_in: P0
+    question: "Where does the 10-00-190 footage come from — geometry or manual?"
+    status: closed-deterministic
+    closed_in: P1
+    answer: "ceil(Σ per-run routed lengths) from the DUCT block; exact on 71% of pairs, remainder is rup↔xls revision skew."
+
+  - id: q.goodman_daikin_trigger
+    asked_in: P0
+    question: "What triggers Daikin equipment instead of Goodman (~11-18%)?"
+    status: closed-documentary
+    closed_in: P1
+    answer: "R32-platform equivalence (Goodman is Daikin-owned rebadge) — 62 AHRI export sheets in lot folders. Not a choice; same hardware."
+
+  - id: q.boot_diffuser_totals
+    asked_in: P0
+    question: "How do boot/diffuser totals relate to the design?"
+    status: closed-deterministic
+    closed_in: P0
+    answer: "= registers − 1 (later: = home-run count); corroborated by Rheia's own checklist (manifold holes == registers)."
+
+  - id: q.fitting_hardware_quantities
+    asked_in: P0
+    question: "What rule sets ferrule/elbow/coupler/hanger quantities?"
+    status: closed-deterministic
+    closed_in: P2
+    answer: >
+      Per-plan constant; plan memo (learned from prior BOMs of the same
+      plan) reproduces them — holdout-validated recall 0.652→0.739 with
+      no precision cost, applicable to 81% of pairs / 94% of lots.
+      Underlying Rheia formula (elbow placement) remains unknown but is
+      not needed for BOM generation.
+
+  - id: q.ceiling_sidewall_split
+    asked_in: P0
+    question: "What splits ceiling vs sidewall/pass-through boots per plan?"
+    status: open
+    note: "Mount type per register — likely in drawing objects (undecoded); plan memo covers known plans, split needed only for NEW plans."
+
+  - id: q.takeoff_sku_generation
+    asked_in: P1
+    question: "Why do communities split between 040/050 and 041/051 takeoff SKUs?"
+    status: provisional
+    answer_hypothesis: "Product generation change over community eras (older communities on 040/050)."
+    confirmation_line: "We map takeoff SKU generation per community from your history — correct going forward?"
+
+  - id: q.heat_strip_rule
+    asked_in: P0
+    question: "What sizes the electric heat strip (HKTSD05X1 on 79%)?"
+    status: provisional
+    closed_in: P2
+    answer_hypothesis: >
+      Two-part: (a) the placed strip model is ALREADY in the .rup EQUIP
+      block on 68% of pairs — copying it matches the xls 725/734
+      (98.8%; the 9 misses are revision skew). (b) Where absent
+      (Creekside/Pennyroyal/Park View era), kW varies 3–10 within the
+      same tonnage — consistent with Manual-J heating-load sizing
+      (loads not yet binary-decodable). Tonnage is NOT the rule
+      (identical to always-5kW at 88.2%).
+    confirmation_line: >
+      "When the design file has no heat strip placed, what sizes it —
+      Manual-J backup heat in kW bands? Give the bands."
+    note: "Engine action: copy strip from EQUIP when present; flag needs-input otherwise." 
+
+  - id: q.dehumidifier_trigger
+    asked_in: P0
+    question: "What decides a B33DHW dehumidifier on a lot (~45%, lot-level)?"
+    status: provisional
+    closed_in: P2
+    answer_hypothesis: >
+      A date/code-cycle effect, not a lot property: 6 communities never
+      have it (334/334 deterministic gate); in mixed communities the
+      predictor is equipment generation + change-order stage
+      (Daikin-spec era → yes 84.7%; GZV6/SEER2 era → no; CO1 90% with,
+      CO2 72% without). Combined rule 93.1% (773/830 unique BOMs).
+      78 lots have BOTH with/without revisions for the same lot.
+    confirmation_line: >
+      "On e.g. Aulin Bldg 2 Lot 14, B33DHW was added at CO1 and dropped
+      at CO2 — what changed? Code cycle, spec revision, or client
+      option? (6 communities never get one.)"
+    note: "Engine action: apply the 93% era rule, flag low-confidence." 
+
+  - id: q.erv_exception
+    asked_in: P0
+    question: "Every plan gets a B150E75NT ERV unless ___? (B150E75NS seen once)"
+    status: open
+    note: "Check NS-vs-NT by community/date in a P3 pass before asking."
+
+  - id: q.rheia_unit_prices
+    asked_in: P0
+    question: "Per-unit prices for the Rheia SKUs?"
+    status: not-in-data
+    closed_in: P3
+    evidence: >
+      Sample estimate PDF read (Estimate_15681, Acuera Lot 22): the
+      archive's pricing documents are ProCalcs' DESIGN-SERVICE
+      estimates billed to the builder (Beazer Homes - Orlando), e.g.
+      "$125 Change Order to RNC project" — not parts pricing. Rheia
+      hardware is purchased by the installing contractor; their
+      invoices were never in this design archive. Full sweep
+      continues as confirmation, but the Forms/ pattern is uniform.
+    for_richard: "Rheia price sheet — the one unavoidable paste."
+
+
+  - id: q.equipment_prices
+    asked_in: P0
+    question: "Reliable's cost for Goodman/Daikin/Broan equipment?"
+    status: not-in-data
+    closed_in: P3
+    evidence: "Same as q.rheia_unit_prices — archive holds design-side documents only."
+    for_richard: "Equipment cost sheet (or supplier + we quote list)." 
+
+  - id: q.ws_report_toggles
+    asked_in: P0
+    question: "Are Richard's BOM-export toggles fixed or per-project?"
+    status: open
+    note: "May be answerable by diffing xls column structure across corpus (P3 candidate) — identical structure everywhere ⇒ fixed toggles."
+
+  - id: q.revision_skew
+    asked_in: P1
+    question: "Why do 312 pairs have rup↔xls footage mismatch?"
+    status: provisional
+    answer_hypothesis: "Finals rup re-saved after BOM export (revision skew); Working Drawings chains hold the matching revision."
+    confirmation_line: none  # internal data-hygiene question, not for Richard
+    note: "P3: match xls against WD revisions to recover ground truth."
