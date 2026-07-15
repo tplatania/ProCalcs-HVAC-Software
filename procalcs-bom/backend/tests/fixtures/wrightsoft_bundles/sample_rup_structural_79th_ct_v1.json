@@ -1,0 +1,38 @@
+{
+  "bundle_source":         "rup_structural",
+  "bundle_schema_version": "v1",
+  "producer_metadata": {
+    "wrightsoft_version":  null,
+    "catalog_version":     null,
+    "catalog_schemas":     null,
+    "producer_hostname":   "procalcs-hvac-bom-staging",
+    "producer_id":         "rup-structural-parser-v0.1",
+    "extracted_at":        "2026-07-08T02:15:00.000000Z"
+  },
+  "project": {
+    "name":              "79th Ct Residence",
+    "rup_filename":      "79th Ct Residence Load Calcs.rup",
+    "investment_index":  0,
+    "notes":             "Path A extraction — prices intentionally absent; consumer fills from hosted catalog"
+  },
+  "line_items": [
+    {"part_no": "DDVn08", "description": "Round vinyl duct, D = 8\"",
+     "category": "WSFDCT", "part_source": "WSF",
+     "quantity": 73.0, "unit": "ea",
+     "producer_notes": "structural DUCTRUN decode; rup byte offset 0x1a2c4"},
+    {"part_no": "FBTI-1010-7", "description": "Ceiling round boot 10x10x7",
+     "category": "WSFFTR", "part_source": "WSF",
+     "quantity": 4.0, "unit": "ea",
+     "producer_notes": "structural FITNG decode; rup byte offset 0x2e8f0"}
+  ],
+  "zones": [
+    {"zone_name": "AHU - 1",
+     "cooling": {"type": "Split AC", "manufacturer": "Trane",
+                 "condenser_model": "5TTV0X60A1", "coil_model": "5TAMXD07AV51",
+                 "capacity_btu": 53000, "seer": 21.0, "hspf": null, "afue": null},
+     "heating": {"type": "Elec strip", "manufacturer": "Trane",
+                 "model": "", "output_btu": 26273},
+     "backup_heat": null,
+     "load_percent": null}
+  ]
+}

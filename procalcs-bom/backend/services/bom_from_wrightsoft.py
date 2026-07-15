@@ -100,6 +100,7 @@ def build_bom_from_wrightsoft_lines(
     # Day-15 — Equipment lines whose model number matched a row in the
     # 1.4M-row AHRI library, so we attached SEER/HSPF/AFUE/AHRI ref.
     ahri_count = 0
+    arigama2_spec_count = 0
     # Day-12 — collected for the discovered_mappings auto-learn write.
     # Each entry is the minimum needed for upsert_many. Populated
     # only on the passthrough branch (the catalog branches are already
@@ -181,6 +182,14 @@ def build_bom_from_wrightsoft_lines(
         # bundled catalog doesn't cover this part. Used by the
         # passthrough branch below.
         wsf_src = (raw.get("src") or "").strip().upper() or None
+        # Day-20 — Path A tuple for the hosted-catalog price lookup.
+        # (category, psrc, pn) as Wrightsoft would key it into
+        # RPRUWSF.mdb::ActItem. Only used inside _priced_line and only
+        # when the profile's use_wrightsoft_hosted_catalog flag is on.
+        _wsf_category = (catalog_row.get("Category") or
+                         raw.get("category") or "").strip() or None
+        _wsf_psrc = wsf_src
+        _wsf_pn = gen_id
 
         # Day-13 — check for a contractor-level manual override BEFORE
         # any source branching. The override applies regardless of
@@ -228,6 +237,9 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
                 wrightsoft_price=raw.get("wrightsoft_price"),
+                wsf_category=_wsf_category,
+                wsf_psrc=_wsf_psrc,
+                wsf_pn=_wsf_pn,
             )
             # Attach the spec dict so PDF / SPA can display capacity,
             # dimensions, weight without re-looking up DFUnit downstream.
@@ -249,6 +261,9 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
                 wrightsoft_price=raw.get("wrightsoft_price"),
+                wsf_category=_wsf_category,
+                wsf_psrc=_wsf_psrc,
+                wsf_pn=_wsf_pn,
             )
         elif wsf_src:
             # Wrightsoft told us who supplies this part (Src column) and
@@ -334,6 +349,9 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
                 wrightsoft_price=raw.get("wrightsoft_price"),
+                wsf_category=_wsf_category,
+                wsf_psrc=_wsf_psrc,
+                wsf_pn=_wsf_pn,
             )
         else:
             # No catalog match AND no Src column — genuinely unmapped.
@@ -354,6 +372,9 @@ def build_bom_from_wrightsoft_lines(
                 get_unit_cost=_get_unit_cost,
                 get_markup_pct=_get_markup_pct,
                 wrightsoft_price=raw.get("wrightsoft_price"),
+                wsf_category=_wsf_category,
+                wsf_psrc=_wsf_psrc,
+                wsf_pn=_wsf_pn,
             )
 
         # Day-13 — apply contractor-level overrides on every line that
@@ -444,6 +465,21 @@ def build_bom_from_wrightsoft_lines(
             if ahri_row:
                 line["ahri_spec"] = wsc.ahri_line_spec(ahri_row)
                 ahri_count += 1
+            elif not line.get("ahri_spec"):
+                # Day-21 — arigama2 fat-table fallback. When AHRI has
+                # nothing on this model AND the line didn't already
+                # come with an ahri_spec (bundle path attaches its own
+                # from ValidateProject), try the arigama2 catalog. Best-
+                # effort — silent fallthrough on miss so nothing
+                # regresses when the model isn't in ARI/GAMA either.
+                a2_spec = _arigama2_spec_lookup(
+                    manufacturer=line.get("manufacturer"),
+                    model=gen_id,
+                )
+                if a2_spec:
+                    line["ahri_spec"] = a2_spec
+                    line["ahri_spec_source"] = "arigama2"
+                    arigama2_spec_count += 1
 
         line_items.append(line)
 
@@ -566,13 +602,125 @@ def build_bom_from_wrightsoft_lines(
     except Exception as exc:  # noqa: BLE001 — best-effort enrichment
         logger.warning("quick_order build skipped: %s", exc)
 
+    # Day-21 — hydrate manufacturer 4-char codes into display names
+    # via the arigama2 catalog (TRAN → "Trane" etc.). Best-effort;
+    # unknown codes stay as-is so nothing regresses on catalog miss.
+    try:
+        _hydrate_manufacturer_names(line_items)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("manufacturer hydration skipped: %s", exc)
+
     logger.info(
         "Wrightsoft BOM built for job %s — %d lines "
-        "(%d manual / %d mapped / %d discovered / %d passthrough / %d unmapped)",
+        "(%d manual / %d mapped / %d discovered / %d passthrough / %d unmapped"
+        " / %d AHRI enriched / %d arigama2 fallback)",
         job_id, len(line_items), manual_count, mapped_count,
         discovered_count, passthrough_count, unmapped_count,
+        ahri_count, arigama2_spec_count,
     )
     return bom
+
+
+def _arigama2_spec_lookup(*, manufacturer: str | None,
+                            model: str | None
+                            ) -> dict | None:
+    """Look up an equipment model in the arigama2 fat tables and return
+    an ahri_spec-shaped dict, or None if not found or on error.
+
+    Tries AC first (most common), then HP. Doesn't try FURNACE here —
+    that path is only reached for equipment lines where AHRI missed,
+    and furnace models are usually well-covered by AHRI/DFUnit. The
+    spec dict matches the shape wrightsoft_bundle_adapter builds:
+    (product_type, manufacturer, condenser_model, coil_model,
+    capacity_btu, seer, hspf, afue, ari_refno, trade_name).
+    """
+    if not (manufacturer and model):
+        return None
+    try:
+        from services import wrightsoft_catalog as _wsc
+        client = _wsc._get_client()
+        if client is None:
+            return None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("arigama2 spec lookup: catalog client unavailable: %s",
+                     exc)
+        return None
+    try:
+        # AC first — try both condenser_model and coil_model since some
+        # equipment lines carry the coil identifier as gen_id (Wrightsoft's
+        # BOM line sometimes lists the coil rather than the condenser).
+        rows = client.arigama2_ac_by_model(
+            manufacturer=manufacturer, condenser_model=model,
+        )
+        product_type = "AC"
+        if not rows:
+            rows = client.arigama2_ac_by_model(
+                manufacturer=manufacturer, coil_model=model,
+            )
+        if not rows:
+            rows = client.arigama2_hp_by_model(
+                manufacturer=manufacturer, condenser_model=model,
+            )
+            product_type = "Heat pump"
+        if not rows:
+            rows = client.arigama2_hp_by_model(
+                manufacturer=manufacturer, coil_model=model,
+            )
+        if not rows:
+            return None
+        top = rows[0]  # highest-capacity match (server sorts DESC)
+        return {
+            "product_type":    product_type,
+            "manufacturer":    manufacturer,
+            "condenser_model": top.get("condenser_model") or model,
+            "coil_model":      top.get("coil_model"),
+            "capacity_btu":    int(top["capacity"]) if top.get("capacity") else None,
+            "seer":            top.get("seer"),
+            "hspf":            top.get("hspf"),
+            "afue":            None,
+            "ari_refno":       top.get("ari_refno"),
+            "trade_name":      top.get("trade_name"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("arigama2 spec lookup failed for %s / %s: %s",
+                     manufacturer, model, exc)
+        return None
+
+
+def _hydrate_manufacturer_names(line_items: list) -> None:
+    """Convert 4-char Wrightsoft manufacturer codes (TRAN, BRYA...)
+    on line_items' `manufacturer` field into human-readable names
+    ("Trane", "Bryant"...). Batches one round-trip against the
+    arigama2 catalog. Silently no-ops if the catalog client is
+    unavailable or the endpoint doesn't recognize the code."""
+    # A 4-char alphanumeric all-caps string is the Wrightsoft code shape.
+    # Anything else (blank, already-display name, longer string) skip.
+    codes = set()
+    for li in line_items:
+        m = (li.get("manufacturer") or "").strip()
+        if len(m) == 4 and m.isupper() and m.isalnum():
+            codes.add(m)
+    if not codes:
+        return
+    try:
+        from services import wrightsoft_catalog as _wsc
+        client = _wsc._get_client()
+        if client is None:
+            return
+        resolved = client.arigama2_manufacturer_batch(list(codes))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("arigama2 batch lookup failed: %s", exc)
+        return
+    if not resolved:
+        return
+    for li in line_items:
+        m = (li.get("manufacturer") or "").strip()
+        if m in resolved:
+            entry = resolved[m]
+            display = entry.get("mfr") or entry.get("mfrname") or entry.get("mfr_name")
+            if display:
+                li["manufacturer_code"] = m
+                li["manufacturer"] = display
 
 
 # ─── Internals ──────────────────────────────────────────────────────
@@ -653,6 +801,9 @@ def _priced_line(
     get_unit_cost,
     get_markup_pct,
     wrightsoft_price: Optional[float] = None,
+    wsf_category: Optional[str] = None,
+    wsf_psrc: Optional[str] = None,
+    wsf_pn: Optional[str] = None,
 ) -> dict[str, Any]:
     """Apply markup + estimated-cost fallback to a single line. Shared
     between the mapped and unmapped paths so the cost math is consistent.
@@ -660,10 +811,38 @@ def _priced_line(
     Day-16: when our bundled catalog has no price for the SKU AND
     Wrightsoft itself wrote a per-unit price in the source .xls, fall
     back to that. Without this fallback, Richard's 81-line oracle BOM
-    came out as $12.75 vs Wrightsoft's $2,149.81."""
-    unit_cost = float(get_unit_cost(description, category, profile) or 0.0)
-    if unit_cost == 0.0 and wrightsoft_price and wrightsoft_price > 0:
-        unit_cost = float(wrightsoft_price)
+    came out as $12.75 vs Wrightsoft's $2,149.81.
+
+    Day-20+: when the contractor's profile has
+    use_wrightsoft_hosted_catalog=True AND we have Wrightsoft category
+    + psrc + pn, prefer the hosted-catalog price (which applies the
+    real ActCateg discount + margin rules Wrightsoft uses at BOM
+    assembly). Falls back to the existing get_unit_cost + wrightsoft_
+    price chain when the hosted catalog has no entry."""
+    # Day-20 — Path A rollout: try hosted catalog first when
+    # profile flag is on. Returns None when disabled OR unknown SKU —
+    # both trigger fallthrough to the existing v1 pricing path so
+    # nothing regresses when the flag is off.
+    hosted_price = None
+    if wsf_pn:
+        try:
+            from services.hosted_catalog_pricing import get_hosted_price
+            hosted_price = get_hosted_price(
+                profile,
+                category=wsf_category,
+                psrc=wsf_psrc,
+                pn=wsf_pn,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("hosted_catalog_pricing skipped: %s", exc)
+            hosted_price = None
+
+    if hosted_price and hosted_price.get("unit_price") and hosted_price["unit_price"] > 0:
+        unit_cost = float(hosted_price.get("cost") or hosted_price["unit_price"])
+    else:
+        unit_cost = float(get_unit_cost(description, category, profile) or 0.0)
+        if unit_cost == 0.0 and wrightsoft_price and wrightsoft_price > 0:
+            unit_cost = float(wrightsoft_price)
     is_estimate = False
     # Equipment-category items with no mapped catalog cost still get
     # the estimated-cost fallback from bom_service so they don't emit
@@ -709,6 +888,12 @@ def _priced_line(
         line["manufacturer"] = manufacturer
     if is_estimate:
         line["cost_is_estimate"] = True
+    if hosted_price and hosted_price.get("unit_price") and hosted_price["unit_price"] > 0:
+        # Marker so the SPA / diff export can distinguish "priced from
+        # hosted Wrightsoft catalog" from "priced from mapped_parts.csv"
+        # from "estimated" — three different confidence tiers.
+        line["pricing_source"] = "wrightsoft_hosted_catalog"
+        line["pricing_source_mdb"] = hosted_price.get("source_mdb")
     return line
 
 

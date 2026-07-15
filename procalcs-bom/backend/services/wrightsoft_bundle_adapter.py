@@ -170,7 +170,15 @@ def parse_validateproject_bundle(bundle: Dict[str, Any],
     if not isinstance(bundle, dict) or not bundle:
         return []
 
-    # Project resolution
+    # v1 schema dispatch — detect the bundle_schema_version marker.
+    # v1 replaces the v0 top-level {project_name: [zones]} shape with a
+    # documented envelope: {bundle_schema_version, producer_metadata,
+    # project, line_items, zones}. Keep both branches — v0 bundles
+    # from the sister session's early smokes still exist.
+    if bundle.get("bundle_schema_version") == "v1":
+        return _parse_v1(bundle, project_name)
+
+    # Project resolution (v0 branch)
     projects = list(bundle.keys())
     if project_name is None:
         if len(projects) == 1:
@@ -319,4 +327,142 @@ def parse_validateproject_bundle(bundle: Dict[str, Any],
         "wrightsoft_bundle_adapter: parsed project=%r zones=%d → %d line items",
         project_name, len(zones), len(lines),
     )
+    return lines
+
+
+def _parse_v1(bundle: Dict[str, Any],
+              project_name: Optional[str]) -> List[Dict[str, Any]]:
+    """v1 bundle parser — see wrightsoft-bundle-schema-v1.md.
+
+    Unlike v0's positional field-list-per-zone, v1 zones carry
+    typed sub-objects: cooling / heating / backup_heat / load_percent.
+    Emit the same per-zone lines as the v0 branch (condenser + coil
+    + optional furnace + optional backup heat kit)."""
+    project_obj = bundle.get("project") or {}
+    resolved = project_obj.get("name") or "unknown"
+    if project_name and project_name != resolved:
+        # Caller passed a project_name — accept it if it exactly matches;
+        # otherwise treat as an error rather than silently ignore.
+        raise ValueError(
+            f"Project {project_name!r} not in bundle. "
+            f"Available: [{resolved!r}]"
+        )
+
+    zones = bundle.get("zones") or []
+    lines: List[Dict[str, Any]] = []
+
+    for zone in zones:
+        zone_name = (zone.get("zone_name") or "").strip()
+        cooling = zone.get("cooling") or {}
+        heating = zone.get("heating") or {}
+        backup = zone.get("backup_heat") or {}
+
+        cool_mfr   = (cooling.get("manufacturer") or "").strip()
+        cond_model = (cooling.get("condenser_model") or "").strip()
+        coil_model = (cooling.get("coil_model") or "").strip()
+        cool_cap   = cooling.get("capacity_btu")
+        seer       = cooling.get("seer")
+        hspf       = cooling.get("hspf")
+        afue       = cooling.get("afue")
+        # Suppress AFUE == 0 marker (same rule as v0 branch)
+        afue = afue if (afue is not None and afue > 0) else None
+
+        ahri_spec = _build_ahri_spec(
+            (cooling.get("type") or "").strip(),
+            cool_mfr, cond_model, coil_model, cool_cap,
+            seer, hspf, afue,
+        )
+
+        # Condenser line
+        if cond_model:
+            lines.append({
+                "generic_id":   cond_model,
+                "quantity":     1,
+                "description":  f"Condenser — {cool_mfr} {cond_model} ({zone_name})".strip(),
+                "src":          _mfr_src(cool_mfr),
+                "manufacturer": cool_mfr,
+                "section_hint": "Equipment",
+                "unit":         "EA",
+                "com_extracted": True,
+                "com_zone":      zone_name,
+                "ahri_spec":     ahri_spec,
+            })
+
+        # Coil / air handler line
+        if coil_model:
+            lines.append({
+                "generic_id":   coil_model,
+                "quantity":     1,
+                "description":  f"Air Handler — {cool_mfr} {coil_model} ({zone_name})".strip(),
+                "src":          _mfr_src(cool_mfr),
+                "manufacturer": cool_mfr,
+                "section_hint": "Equipment",
+                "unit":         "EA",
+                "com_extracted": True,
+                "com_zone":      zone_name,
+            })
+
+        # Primary heating — only emit a Furnace/Boiler line when
+        # heating.type names one. Heat pumps reuse the coil.
+        htg_type = (heating.get("type") or "").strip().lower()
+        htg_model = (heating.get("model") or "").strip()
+        htg_mfr = (heating.get("manufacturer") or "").strip()
+        htg_output = heating.get("output_btu")
+        if htg_model and any(t in htg_type for t in ("furnace", "boiler")):
+            furnace_spec = {
+                "product_type":    heating.get("type"),
+                "manufacturer":    htg_mfr or None,
+                "condenser_model": None,
+                "coil_model":      htg_model,
+                "capacity_btu":    int(htg_output) if htg_output else None,
+                "seer":            None,
+                "hspf":            None,
+                "afue":            None,
+                "ari_refno":       None,
+                "trade_name":      None,
+            }
+            lines.append({
+                "generic_id":   htg_model,
+                "quantity":     1,
+                "description":  f"{heating.get('type')} — {htg_mfr} {htg_model} ({zone_name})".strip(),
+                "src":          _mfr_src(htg_mfr),
+                "manufacturer": htg_mfr,
+                "section_hint": "Equipment",
+                "unit":         "EA",
+                "com_extracted": True,
+                "com_zone":      zone_name,
+                "ahri_spec":     furnace_spec,
+            })
+
+        # Backup heat kit
+        backup_model = (backup.get("model") or "").strip()
+        backup_mfr = (backup.get("manufacturer") or "").strip()
+        backup_cap = backup.get("capacity_btu")
+        if backup_model:
+            lines.append({
+                "generic_id":   backup_model,
+                "quantity":     1,
+                "description":  f"Heat Kit — {backup_mfr} {backup_model} ({zone_name})".strip(),
+                "src":          _mfr_src(backup_mfr),
+                "manufacturer": backup_mfr,
+                "section_hint": "Equipment",
+                "unit":         "EA",
+                "com_extracted": True,
+                "com_zone":      zone_name,
+                "ahri_spec": {
+                    "product_type":    "Elec strip",
+                    "manufacturer":    backup_mfr or None,
+                    "condenser_model": None,
+                    "coil_model":      backup_model,
+                    "capacity_btu":    int(backup_cap) if backup_cap else None,
+                    "seer":            None,
+                    "hspf":            None,
+                    "afue":            None,
+                    "ari_refno":       None,
+                    "trade_name":      None,
+                } if backup_cap else None,
+            })
+
+    logger.info("wrightsoft_bundle_adapter[v1]: project=%r zones=%d → %d lines",
+                resolved, len(zones), len(lines))
     return lines

@@ -1,0 +1,57 @@
+{
+  "bundle_source":         "com_extraction_station",
+  "bundle_schema_version": "v1",
+  "producer_metadata": {
+    "wrightsoft_version":  "25.0.05",
+    "catalog_version":     "2017.091",
+    "catalog_schemas":     "FGHIJKLMNOP",
+    "producer_hostname":   "BAMBINO311",
+    "producer_id":         "ws-agent-v1",
+    "extracted_at":        "2026-07-07T15:35:52.803952Z"
+  },
+  "project": {
+    "name":              "79th Ct Residence",
+    "rup_filename":      "79th Ct Residence Load Calcs.rup",
+    "investment_index":  0,
+    "notes":             "COM extraction; takeoffs enabled, proposal built"
+  },
+  "line_items": [
+    {"part_no": "DDVn08", "description": "Round vinyl duct, D = 8\"",
+     "category": "WSFDCT", "part_source": "WSF",
+     "quantity": 73.0, "unit": "ea",
+     "list_price": 1.80, "unit_price": 1.80, "extended_price": 131.40,
+     "discount": 0.00, "margin": 0.00, "cost_tax": 0.00,
+     "producer_notes": "COM.IBOMInterface.GetBOMItem[0]"},
+    {"part_no": "FBTI-1010-7", "description": "Ceiling round boot 10x10x7",
+     "category": "WSFFTR", "part_source": "WSF",
+     "quantity": 4.0, "unit": "ea",
+     "list_price": 29.60, "unit_price": 29.60, "extended_price": 118.40,
+     "discount": 0.00, "margin": 0.00, "cost_tax": 0.00,
+     "producer_notes": "COM.IBOMInterface.GetBOMItem[12]"},
+    {"part_no": "FRGRMCG-3603", "description": "Rectangular metal ceiling grille, 36\" x 3\"",
+     "quantity": 6.0, "unit": "ea",
+     "list_price": 0.00, "unit_price": 0.00, "extended_price": 0.00,
+     "discount": 0.00, "margin": 0.00, "cost_tax": 0.00,
+     "producer_notes": "COM.IBOMInterface.GetBOMItem[47] — catalog gap"}
+  ],
+  "zones": [
+    {"zone_name": "AHU - 1",
+     "cooling": {"type": "Split AC", "manufacturer": "Trane",
+                 "condenser_model": "5TTV0X60A1", "coil_model": "5TAMXD07AV51",
+                 "capacity_btu": 53000, "seer": 21.0, "hspf": null, "afue": null},
+     "heating": {"type": "Elec strip", "manufacturer": "Trane",
+                 "model": "", "output_btu": 26273},
+     "backup_heat": null,
+     "load_percent": {"cooling_total": 105.8, "cooling_sensible": 100.1,
+                      "cooling_latent": 140.3, "heating": 0.0, "backup_heating": 0.0}},
+    {"zone_name": "AHU - 5",
+     "cooling": {"type": "Split ASHP", "manufacturer": "Mitsubishi Electric",
+                 "condenser_model": "MUZ-WX18NL***", "coil_model": "MSZ-WX18NL***",
+                 "capacity_btu": 17200, "seer": 18.0, "hspf": 8.5, "afue": null},
+     "heating": {"type": "Split ASHP", "manufacturer": "Mitsubishi Electric",
+                 "model": "MSZ-WX18NL***", "output_btu": 18000},
+     "backup_heat": null,
+     "load_percent": {"cooling_total": 117.2, "cooling_sensible": 103.0,
+                      "cooling_latent": 318.3, "heating": 330.1, "backup_heating": 0.0}}
+  ]
+}

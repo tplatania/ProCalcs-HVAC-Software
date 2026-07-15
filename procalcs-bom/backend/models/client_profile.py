@@ -223,6 +223,13 @@ class ClientProfile:
     # Output preferences
     default_output_mode: str = "full"   # "full" | "materials_only" | "client_proposal" | "cost_estimate"
     include_labor: bool = False
+    # Day-20+ — Path A rollout: when True, .xls-derived line items get
+    # priced via procalcs-catalog's new /api/v1/catalog/wrightsoft/*
+    # endpoints (backed by the hosted RPRUWSF.mdb) instead of the
+    # legacy mapped_parts.csv path. Feature-flagged per profile so we
+    # can A/B against v1 pricing during rollout without touching the
+    # full fleet. Default False = existing behavior unchanged.
+    use_wrightsoft_hosted_catalog: bool = False
 
     # Metadata
     created_at: Optional[str] = None
@@ -314,6 +321,7 @@ class ClientProfile:
             },
             "default_output_mode": self.default_output_mode,
             "include_labor":       self.include_labor,
+            "use_wrightsoft_hosted_catalog": self.use_wrightsoft_hosted_catalog,
             "created_at":          self.created_at,
             "updated_at":          self.updated_at,
             "created_by":          self.created_by,
@@ -397,6 +405,7 @@ class ClientProfile:
             part_name_overrides=overrides,
             default_output_mode=data.get('default_output_mode', 'full'),
             include_labor=data.get('include_labor', False),
+            use_wrightsoft_hosted_catalog=bool(data.get('use_wrightsoft_hosted_catalog', False)),
             created_at=data.get('created_at'),
             updated_at=data.get('updated_at'),
             created_by=data.get('created_by', ''),

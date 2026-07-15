@@ -1,0 +1,46 @@
+{
+  "bundle_source":         "com_extraction_station",
+  "bundle_schema_version": "v1",
+  "producer_metadata": {
+    "wrightsoft_version":  "25.0.05",
+    "catalog_version":     "2017.091",
+    "catalog_schemas":     "FGHIJKLMNOP",
+    "producer_hostname":   "BAMBINO311",
+    "producer_id":         "ws-agent-v1",
+    "extracted_at":        "2026-07-07T15:26:17.712595Z"
+  },
+  "project": {
+    "name":              "Ally Residence (Main House)",
+    "rup_filename":      "Ally Residence (Main House).rup",
+    "investment_index":  0,
+    "notes":             "Two zones with backup heat kits"
+  },
+  "line_items": [
+    {"part_no": "DDVn04", "description": "Round vinyl duct, D = 4\"",
+     "category": "WSFDCT", "part_source": "WSF",
+     "quantity": 96.0, "unit": "ea",
+     "unit_price": 1.40, "extended_price": 134.40}
+  ],
+  "zones": [
+    {"zone_name": "AHU #1",
+     "cooling": {"type": "Split ASHP", "manufacturer": "Trane",
+                 "condenser_model": "5TWV8X60A1", "coil_model": "5TAMXD07AV51",
+                 "capacity_btu": 54000, "seer": 18.0, "hspf": 8.5, "afue": null},
+     "heating": {"type": "Split ASHP", "manufacturer": "Trane",
+                 "model": "5TAMXD07AV51", "output_btu": 54000},
+     "backup_heat": {"manufacturer": "Trane",
+                     "model": "BAYEA(13/AC)10++1", "capacity_btu": 34090},
+     "load_percent": {"cooling_total": 100.0, "cooling_sensible": 100.0,
+                      "cooling_latent": 100.0, "heating": 100.0, "backup_heating": 0.0}},
+    {"zone_name": "AHU #2",
+     "cooling": {"type": "Split ASHP", "manufacturer": "Trane",
+                 "condenser_model": "5TWV8X24A1", "coil_model": "5TAMXB02AV21",
+                 "capacity_btu": 21400, "seer": 18.0, "hspf": 8.5, "afue": null},
+     "heating": {"type": "Split ASHP", "manufacturer": "Trane",
+                 "model": "5TAMXB02AV21", "output_btu": 23400},
+     "backup_heat": {"manufacturer": "Trane",
+                     "model": "BAYEA(13/AC)08++1", "capacity_btu": 26273},
+     "load_percent": {"cooling_total": 114.9, "cooling_sensible": 114.4,
+                      "cooling_latent": 117.5, "heating": 0.0, "backup_heating": 0.0}}
+  ]
+}

@@ -21,6 +21,13 @@ import requests
 logger = logging.getLogger("procalcs_catalog_client")
 
 
+def _looks_like_mfr_code(s: str) -> bool:
+    """A 4-char alphanumeric all-caps string is assumed to already BE
+    a Wrightsoft manufacturer code (TRAN, BRYA, CARR). Anything else
+    is treated as a display name that needs server-side resolution."""
+    return bool(s) and len(s) == 4 and s.isupper() and s.isalnum()
+
+
 class CatalogError(Exception):
     """Raised when the catalog service returns a non-2xx OR a Flask
     envelope with success=false. .status_code + .error_text on the
@@ -187,6 +194,167 @@ class CatalogClient:
             {}, as_of,
         ) or {"fitting_code": code, "in_template": False,
               "count": 0, "items": []}
+
+    # ─── Wrightsoft binary catalog (RPRUWSF.mdb + follow-ons) ──────
+    # Day-20+ — new endpoints backed by wrightsoft_actitem /
+    # wrightsoft_actcateg / wrightsoft_dfunit_full tables. Ingested
+    # directly from Wrightsoft's binary catalogs via
+    # scripts/import_wrightsoft_mdb.py on procalcs-catalog. Only called
+    # when a contractor profile opts in via
+    # ClientProfile.use_wrightsoft_hosted_catalog=True; the legacy
+    # /mappings + /dfunit paths remain the default until we flip the
+    # fleet.
+
+    def wrightsoft_actitem_by_pn(self, part_no: str, *,
+                                  psrc: str | None = None,
+                                  source_mdb: str | None = None,
+                                  as_of: str | None = None) -> list[dict]:
+        """Lookup Wrightsoft parts-master rows for a given PN. Returns
+        a list because the same PN can exist across multiple suppliers
+        (psrc) or multiple manufacturer catalogs (source_mdb) — narrow
+        with the filters when the caller knows which one they want."""
+        params = {k: v for k, v in {
+            "psrc": psrc, "source_mdb": source_mdb,
+        }.items() if v is not None}
+        body = self._get_cached(
+            f"api/v1/catalog/wrightsoft/actitem/{part_no}",
+            params, as_of,
+        )
+        if not body:
+            return []
+        return body.get("items") or []
+
+    def wrightsoft_pricing_for_part(self, *, category: str, psrc: str,
+                                     pn: str, source_mdb: str | None = None,
+                                     as_of: str | None = None
+                                     ) -> dict | None:
+        """One-shot part + rule join. Returns:
+            {
+              "part": {...ActItem row...},
+              "rule": {...ActCateg row for (category, psrc)...} | None
+            }
+        or None when the part isn't in the catalog. The caller applies
+        the rule to the part's raw price to compute the final line
+        price — same math Wrightsoft's own UI does at BOM assembly."""
+        params: dict[str, Any] = {"category": category, "psrc": psrc, "pn": pn}
+        if source_mdb is not None:
+            params["source_mdb"] = source_mdb
+        return self._get_cached(
+            "api/v1/catalog/wrightsoft/pricing-for-part",
+            params, as_of,
+        )
+
+    def arigama2_manufacturer_by_code(self, code: str, *,
+                                       domain: str | None = None,
+                                       as_of: str | None = None
+                                       ) -> dict | None:
+        """Resolve a 4-char Wrightsoft manufacturer code (TRAN, BRYA,
+        CARR, DAIK...) to its display name. Optional domain narrows
+        to cooling|heating|wshp when the caller knows the equipment
+        type; otherwise walks all three in that priority."""
+        params = {"domain": domain} if domain else {}
+        return self._get_cached(
+            f"api/v1/catalog/arigama2/manufacturer/{code}",
+            params, as_of,
+        )
+
+    def arigama2_manufacturer_batch(self, codes: list[str], *,
+                                     domain: str | None = None,
+                                     as_of: str | None = None
+                                     ) -> dict[str, dict]:
+        """Resolve multiple manufacturer codes in one round-trip.
+        Returns {code: {mfrcode, mfr, ...}} — includes only codes
+        that were found. Callers should fall back to the raw code
+        for anything missing."""
+        if not codes:
+            return {}
+        params: dict[str, Any] = {"codes": ",".join(codes[:200])}
+        if domain:
+            params["domain"] = domain
+        body = self._get_cached(
+            "api/v1/catalog/arigama2/manufacturer",
+            params, as_of,
+        )
+        if not body:
+            return {}
+        return body.get("items") or {}
+
+    def arigama2_ac_by_model(self, *, manufacturer: str,
+                              condenser_model: str | None = None,
+                              coil_model: str | None = None,
+                              as_of: str | None = None) -> list[dict]:
+        """Look up cooling equipment by manufacturer + condenser or coil
+        model. `manufacturer` may be either a 4-char code (TRAN) or a
+        display name ("Trane"). Provide at least one of condenser_model
+        or coil_model. Returns rows sorted by capacity desc."""
+        if not manufacturer or not (condenser_model or coil_model):
+            return []
+        param_key = ("manufacturer" if _looks_like_mfr_code(manufacturer)
+                      else "manufacturer_name")
+        params: dict[str, Any] = {param_key: manufacturer}
+        if condenser_model:
+            params["condenser_model"] = condenser_model
+        if coil_model:
+            params["coil_model"] = coil_model
+        body = self._get_cached(
+            "api/v1/catalog/arigama2/ac/by-model",
+            params, as_of,
+        )
+        if not body:
+            return []
+        return body.get("items") or []
+
+    def arigama2_hp_by_model(self, *, manufacturer: str,
+                              condenser_model: str | None = None,
+                              coil_model: str | None = None,
+                              as_of: str | None = None) -> list[dict]:
+        """Same shape as arigama2_ac_by_model but for heat pumps —
+        includes HSPF, high_capacity, low_capacity, high_cop, low_cop
+        alongside the AC-shared fields."""
+        if not manufacturer or not (condenser_model or coil_model):
+            return []
+        param_key = ("manufacturer" if _looks_like_mfr_code(manufacturer)
+                      else "manufacturer_name")
+        params: dict[str, Any] = {param_key: manufacturer}
+        if condenser_model:
+            params["condenser_model"] = condenser_model
+        if coil_model:
+            params["coil_model"] = coil_model
+        body = self._get_cached(
+            "api/v1/catalog/arigama2/hp/by-model",
+            params, as_of,
+        )
+        if not body:
+            return []
+        return body.get("items") or []
+
+    def arigama2_furnace_by_model(self, *, manufacturer: str,
+                                    model: str,
+                                    as_of: str | None = None) -> list[dict]:
+        """Furnace lookup — returns input/output/AFUE/fuel/stages
+        plus dimensions."""
+        if not (manufacturer and model):
+            return []
+        param_key = ("manufacturer" if _looks_like_mfr_code(manufacturer)
+                      else "manufacturer_name")
+        body = self._get_cached(
+            "api/v1/catalog/arigama2/furnace/by-model",
+            {param_key: manufacturer, "model": model},
+            as_of,
+        )
+        if not body:
+            return []
+        return body.get("items") or []
+
+    def wrightsoft_dfunit_full(self, model: str, *,
+                                as_of: str | None = None) -> dict | None:
+        """Authoritative DFUnit lookup from RPRUWSF.mdb (supersedes
+        the CSV-sourced /dfunit endpoint for callers that want the
+        .mdb-ingested version)."""
+        return self._get_cached(
+            f"api/v1/catalog/wrightsoft/dfunit-full/{model}",
+            {}, as_of,
+        )
 
     def latest_batch(self) -> dict | None:
         body = self._get_envelope("api/v1/catalog/batches/latest", {}, None)

@@ -2,6 +2,41 @@
 rup_parser.py — Canonical Wrightsoft Right-Suite Universal (.rup) parser
 for the ProCalcs BOM pipeline.
 
+────────────────────────────────────────────────────────────────────
+Day-21 deprecation notice — retire when live traffic confirms zero
+fallback hits on the new structural path (utils.rup_reader et al.).
+
+The sister session's RUP_BINARY_FORMAT.md decoded the .rup binary
+structurally in July 2026. Four functions in this module were built
+reactively to compensate for what turned out to be a documented MFC
+CArchive format:
+
+  * `extract_utf16_strings` (odd/even dual-pass byte walker)
+    → superseded by utils.rup_reader field-by-field cursor advance.
+      Increment 4 confirmed CArchive has no alignment; the walker
+      was compensating for exactly this.
+
+  * `_extract_equipment_models` (day-18 mfr-double-marker filter)
+    → superseded by utils.rup_equip_parser + §3.2's structural
+      (manufacturer key + resolved model) signature.
+
+  * `_scan_free_models` (day-17 Ally follow-up prefix scan)
+    → superseded by utils.rup_equip_parser. §3 confirms Ally's
+      equipment IS in EQUIP blocks — the aligned reader skipped
+      them because the type field starts at an odd offset.
+
+  * narrative-text builder + `raw_rup_context` field
+    → superseded by parse_priced_lines (§1) which returns the exact
+      per-code priced BOM directly from the file.
+
+bom_from_rup.py currently uses this module as a SAFETY-NET fallback
+alongside the structural parsers. Deletion path: once a few weeks
+of production traffic land zero cases where the empirical path
+adds a row that the structural path missed, remove the fallback
+call in bom_from_rup.build_lines_from_rup and delete the marked
+functions here.
+────────────────────────────────────────────────────────────────────
+
 Consolidates the two earlier prototypes:
   - experiments/rup_extractor.py   (UTF-16 byte-level extraction, BEG/END
                                     backreference, narrative text output)
@@ -108,7 +143,16 @@ _VALID_DUCT_LOCATIONS = {
 # ── Low-level primitives ────────────────────────────────────────────────────
 
 def extract_utf16_strings(data: bytes, min_len: int = 4) -> List[str]:
-    """Pull all UTF-16 LE printable-ASCII runs from binary data.
+    """DEPRECATED (Day-21) for the equipment/BOM path: superseded by
+    utils.rup_reader's structural cursor walker. The odd/even
+    dual-pass strategy documented below was compensating for what
+    RUP_BINARY_FORMAT.md §4 revealed: MFC CArchive has NO alignment,
+    so every field's parity is arbitrary. A field-by-field structural
+    reader (advance by exact width from the current cursor) makes
+    this walker unnecessary. Still used by the /diagnostics/rup-
+    inspect narrative view; delete once that consumer migrates too.
+
+    Pull all UTF-16 LE printable-ASCII runs from binary data.
 
     Ported from experiments/rup_extractor.py. This tolerates the binary
     chunks interspersed between ASCII text that Wrightsoft's format has —
@@ -578,7 +622,16 @@ _MODEL_PATTERNS: List[tuple] = [
 
 
 def _scan_free_models(strings: List[str]) -> List[Dict[str, Any]]:
-    """Walk every extracted UTF-16 string, find tokens that match a
+    """DEPRECATED (Day-21): superseded by utils.rup_equip_parser which
+    walks EQUIP blocks structurally per RUP_BINARY_FORMAT.md §3. The
+    structural walker finds every placed instance regardless of file
+    variant (fixes the Ally-shaped file gap this function was written
+    to compensate for) and does not depend on a hand-maintained
+    manufacturer prefix table. Kept as a safety net during the first
+    weeks of production traffic on the structural path; delete once
+    live traffic confirms zero fallback hits.
+
+    Walk every extracted UTF-16 string, find tokens that match a
     known-manufacturer model prefix regardless of surrounding context,
     and group by (type, mfr, model) with occurrence counts.
 
@@ -646,7 +699,15 @@ _KNOWN_MANUFACTURERS = {
 
 
 def _extract_equipment_models(sections: Dict[str, List[str]]) -> List[Dict[str, Any]]:
-    """Walk the EQUIP section and pull real (type, manufacturer, model)
+    """DEPRECATED (Day-21): superseded by utils.rup_equip_parser which
+    decodes EQUIP blocks structurally per RUP_BINARY_FORMAT.md §3.
+    The structural path uses the (manufacturer key + resolved model)
+    signature from §3.2 rather than the day-18 mfr-double-marker
+    heuristic implemented below. Kept as safety-net fallback in
+    bom_from_rup.py; delete once live traffic confirms structural
+    handles every real file variant.
+
+    Walk the EQUIP section and pull real (type, manufacturer, model)
     tuples. Each configured project equipment instance shows up as a
     multi-line EQUIP entry like:
 

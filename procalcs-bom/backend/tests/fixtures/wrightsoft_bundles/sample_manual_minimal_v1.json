@@ -1,0 +1,33 @@
+{
+  "bundle_source":         "manual_upload",
+  "bundle_schema_version": "v1",
+  "producer_metadata": {
+    "wrightsoft_version":  null,
+    "catalog_version":     null,
+    "catalog_schemas":     null,
+    "producer_hostname":   null,
+    "producer_id":         "manual",
+    "extracted_at":        "2026-07-08T00:00:00.000000Z"
+  },
+  "project": {
+    "name":              "Minimal Test Project",
+    "rup_filename":      null,
+    "investment_index":  0,
+    "notes":             "Smallest legal v1 bundle: 1 line, 1 zone"
+  },
+  "line_items": [
+    {"part_no": "DDVn08", "description": "Round vinyl duct, D = 8\"",
+     "category": "WSFDCT", "part_source": "WSF",
+     "quantity": 10.0, "unit": "ea",
+     "unit_price": 1.80, "extended_price": 18.00}
+  ],
+  "zones": [
+    {"zone_name": "AHU - 1",
+     "cooling": {"type": "Split AC", "manufacturer": "Trane",
+                 "condenser_model": "5TTV0X48A1", "coil_model": "5TAMXD06AV41",
+                 "capacity_btu": 45000, "seer": 20.0, "hspf": null, "afue": null},
+     "heating": null,
+     "backup_heat": null,
+     "load_percent": null}
+  ]
+}
