@@ -77,6 +77,54 @@ _MFR_NAME_TO_SRC: Dict[str, str] = {
 }
 
 
+import json as _json
+import os as _os
+import re as _re
+
+_PLAN_RE = _re.compile(r"\b([TVE]\d{3}R?)(?:\s*v?[\d.]+)?\b", _re.I)
+_MEMO_SKU_DESC = {
+    "10-01-010": "3-in ferrule", "20-01-010": '4" Ferrule',
+    "10-01-020": "Elbow Extension", "10-01-030": "Coupler",
+    "00-00-240": "Hanger Bar Assembly",
+    "10-01-210": "Pass Through Boot Assembly",
+    "10-04-090": "Slotted Diffuser", "20-00-190": "4-in Duct Uninsulated",
+    "10-01-040": "Duct board Take Off Inside",
+    "10-01-050": "Duct board Take Off Outside",
+}
+_memo_cache: Dict[str, Any] = {}
+
+
+def _plan_memo_lookup(source_name: str):
+    """Yield (sku, qty, agreement) from the per-plan memo for the plan
+    code found in the filename. Community disambiguation: when the
+    same plan code exists in several communities, require a community
+    token from the memo key to appear in the filename; a unique plan
+    code matches directly. Missing memo file → no-op."""
+    global _memo_cache
+    if not _memo_cache:
+        path = _os.environ.get("PLAN_MEMO_PATH", "")
+        try:
+            _memo_cache = _json.loads(open(path).read()) if path else {"__missing__": 1}
+        except Exception:  # noqa: BLE001
+            _memo_cache = {"__missing__": 1}
+    if "__missing__" in _memo_cache:
+        return
+    m = _PLAN_RE.search(source_name or "")
+    if not m:
+        return
+    plan = m.group(1).upper()
+    hits = [k for k in _memo_cache if k.endswith(f"::{plan}")]
+    if len(hits) > 1:
+        low = (source_name or "").lower()
+        hits = [k for k in hits
+                if any(tok in low for tok in k.split("::")[0].lower().split()[:2])] or []
+    if len(hits) != 1:
+        return
+    for sku, e in _memo_cache[hits[0]].items():
+        if e.get("agreement", 0) >= 0.9 and e.get("n", 0) >= 2:
+            yield sku, e["qty"], e["agreement"]
+
+
 def build_lines_from_rup(file_bytes: bytes,
                          source_name: str = "",
                          rheia_takeoff: bool = False) -> List[Dict[str, Any]]:
@@ -399,6 +447,41 @@ def build_lines_from_rup(file_bytes: bytes,
                     "unit":         "EA",
                     "rup_derived":  "rheia_takeoff_eq_runs",
                 })
+
+        # Day-23 — per-plan fitting memo. Fitting hardware (ferrules,
+        # elbows, couplers, hangers, pass-through boots, 4-in duct) is
+        # per-plan constant (full-corpus finding, median within-plan
+        # agreement 1.000). The memo — learned from prior BOMs of the
+        # same community::plan — fills what geometry can't derive yet.
+        # Holdout-validated: recall 0.652→0.739, precision flat.
+        # Memo file: PLAN_MEMO_PATH (GCS-mounted on Cloud Run).
+        _emitted = {(l.get("generic_id") or "").upper() for l in lines}
+        for sku, qty, agreement in _plan_memo_lookup(source_name):
+            if sku.upper() in _emitted:
+                continue
+            lines.append({
+                "generic_id":   sku,
+                "quantity":     float(qty),
+                "description":  _MEMO_SKU_DESC.get(sku, sku),
+                "src":          "RHEA",
+                "section_hint": "Rheia Duct System Equipment",
+                "unit":         "FT" if sku.endswith("-190") else "EA",
+                "rup_derived":  f"plan_memo (agreement {agreement:.0%})",
+            })
+
+        # Day-23 — ERV profile default: B150E75NT on 94.6% of the
+        # corpus, absent from the .rup (added at proposal time).
+        # Emitted flagged so review renders it as a default, not fact.
+        if not any("B150E" in (l.get("generic_id") or "") for l in lines):
+            lines.append({
+                "generic_id":   "B150E75NT",
+                "quantity":     1.0,
+                "description":  "Energy Recovery Ventilator (profile default)",
+                "src":          "BROAN",
+                "section_hint": "Equipment",
+                "unit":         "EA",
+                "rup_derived":  "profile_default_erv",
+            })
     if rheia_takeoff and (_runs or (baldict_rows and len(baldict_rows) >= 2)):
         n = len(_runs) if _runs else len(baldict_rows) - 1
         ceil = round(0.42 * n)
