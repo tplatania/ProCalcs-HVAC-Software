@@ -379,6 +379,26 @@ def build_lines_from_rup(file_bytes: bytes,
                 "unit":         "FT",
                 "rup_derived":  "rheia_home_run_decode",
             })
+            # Day-22c — duct-board takeoffs = home-run count, EXACT on
+            # all 762 non-skewed ground-truth pairs (full-corpus run
+            # 2026-07-15; integer ratio 1.000 on every pair). Two SKU
+            # generations exist per community era; default to the
+            # newer 041/051 — the community-level override belongs in
+            # the contractor profile / per-plan memo, and either
+            # generation is a 1-keystroke SKU correction in review.
+            for gen_id, desc in (
+                ("10-01-041", "Duct board Take Off Inside"),
+                ("10-01-051", "Duct board Take Off Outside"),
+            ):
+                lines.append({
+                    "generic_id":   gen_id,
+                    "quantity":     float(len(_runs)),
+                    "description":  desc,
+                    "src":          "RHEA",
+                    "section_hint": "Rheia Duct System Equipment",
+                    "unit":         "EA",
+                    "rup_derived":  "rheia_takeoff_eq_runs",
+                })
     if rheia_takeoff and (_runs or (baldict_rows and len(baldict_rows) >= 2)):
         n = len(_runs) if _runs else len(baldict_rows) - 1
         ceil = round(0.42 * n)
