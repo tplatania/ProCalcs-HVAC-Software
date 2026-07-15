@@ -486,13 +486,16 @@ def build_lines_from_rup(file_bytes: bytes,
         n = len(_runs) if _runs else len(baldict_rows) - 1
         ceil = round(0.42 * n)
         side = n - ceil
+        _already = {(l.get("generic_id") or "").upper() for l in lines}
         for gen_id, qty, desc in (
             ("10-01-220", ceil, "Ceiling Boot Assembly"),
             ("10-01-200", side, "High Sidewall Boot Assembly"),
             ("10-04-230", ceil, "Ceiling Diffuser Assembly"),
             ("10-04-091", side, "Slotted Diffuser"),
         ):
-            if qty <= 0:
+            # Plan memo (exact copies from prior BOMs of this plan)
+            # outranks the prior-based ceiling/sidewall split.
+            if qty <= 0 or gen_id.upper() in _already:
                 continue
             lines.append({
                 "generic_id":   gen_id,
