@@ -832,7 +832,10 @@ def bom_from_wrightsoft():
         # the T333 smoke draft). First occurrence wins — the route's
         # empirical rows lead and carry the richer description.
         merged_lines = (rup_equipment_lines + lines) if rup_equipment_lines else lines
-        if rup_equipment_lines:
+        if source_pipeline_override == "wrightsoft_rup":
+            # Unconditional on the .rup path: duplicates also arise
+            # INSIDE build_lines_from_rup (design-block vs structural
+            # EQUIP extraction), not only from the route-level merge.
             seen_ids: set = set()
             deduped: list = []
             for li in merged_lines:

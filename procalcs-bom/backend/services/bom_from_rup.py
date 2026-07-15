@@ -355,8 +355,32 @@ def build_lines_from_rup(file_bytes: bytes,
     # (mount type per register); until then we use the corpus-median
     # ceiling share (~0.42) and flag the lines low-confidence so the
     # review UI renders them as needs-verification, not fact.
-    if rheia_takeoff and baldict_rows and len(baldict_rows) >= 2:
-        n = len(baldict_rows) - 1  # minus the return
+    if rheia_takeoff:
+        # Day-22b — home-run decode (DUCT block, per-runout routed
+        # lengths). Runout count == boot-assembly count on every
+        # ground-truth pair, and xls 10-00-190 footage == ceil(Σ
+        # lengths) exactly on 14/20 (the rest are rup↔xls revision
+        # skew). Prefer runouts over registers−1; fall back when the
+        # DUCT block is absent.
+        try:
+            from utils.rup_home_run_parser import parse_home_run_lengths
+            _runs = parse_home_run_lengths(reader)
+        except Exception:  # noqa: BLE001
+            _runs = []
+        if _runs:
+            import math
+            total_ft = math.ceil(sum(r["length_ft"] for r in _runs))
+            lines.append({
+                "generic_id":   "10-00-190",
+                "quantity":     float(total_ft),
+                "description":  "3-in Duct Uninsulated",
+                "src":          "RHEA",
+                "section_hint": "Rheia Duct System Equipment",
+                "unit":         "FT",
+                "rup_derived":  "rheia_home_run_decode",
+            })
+    if rheia_takeoff and (_runs or (baldict_rows and len(baldict_rows) >= 2)):
+        n = len(_runs) if _runs else len(baldict_rows) - 1
         ceil = round(0.42 * n)
         side = n - ceil
         for gen_id, qty, desc in (
