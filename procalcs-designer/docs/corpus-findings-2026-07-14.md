@@ -78,3 +78,35 @@ Includes plan-memo with merged-community fallback. Honest holdout
 reference: 0.739 recall (memo learned excluding the scored lot).
 Document sweep complete: 21,362 docs, zero contractor-side pricing —
 pricing questions confirmed not-in-data exhaustively.
+
+## P5 — standard-project ground truth found and PASSED (2026-07-16)
+
+Census of all 2,630 BOM xls: 2,611 Rheia, **15 standard (non-Rheia) —
+all Sales Office projects** (5 unique). Scored the existing engine
+against every one: **recall 1.00 on 5/5, precision 0.73–1.00, qty
+0.93–1.00.** Standard projects need NO new derivation: Wrightsoft's
+own takeoff populates RPITEM for conventional duct — the Rheia gap
+existed only because the Rheia plugin bypasses RPITEM. The BOM module
+for standard projects is, in effect, "run the export Wrightsoft never
+ran" — already working in the deployed engine.
+
+## P5 complete — corpus exhausted (2026-07-16)
+
+- **Ground truth final: 1,321 pairs** (1,076 base + 154 ambiguous-lot
+  recoveries + 91 revision recoveries).
+- **Email mining** (22 threads read): dehumidifier = Beazer townhome
+  spec revision, removed from load calcs 2025-03-05 (Pratt emails);
+  takeoff SKU generations = Rheia Phase-2 cutover 2022-07-01. Both
+  closed documentarily. Heat-strip legacy variance = builder-spec
+  churn (proven) → one confirmation line remains.
+- **Standard projects: solved without new work** — 5/5 sales-office
+  BOMs reproduce at recall 1.0 with the existing engine (Wrightsoft's
+  takeoff populates RPITEM for conventional duct).
+- **Plan versions change fitting quantities (12/12 multi-version
+  plans)** — memo agreement gate handles it; version-aware keys are
+  the refinement if sub-90% entries ever matter.
+- Memo v2 harvested from full ground truth: 62 plans, median
+  agreement 1.000; deployed (MEMO_VERSION=2).
+
+**Corpus learning is DONE. Final Richard ask: Rheia price sheet +
+equipment costs + one heat-strip one-liner.**

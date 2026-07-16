@@ -63,15 +63,35 @@ questions:
   - id: q.ceiling_sidewall_split
     asked_in: P0
     question: "What splits ceiling vs sidewall/pass-through boots per plan?"
-    status: open
-    note: "Mount type per register — likely in drawing objects (undecoded); plan memo covers known plans, split needed only for NEW plans."
+    status: closed-deterministic
+    closed_in: P4
+    answer: >
+      Not a contractor rule at all — the .rup stores the literal boot
+      SKU per register (DREGPERF block): 10-01-220/200/210. Decoded;
+      92.6% exact (c,s,p) triples on 1,076 pairs, mismatches are
+      revision skew. Engine v7 uses it; qty accuracy hit 1.000 median.
+
+# ── CONVERGENCE (P4, 2026-07-16) ─────────────────────────────────────
+# P4 closed 5 questions (ERV variant, WS toggles, revision skew,
+# mount split; heat-strip/dehumidifier upgraded in P2) and opened 0
+# material questions. Zero questions remain in status: open.
+# By the stopping rule the loop has CONVERGED. Final Richard ask:
+#   2 not-in-data pastes (Rheia price sheet, equipment costs)
+#   3 provisional one-line confirmations (takeoff SKU generation,
+#     heat-strip kW bands for legacy-era files, dehumidifier CO story)
 
   - id: q.takeoff_sku_generation
     asked_in: P1
     question: "Why do communities split between 040/050 and 041/051 takeoff SKUs?"
-    status: provisional
-    answer_hypothesis: "Product generation change over community eras (older communities on 040/050)."
-    confirmation_line: "We map takeoff SKU generation per community from your history — correct going forward?"
+    status: closed-documentary
+    closed_in: P5
+    answer: >
+      Rheia "Phase 2 HVAC design system" cutover, effective
+      2022-07-01 (Pratt kickoff email, Park View Phase 2; Builders
+      FirstSource re-engineering confirmation). Legacy communities
+      (pre-cutover releases) carry 040/050; Phase-2 releases carry
+      041/051. Digit mapping itself is corpus-inferred (exact on all
+      1,076 pairs); the mechanism is documentary.
 
   - id: q.heat_strip_rule
     asked_in: P0
@@ -87,33 +107,42 @@ questions:
       (loads not yet binary-decodable). Tonnage is NOT the rule
       (identical to always-5kW at 88.2%).
     confirmation_line: >
-      "When the design file has no heat strip placed, what sizes it —
-      Manual-J backup heat in kW bands? Give the bands."
-    note: "Engine action: copy strip from EQUIP when present; flag needs-input otherwise." 
+      "Legacy-era strips were field-corrected to builder spec (emails
+      prove churn, no band table exists). One-liner for Richard:
+      'Is there a standing kW-band rule today, or is the strip always
+      per builder equipment spec?'"
+    note: >
+      Engine action unchanged: copy strip from EQUIP when present;
+      flag needs-input otherwise. P5 emails (Pippin/Pratt 2023-01)
+      prove legacy variance was spec churn, not a decodable rule.
 
   - id: q.dehumidifier_trigger
     asked_in: P0
     question: "What decides a B33DHW dehumidifier on a lot (~45%, lot-level)?"
-    status: provisional
-    closed_in: P2
-    answer_hypothesis: >
-      A date/code-cycle effect, not a lot property: 6 communities never
-      have it (334/334 deterministic gate); in mixed communities the
-      predictor is equipment generation + change-order stage
-      (Daikin-spec era → yes 84.7%; GZV6/SEER2 era → no; CO1 90% with,
-      CO2 72% without). Combined rule 93.1% (773/830 unique BOMs).
-      78 lots have BOTH with/without revisions for the same lot.
-    confirmation_line: >
-      "On e.g. Aulin Bldg 2 Lot 14, B33DHW was added at CO1 and dropped
-      at CO2 — what changed? Code cycle, spec revision, or client
-      option? (6 communities never get one.)"
-    note: "Engine action: apply the 93% era rule, flag low-confidence." 
+    status: closed-documentary
+    closed_in: P5
+    answer: >
+      Beazer builder-spec revision, proven by email (Charles Pratt,
+      Beazer Product Manager): 2025-02-07 "switch to the Goodman
+      GZV6SA equipment across all communities" + test design "with
+      the dehumidifier removed"; 2025-03-05 "for townhome communities
+      only. The dehumidifier will be removed from all load calcs"
+      (names Aulin Bldgs 2/4/5). CO1 predates the removal, CO2
+      implements it; single-family communities never had it.
+      Evidence: email_mining_report.md. NO Richard question needed.
+    note: "Engine rule: B33DHW on townhome designs dated before 2025-03-05, not after." 
 
   - id: q.erv_exception
     asked_in: P0
     question: "Every plan gets a B150E75NT ERV unless ___? (B150E75NS seen once)"
-    status: open
-    note: "Check NS-vs-NT by community/date in a P3 pass before asking."
+    status: closed-deterministic
+    closed_in: P4
+    answer: >
+      NS is the legacy-era variant: appears ONLY in the three
+      older-era communities (Pennyroyal 84, Creekside 29, Park View
+      14 of 1,076 pairs) — the same era cluster as the 040/050
+      takeoff SKUs and absent strip records. Rule: emit NT (current
+      generation); the community era-map covers legacy.
 
   - id: q.rheia_unit_prices
     asked_in: P0
@@ -142,13 +171,23 @@ questions:
   - id: q.ws_report_toggles
     asked_in: P0
     question: "Are Richard's BOM-export toggles fixed or per-project?"
-    status: open
-    note: "May be answerable by diffing xls column structure across corpus (P3 candidate) — identical structure everywhere ⇒ fixed toggles."
+    status: closed-deterministic
+    closed_in: P4
+    answer: >
+      Fixed. 148/150 sampled BOMs share one structural fingerprint
+      (identical populated fields + section set); the 2 outliers
+      differ trivially. Export settings do not vary per project.
 
   - id: q.revision_skew
     asked_in: P1
     question: "Why do 312 pairs have rup↔xls footage mismatch?"
-    status: provisional
-    answer_hypothesis: "Finals rup re-saved after BOM export (revision skew); Working Drawings chains hold the matching revision."
-    confirmation_line: none  # internal data-hygiene question, not for Richard
-    note: "P3: match xls against WD revisions to recover ground truth."
+    status: closed-deterministic
+    closed_in: P4
+    answer: >
+      Revision skew confirmed: for 91/312 pairs a sibling rup revision
+      in the same lot folder matches the xls footage EXACTLY
+      (skew_recovery.json holds the mapping — those 91 are recovered
+      ground truth). The remaining 221 have no matching revision in
+      the archive — consistent with rups re-saved in place after
+      export. Data-hygiene rule: score against recovered revisions
+      where available; exclude the rest from ground truth.
