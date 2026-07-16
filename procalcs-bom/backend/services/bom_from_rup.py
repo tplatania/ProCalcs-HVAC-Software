@@ -501,14 +501,28 @@ def build_lines_from_rup(file_bytes: bytes,
             })
     if rheia_takeoff and (_runs or (baldict_rows and len(baldict_rows) >= 2)):
         n = len(_runs) if _runs else len(baldict_rows) - 1
-        ceil = round(0.42 * n)
-        side = n - ceil
+        # Day-23 — exact mount split from DREGPERF (the .rup stores the
+        # literal boot SKU per register; 92.6% exact triples on 1,076
+        # pairs). Prior-based 0.42 split only as last-resort fallback.
+        ceil = side = passthru = 0
+        try:
+            from utils.rup_home_run_parser import mount_counts
+            mc = mount_counts(reader)
+            ceil = mc.get("ceiling", 0)
+            side = mc.get("sidewall", 0)
+            passthru = mc.get("pass_through", 0)
+        except Exception:  # noqa: BLE001
+            pass
+        if not (ceil or side or passthru):
+            ceil = round(0.42 * n)
+            side = n - ceil
         _already = {(l.get("generic_id") or "").upper() for l in lines}
         for gen_id, qty, desc in (
             ("10-01-220", ceil, "Ceiling Boot Assembly"),
             ("10-01-200", side, "High Sidewall Boot Assembly"),
+            ("10-01-210", passthru, "Pass Through Boot Assembly"),
             ("10-04-230", ceil, "Ceiling Diffuser Assembly"),
-            ("10-04-091", side, "Slotted Diffuser"),
+            ("10-04-091", side + passthru, "Slotted Diffuser"),
         ):
             # Plan memo (exact copies from prior BOMs of this plan)
             # outranks the prior-based ceiling/sidewall split.
