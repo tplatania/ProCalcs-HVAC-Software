@@ -721,6 +721,16 @@ def bom_from_wrightsoft():
                 except ValueError as exc:
                     return jsonify({"success": False, "data": None,
                                     "error": str(exc)}), 400
+                # Day-23 smoke-suite finding: unrecognized bytes fell
+                # through to the xls parser, yielded zero rows, and
+                # returned a confusing empty 200 BOM. Reject instead.
+                if not lines:
+                    return jsonify({
+                        "success": False, "data": None,
+                        "error": "File is neither a Wrightsoft .rup nor "
+                                 "a recognizable BOM export — no line "
+                                 "items found.",
+                    }), 400
                 _rup_ducts_only_hint = False
                 _rup_extras = {}
 

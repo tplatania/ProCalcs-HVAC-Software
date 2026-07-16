@@ -472,9 +472,26 @@ def build_lines_from_rup(file_bytes: bytes,
         # same community::plan — fills what geometry can't derive yet.
         # Holdout-validated: recall 0.652→0.739, precision flat.
         # Memo file: PLAN_MEMO_PATH (GCS-mounted on Cloud Run).
+        # Generation pairs: the same part across the Rheia Phase-2
+        # cutover (2022-07-01). The memo carries the plan's HISTORICAL
+        # generation — authoritative for that plan — so it replaces a
+        # rule-emitted counterpart instead of duplicating it.
+        _GEN_PAIR = {"10-01-040": "10-01-041", "10-01-041": "10-01-040",
+                     "10-01-050": "10-01-051", "10-01-051": "10-01-050",
+                     "10-04-090": "10-04-091", "10-04-091": "10-04-090"}
         _emitted = {(l.get("generic_id") or "").upper() for l in lines}
         for sku, qty, agreement in _plan_memo_lookup(source_name):
             if sku.upper() in _emitted:
+                continue
+            counterpart = _GEN_PAIR.get(sku.upper())
+            if counterpart and counterpart in _emitted:
+                for l in lines:
+                    if (l.get("generic_id") or "").upper() == counterpart:
+                        l["generic_id"] = sku
+                        l["quantity"] = float(qty)
+                        l["rup_derived"] = f"plan_memo (agreement {agreement:.0%})"
+                        break
+                _emitted.add(sku.upper())
                 continue
             lines.append({
                 "generic_id":   sku,
