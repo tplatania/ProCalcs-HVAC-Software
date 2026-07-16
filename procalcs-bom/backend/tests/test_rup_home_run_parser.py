@@ -28,7 +28,12 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.rup_reader import RupReader
-from utils.rup_home_run_parser import home_run_total_ft, parse_home_run_lengths
+from utils.rup_home_run_parser import (
+    home_run_total_ft,
+    mount_counts,
+    parse_home_run_lengths,
+    parse_register_mounts,
+)
 
 CORPUS_RUP = Path(
     "/Users/geraldvillaran/Procalcs/RUPs-from-zoho/Creekside/Lot Specifics/"
@@ -36,6 +41,9 @@ CORPUS_RUP = Path(
     "Lot 100 T072R Plan SCL.rup"
 )
 CORPUS_XLS_TOTAL_FT = 597.0  # SKU 10-00-190 qty in the paired BOM xls
+# Boot lines in the same paired BOM xls: 9× 10-01-220 (ceiling),
+# 15× 10-01-200 (high sidewall), no 10-01-210 (pass-through).
+CORPUS_XLS_MOUNTS = {"ceiling": 9, "sidewall": 15, "pass_through": 0}
 
 
 # ─── Synthetic-record builders ─────────────────────────────────────────
@@ -68,6 +76,24 @@ def _duct_record(label: str, length_ft: float, *, obj_id: int = 0x100,
 def _rup(*records: bytes) -> bytes:
     header = ".WS.rsu.WSF.0004.\r\n\r\n".encode("utf-16-le")
     return header + b"".join(records)
+
+
+def _register_object(label: str, sku: str, *, obj_id: int = 0xF00,
+                     rhea: bool = True) -> bytes:
+    """Minimal register drawing object: the label CString envelope
+    (`CD CD BA FF FE FF <len:u8> <UTF-16>`), some filler, then the
+    DREGPERF block carrying the "RHEA" tag and the Rheia boot SKU —
+    the layout documented in rup_home_run_parser's docstring."""
+    env = (b"\xcd\xcd\xba\xff\xfe\xff"
+           + bytes([len(label)]) + label.encode("utf-16-le"))
+    filler = b"\x00" * 24                              # instance internals
+    body = struct.pack("<II", 2, obj_id)               # schema, id
+    body += _s("RHEA" if rhea else "")                 # system tag
+    body += struct.pack("<III", 0, 1, 1)               # ints
+    body += struct.pack("<d", 6.4)                     # design number
+    body += _s(sku)                                    # boot SKU
+    body += b"\x00" * 16                               # tail padding
+    return env + filler + _s("!BEG=DREGPERF") + body + _s("!END=DREGPERF")
 
 
 # ─── Synthetic decode tests ────────────────────────────────────────────
@@ -122,6 +148,67 @@ def test_total_helper_sums_runouts():
     assert home_run_total_ft(RupReader(data)) == pytest.approx(30.75, abs=0.06)
 
 
+# ─── Mount-type decode tests (DREGPERF / Rheia boot SKUs) ──────────────
+
+def test_register_mounts_decode_label_and_sku():
+    data = _rup(
+        _register_object("FOYER-B", "10-01-220"),
+        _register_object("LAUNDRY", "10-01-210"),
+        _register_object("W.I.C.", "10-01-200"),
+    )
+    regs = parse_register_mounts(RupReader(data))
+    assert [(r["label"], r["mount"]) for r in regs] == [
+        ("FOYER-B", "ceiling"),
+        ("LAUNDRY", "pass_through"),
+        ("W.I.C.", "sidewall"),
+    ]
+    assert [r["sku"] for r in regs] == ["10-01-220", "10-01-210", "10-01-200"]
+
+
+def test_non_rhea_registers_are_omitted():
+    """Return grilles / non-Rheia registers carry an empty system tag
+    and no boot SKU — they must not appear in the mount list."""
+    data = _rup(
+        _register_object("BATH 2", "10-01-200"),
+        _register_object("rb1", "", rhea=False),
+    )
+    regs = parse_register_mounts(RupReader(data))
+    assert [r["label"] for r in regs] == ["BATH 2"]
+
+
+def test_runouts_join_mount_by_label():
+    data = _rup(
+        _duct_record("BATH 2", 19.8, seq=1),
+        _duct_record("BEDROOM 2", 36.3, seq=2),
+        _duct_record("dmn1", 0.1, supply_parent="", return_parent=""),
+        _register_object("BATH 2", "10-01-210"),
+        _register_object("BEDROOM 2", "10-01-220"),
+    )
+    rows = parse_home_run_lengths(RupReader(data))
+    assert {r["label"]: r["mount"] for r in rows} == {
+        "BATH 2": "pass_through",
+        "BEDROOM 2": "ceiling",
+    }
+
+
+def test_runout_without_register_mount_is_unknown():
+    data = _rup(_duct_record("PDR", 26.4, seq=3))
+    rows = parse_home_run_lengths(RupReader(data))
+    assert rows[0]["mount"] == "unknown"
+
+
+def test_mount_counts_reproduce_boot_line_quantities():
+    data = _rup(
+        _register_object("A", "10-01-220"),
+        _register_object("B", "10-01-220"),
+        _register_object("C", "10-01-200"),
+        _register_object("D", "10-01-210"),
+    )
+    assert mount_counts(RupReader(data)) == {
+        "ceiling": 2, "sidewall": 1, "pass_through": 1,
+    }
+
+
 # ─── Corpus ground-truth test ──────────────────────────────────────────
 
 @pytest.mark.skipif(not CORPUS_RUP.exists(),
@@ -137,3 +224,19 @@ def test_creekside_lot100_matches_rheia_bom_footage():
     assert math.ceil(total) == CORPUS_XLS_TOTAL_FT
     # every run physically plausible
     assert all(3.0 < r["length_ft"] < 60.0 for r in rows)
+
+
+@pytest.mark.skipif(not CORPUS_RUP.exists(),
+                    reason="Reliable corpus not present on this machine")
+def test_creekside_lot100_matches_rheia_bom_boot_mounts():
+    """Per-register mounts must reproduce the paired BOM xls boot
+    lines: 9× ceiling (10-01-220), 15× high sidewall (10-01-200),
+    0× pass-through (10-01-210) — and every runout must join a
+    mount by label."""
+    reader = RupReader(CORPUS_RUP.read_bytes())
+    assert mount_counts(reader) == CORPUS_XLS_MOUNTS
+    rows = parse_home_run_lengths(reader)
+    assert all(r["mount"] in ("ceiling", "sidewall") for r in rows)
+    from collections import Counter
+    assert Counter(r["mount"] for r in rows) == Counter(
+        {"sidewall": 15, "ceiling": 9})
