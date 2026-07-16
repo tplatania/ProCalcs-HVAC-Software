@@ -659,6 +659,15 @@ def bom_from_wrightsoft():
             # parser that powers /diagnostics/rup-inspect and shape them
             # into the line-item contract this endpoint expects.
             if fname.endswith(".rup") or _looks_like_rup(file_bytes):
+                # Day-23 smoke-suite finding: junk bytes named *.rup
+                # sailed through to an empty 200 BOM. Same header
+                # sanity check /parse-rup uses.
+                if not file_bytes.startswith(b'.\x00W\x00S'):
+                    return jsonify({
+                        "success": False, "data": None,
+                        "error": "File does not look like a Wrightsoft "
+                                 ".rup project file.",
+                    }), 400
                 try:
                     from services.bom_from_rup import build_lines_from_rup
                     # Day-22 — Rheia register-driven takeoff fires for
