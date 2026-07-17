@@ -28,6 +28,8 @@ import billingRouter from "./routes/billing.js";
 import observerRouter from "./routes/observer.js";
 import catalogRouter from "./routes/catalog.js";
 import bomChatRouter from "./routes/bomChat.js";
+import bomChatAttachmentsRouter from "./routes/bomChatAttachments.js";
+import questionsRouter from "./routes/questions.js";
 import authRouter from "./auth/routes.js";
 import { requireAuth } from "./auth/middleware.js";
 import { authConfig } from "./auth/config.js";
@@ -59,6 +61,12 @@ app.use((req, res, next) => {
   // Observer bundle uploads — multipart .tar.gz per HANDOFF_OBSERVER_AGENT.md.
   // We consume the raw stream ourselves; JSON parsing would break it.
   if (req.path === "/api/observer/upload") return next();
+  // Chat attachments — multipart via multer; JSON parsing would break it.
+  if (req.path === "/api/bom-chat/attachments") return next();
+  // Chat bodies can carry base64 image attachments — needs headroom.
+  if (req.path === "/api/bom-chat") {
+    return express.json({ limit: "30mb" })(req, res, next);
+  }
   // Sample-BOM XLS upload (Phase 7) — must skip JSON parsing so the
   // multipart body streams through to the BOM service unchanged.
   if (req.path.startsWith("/api/bom-runs/") && req.path.endsWith("/compare")) {
@@ -108,7 +116,9 @@ app.use("/api/sku-catalog", requireAuth, skuCatalogRouter);
 app.use("/api/contractor-overrides", requireAuth, contractorOverridesRouter);
 app.use("/api/rup-duct-totals", requireAuth, rupDuctTotalsRouter);
 app.use("/api/catalog", requireAuth, catalogRouter);
+app.use("/api/bom-chat/attachments", requireAuth, bomChatAttachmentsRouter);
 app.use("/api/bom-chat", requireAuth, bomChatRouter);
+app.use("/api/questions", requireAuth, questionsRouter);
 app.use("/api/pdf-cleanup", requireAuth, pdfCleanupRouter);
 app.use("/api/billing", requireAuth, billingRouter);
 

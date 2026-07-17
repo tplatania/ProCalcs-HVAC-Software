@@ -1458,6 +1458,7 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated }: {
           the same savePriceForLine → contractor-override path as the
           drawer, so chat answers are learned once and reused. */}
       <BomChatSidebar
+        clientId={clientId}
         bom={{
           line_items: (bom.line_items as any[])?.map((li: any) => ({
             sku: li.sku ?? li.generic_id,

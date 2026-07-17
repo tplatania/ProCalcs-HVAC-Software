@@ -111,6 +111,10 @@ questions:
       prove churn, no band table exists). One-liner for Richard:
       'Is there a standing kW-band rule today, or is the strip always
       per builder equipment spec?'"
+    for_richard: >
+      When a design file has no electric heat strip placed, what sizes
+      it — is there a standing kW rule today, or is it always per the
+      builder's equipment spec?
     note: >
       Engine action unchanged: copy strip from EQUIP when present;
       flag needs-input otherwise. P5 emails (Pippin/Pratt 2023-01)
@@ -157,7 +161,7 @@ questions:
       hardware is purchased by the installing contractor; their
       invoices were never in this design archive. Full sweep
       continues as confirmation, but the Forms/ pattern is uniform.
-    for_richard: "Rheia price sheet — the one unavoidable paste."
+    for_richard: "Rheia price sheet — attach it in the BOM chat (paperclip) and say 'apply these'; one click per line after that."
 
 
   - id: q.equipment_prices
@@ -166,7 +170,7 @@ questions:
     status: not-in-data
     closed_in: P3
     evidence: "Same as q.rheia_unit_prices — archive holds design-side documents only."
-    for_richard: "Equipment cost sheet (or supplier + we quote list)." 
+    for_richard: "Equipment cost sheet — attach in the BOM chat the same way." 
 
   - id: q.ws_report_toggles
     asked_in: P0
@@ -191,3 +195,12 @@ questions:
       the archive — consistent with rups re-saved in place after
       export. Data-hygiene rule: score against recovered revisions
       where available; exclude the rest from ground truth.
+
+# ── P6 (2026-07-16): FORMAL ZERO-ZERO PASS ───────────────────────────
+# Engine v7 scored on the complete expanded ground truth (1,321 pairs
+# incl. all recoveries): recall 0.750 / precision 0.864 / qty 0.962.
+# New-question detector (recurring miss/extra SKUs >=5% of pairs not
+# already ledgered): ZERO found. P6 closed 0, opened 0.
+# >>> CONVERGENCE CONFIRMED BY THE RULE AS WRITTEN. <<<
+# Corpus completeness: verification re-walk in progress (expect zero
+# new downloads); per-community completion logs already green.

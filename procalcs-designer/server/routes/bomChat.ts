@@ -164,9 +164,19 @@ The user is reviewing a Bill of Materials draft generated from a Wrightsoft .rup
 - Keep answers short and concrete. This user is busy; one question at a time.
 Domain notes: RHEA = Rheia (small-diameter duct system, rheiacomfort.com). BOMs historically exist only for Rheia projects; standard projects are the new territory. "RE" suffix files are revisions.`;
 
+interface ChatAttachment {
+  name: string;
+  kind: string;
+  summary?: string;
+  extracted?: string;
+  image_b64?: string;
+  media_type?: string;
+}
+
 interface ChatBody {
   messages?: Anthropic.MessageParam[];
   bom_context?: unknown;
+  attachments?: ChatAttachment[];
 }
 
 router.post("/", async (req: Request, res: Response) => {
@@ -178,7 +188,7 @@ router.post("/", async (req: Request, res: Response) => {
     });
     return;
   }
-  const { messages = [], bom_context } = (req.body ?? {}) as ChatBody;
+  const { messages = [], bom_context, attachments = [] } = (req.body ?? {}) as ChatBody;
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ success: false, data: null, error: "messages required" });
     return;
@@ -194,8 +204,35 @@ router.post("/", async (req: Request, res: Response) => {
       text: `Current BOM draft (JSON):\n${JSON.stringify(bom_context).slice(0, 60_000)}`,
     });
   }
+  // Day-24 — attachments: text extractions enter the system context
+  // (extracted once at upload, capped per file); images ride as
+  // vision blocks on the latest user turn below.
+  for (const a of attachments.slice(0, 5)) {
+    if (a.extracted) {
+      system.push({
+        type: "text",
+        text: `Attached file "${a.name}" (${a.kind}) — ${a.summary ?? ""}\n` +
+              `Contents:\n${String(a.extracted).slice(0, 30_000)}`,
+      });
+    }
+  }
 
   const convo: Anthropic.MessageParam[] = [...messages];
+  const imageAtts = attachments.filter((a) => a.image_b64 && a.media_type).slice(0, 4);
+  if (imageAtts.length && convo.length) {
+    const last = convo[convo.length - 1];
+    if (last.role === "user" && typeof last.content === "string") {
+      last.content = [
+        ...imageAtts.map((a) => ({
+          type: "image" as const,
+          source: { type: "base64" as const,
+                    media_type: a.media_type as "image/png" | "image/jpeg" | "image/webp" | "image/gif",
+                    data: a.image_b64 as string },
+        })),
+        { type: "text" as const, text: last.content },
+      ];
+    }
+  }
   const actions: Record<string, unknown>[] = [];
 
   try {
