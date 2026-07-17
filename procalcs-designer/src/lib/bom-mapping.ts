@@ -9,7 +9,16 @@ import type { BomLineItem, BomResponse } from "./api-hooks";
 
 // ─── Display shapes ──────────────────────────────────────────────────────
 
-export type Source = "rules" | "ai";
+// Three-state provenance:
+//   "rules"    — the deterministic rules engine OR a catalog_match
+//                emitted this line straight from Tom's catalog.
+//   "verified" — AI proposed this line, BUT its SKU was verified after
+//                the fact against the Wrightsoft catalog (Day-12
+//                cross-pollination pass). Almost as trustworthy as
+//                rules; just a different code path.
+//   "ai"       — pure AI inference, no catalog backing. Spot-check
+//                before sending to a customer.
+export type Source = "rules" | "verified" | "ai";
 
 export const CATEGORIES = ["equipment", "duct", "fitting", "consumable"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -45,13 +54,34 @@ export function normalizeCategory(raw: string | undefined): Category {
   return "consumable";
 }
 
-// Collapse provenance to a 2-state enum. Anything explicit-rules is
-// "rules"; everything else (absent source, "ai", unknown future values)
-// is treated as "ai" so it gets the review-me styling. Defaulting to
-// "ai" is the safe choice — false-positive review costs a glance,
-// false-negative review could ship hallucinated quantities.
+// Collapse provenance to a 3-state enum. The Flask backend emits
+// detailed sources (rules_engine, catalog_match, catalog_verified_*,
+// wrightsoft_*, ai_inferred, ai_with_catalog_sku, etc.) — this folds
+// them into the three categories the UI actually renders.
+//
+// Default is "ai" because false-positive review costs a glance,
+// false-negative review could ship hallucinated quantities — when in
+// doubt, force a human look.
 export function normalizeSource(raw: string | undefined): Source {
-  return raw === "rules" ? "rules" : "ai";
+  if (!raw) return "ai";
+  const r = raw.toLowerCase();
+  // Catalog-emitted lines (rules engine OR per-equipment catalog match)
+  if (r === "rules" || r === "rules_engine" || r === "catalog_match") {
+    return "rules";
+  }
+  // Wrightsoft deterministic pipeline (mapped/dfunit/passthrough have
+  // real SKUs) + AI-then-verified-by-catalog. wrightsoft_unmapped is
+  // intentionally NOT verified — those lines have no SKU resolution,
+  // they're the SKU Backlog candidates and need a human look.
+  if (
+    r === "wrightsoft_mapped" ||
+    r === "wrightsoft_dfunit" ||
+    r === "wrightsoft_passthrough" ||
+    r.startsWith("catalog_verified")
+  ) {
+    return "verified";
+  }
+  return "ai";
 }
 
 // Map a Flask-shaped line_item into the BomLine display shape. Prices
@@ -80,20 +110,28 @@ export function mapLineItem(item: BomLineItem, index: number): BomLine {
 
 export interface ProvenanceCounts {
   rules: number;
+  verified: number;
   ai: number;
   hasProvenance: boolean;
 }
 
-// Prefer the backend-reported counts (post-rules-engine merge in
-// procalcs-bom) and fall back to deriving from line_items for older
-// response shapes that don't carry the totals.
+// Compute provenance counts by normalizing each line's raw source
+// through the same 3-state classifier the badge renderer uses. Pure
+// derivation from line_items so the totals always match what's on
+// screen — earlier versions used backend-reported counts which
+// drifted from line_items once the verifier started promoting lines.
 export function computeProvenanceCounts(
-  bom: Pick<BomResponse, "line_items" | "rules_engine_item_count" | "ai_item_count">
+  bom: Pick<BomResponse, "line_items">
 ): ProvenanceCounts {
   const items = bom.line_items ?? [];
-  const rules = bom.rules_engine_item_count ?? items.filter((l) => l.source === "rules").length;
-  const ai = bom.ai_item_count ?? items.filter((l) => l.source !== "rules").length;
-  return { rules, ai, hasProvenance: rules > 0 || ai > 0 };
+  let rules = 0, verified = 0, ai = 0;
+  for (const l of items) {
+    const s = normalizeSource(l.source);
+    if (s === "rules") rules++;
+    else if (s === "verified") verified++;
+    else ai++;
+  }
+  return { rules, verified, ai, hasProvenance: items.length > 0 };
 }
 
 // ─── CSV row builder ─────────────────────────────────────────────────────

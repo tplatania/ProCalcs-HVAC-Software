@@ -21,10 +21,13 @@ import {
   Home,
   Wind,
   Layers,
+  PackagePlus,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useParseRup,
+  useUpsertRupDuctTotals,
   storeParsedRup,
   type RupDesignData,
 } from "@/lib/api-hooks";
@@ -80,7 +83,14 @@ export default function BomEngine() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [, setLocation] = useLocation();
 
+  // Day-14 Phase 4 — user-entered Wrightsoft Supply Actual Ln totals.
+  // Key format: "${dir}:${type}:${size}", e.g. "round_supply:4" or
+  // "rect_supply:12x10". Stored as strings so empty inputs render
+  // correctly; coerced to numbers at submit time.
+  const [knownLF, setKnownLF] = useState<Record<string, string>>({});
+
   const parseRup = useParseRup();
+  const upsertDuctTotals = useUpsertRupDuctTotals();
 
   const runParse = (file: File) => {
     setDroppedFile(file);
@@ -90,6 +100,25 @@ export default function BomEngine() {
     parseRup.mutate(file, {
       onSuccess: (data) => {
         setParsed(data);
+        // Day-14 Phase 4 — pre-populate the form from cached totals
+        // when the same RUP has been processed before. The backend
+        // bundles cached totals into duct_summary.known_lengths_ft
+        // on /parse-rup so the SPA doesn't need a second round trip.
+        const cached = data.duct_summary?.known_lengths_ft;
+        if (cached) {
+          const pre: Record<string, string> = {};
+          for (const dir of ["round_supply", "round_return",
+                             "rect_supply", "rect_return"] as const) {
+            const bucket = (cached as any)[dir] || {};
+            for (const [size, lf] of Object.entries(bucket)) {
+              const n = Number(lf);
+              if (isFinite(n) && n > 0) pre[`${dir}:${size}`] = String(n);
+            }
+          }
+          setKnownLF(pre);
+        } else {
+          setKnownLF({});  // reset form on every new parse
+        }
         setStatus("parsed");
       },
       onError: (err) => {
@@ -121,7 +150,56 @@ export default function BomEngine() {
 
   const handleContinue = () => {
     if (!parsed || !droppedFile) return;
-    storeParsedRup(parsed, droppedFile.name);
+    // Day-14 Phase 4 — bundle any user-entered known-LF totals into
+    // designData.duct_summary.known_lengths_ft so the backend's
+    // /generate endpoint can emit deterministic duct lines.
+    const buckets: Record<string, Record<string, number>> = {
+      round_supply: {}, round_return: {},
+      rect_supply: {},  rect_return: {},
+    };
+    for (const [key, val] of Object.entries(knownLF)) {
+      const n = Number(val);
+      if (!isFinite(n) || n <= 0) continue;
+      const [dir, size] = key.split(":");
+      if (!buckets[dir]) continue;
+      buckets[dir][size] = n;
+    }
+    const anyKnown = Object.values(buckets).some(b => Object.keys(b).length > 0);
+    const knownLengthsFt = anyKnown
+      ? Object.fromEntries(
+          Object.entries(buckets).filter(([, v]) => Object.keys(v).length > 0)
+        )
+      : null;
+    const merged: RupDesignData = knownLengthsFt
+      ? {
+          ...parsed,
+          duct_summary: {
+            ...(parsed.duct_summary || {}),
+            known_lengths_ft: knownLengthsFt as any,
+          },
+        }
+      : parsed;
+    storeParsedRup(merged, droppedFile.name);
+
+    // Day-14 Phase 4 — persist the totals so a re-upload of this same
+    // RUP pre-fills the form. Fire-and-forget — a save failure is
+    // logged but doesn't block navigation (the BOM still generates
+    // with the in-session totals).
+    if (knownLengthsFt && parsed.rup_hash) {
+      upsertDuctTotals.mutate(
+        {
+          rup_hash: parsed.rup_hash,
+          known_lengths_ft: knownLengthsFt as any,
+          source_filename: droppedFile.name,
+        },
+        {
+          onError: (err) => {
+            console.warn("rup-duct-totals cache save failed:", err?.error);
+          },
+        },
+      );
+    }
+
     setLocation("/bom-output");
   };
 
@@ -148,10 +226,18 @@ export default function BomEngine() {
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">BOM Engine</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Upload a Wrightsoft Right-Suite Universal <code className="text-xs bg-muted px-1 py-0.5 rounded">.rup</code> project file.
-          The parser extracts rooms, equipment, and building info — ready for AI-driven BOM generation.
+        <h1 className="text-2xl font-bold tracking-tight">BOM Engine (AI fallback path)</h1>
+        <p className="text-muted-foreground text-sm mt-1 max-w-3xl">
+          Upload a Wrightsoft Right-Suite Universal{" "}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">.rup</code>{" "}
+          project file. The parser extracts rooms, equipment, and building
+          info, then the AI estimates quantities and prices. Use this path
+          when you don't have Wrightsoft's own BOM export in hand. For a
+          deterministic BOM with real manufacturer SKUs, prefer the{" "}
+          <a className="underline" href="/diagnostics/wrightsoft-bom">
+            Wrightsoft BOM upload
+          </a>{" "}
+          path.
         </p>
       </div>
 
@@ -316,6 +402,58 @@ export default function BomEngine() {
             </Card>
           )}
 
+          {/* Deterministic-pipeline nudge — Day-10. Shows whenever the
+              parser confirms the binary doesn't carry a usable BOM
+              catalog (which is every Wrightsoft file we've sampled).
+              Steers the designer to the deterministic Wrightsoft BOM
+              upload BEFORE they kick off AI estimation. The AI path
+              stays available right below — user picks. */}
+          {isParsed && parsed?.catalog_xref && !parsed.catalog_xref.bom_is_in_binary && (
+            <Card className="border-amber-500/40 bg-amber-500/[0.04]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4" />
+                  This .rup binary does not carry a BOM
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {parsed.catalog_xref.generic_ids_found} of{" "}
+                  {parsed.catalog_xref.generic_ids_in_catalog.toLocaleString()}{" "}
+                  Wrightsoft catalog part IDs found in this file. Wrightsoft
+                  computes BOMs at output time — they're not stored in
+                  the project file.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-xs text-muted-foreground bg-background/60 border rounded p-3 space-y-2">
+                  <p className="font-medium text-foreground inline-flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    Recommended: deterministic Wrightsoft BOM upload
+                  </p>
+                  <p>
+                    In Wrightsoft, export this project's BOM (Reports →
+                    Bill of Materials → CSV/XLS), then upload it on the
+                    Wrightsoft BOM page. Each part is translated through{" "}
+                    <span className="font-mono">mapped_parts.csv</span> into
+                    the contractor's actual manufacturer SKU. No AI, no
+                    guessing.
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={() => setLocation("/diagnostics/wrightsoft-bom")}
+                  >
+                    <PackagePlus className="w-3.5 h-3.5 mr-1.5" />
+                    Use deterministic upload
+                  </Button>
+                  <p className="text-xs text-muted-foreground self-center">
+                    — or continue below with the AI-estimated fallback
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Preview card — parsed project data */}
           {isParsed && parsed && stats && (
             <Card className="border-green-500/20 bg-green-500/5">
@@ -386,6 +524,16 @@ export default function BomEngine() {
                     )}
                   </div>
                 )}
+
+                {/* Day-14 Phase 4 — known-duct-LF paste form. Optional.
+                    Shows up only when the parser detected duct sizes.
+                    When filled, the backend emits deterministic duct
+                    lines from these totals — no AI estimation. */}
+                <KnownDuctLengthsForm
+                  ductSummary={parsed.duct_summary}
+                  value={knownLF}
+                  onChange={setKnownLF}
+                />
 
                 <Button size="sm" className="w-full" onClick={handleContinue}>
                   Continue to BOM Output
@@ -470,6 +618,177 @@ export default function BomEngine() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+
+// ─── Known-duct-LF paste form (Day-14 Phase 4) ─────────────────────
+//
+// Wrightsoft's report has a "Supply Actual Ln(ft)" + "Return Actual Ln(ft)"
+// table that's the ground truth for duct linear footage. We can't crack
+// it out of the .rup binary deterministically yet, so the simpler win
+// is to let Richard's team paste those numbers in here. When filled,
+// the backend emits one deterministic duct line per (size, direction)
+// and the AI is told to skip all duct lines.
+
+function KnownDuctLengthsForm({
+  ductSummary,
+  value,
+  onChange,
+}: {
+  ductSummary: RupDesignData["duct_summary"];
+  value: Record<string, string>;
+  onChange: (next: Record<string, string>) => void;
+}) {
+  const roundDiams = ductSummary?.round_diameters_present ?? [];
+  const rectSizes  = ductSummary?.rect_sizes_present ?? [];
+
+  // Skip rendering entirely on RUPs with no duct system at all
+  // (commercial equipment-only projects, equipment swap-outs).
+  if (roundDiams.length === 0 && rectSizes.length === 0) {
+    return null;
+  }
+
+  const setVal = (key: string, v: string) => {
+    onChange({ ...value, [key]: v });
+  };
+
+  const totalEntered = Object.values(value)
+    .map(v => Number(v))
+    .filter(n => isFinite(n) && n > 0)
+    .reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 mt-3 text-xs space-y-3">
+      <div>
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+          <p className="font-semibold text-sm">
+            Known duct totals (optional)
+          </p>
+          {ductSummary?.known_lengths_cached_at && (
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+              ✓ pre-filled from earlier upload
+              {ductSummary.known_lengths_cached_by
+                ? ` by ${ductSummary.known_lengths_cached_by}`
+                : ""}
+            </span>
+          )}
+        </div>
+        <p className="text-muted-foreground mt-0.5 leading-snug">
+          From Wrightsoft's report, two numbers per duct size: how many
+          feet of <strong className="text-foreground">supply</strong> duct
+          (air going TO rooms) and how many feet of{" "}
+          <strong className="text-foreground">return</strong> duct (air
+          coming back to the AHU). Wrightsoft labels these{" "}
+          <em>Supply Actual Ln(ft)</em> and <em>Return Actual Ln(ft)</em> —
+          paste those numbers verbatim. Decimals OK (e.g. 524.1).
+          When provided, BOM duct lines come straight from these numbers —
+          no AI estimation. Saved per-RUP so re-uploads of the same file
+          remember your numbers.
+        </p>
+      </div>
+
+      {roundDiams.length > 0 && (
+        <div>
+          <div className="font-medium text-muted-foreground mb-1">
+            Round flex duct
+          </div>
+          {roundDiams.map((d) => (
+            <div key={`round-${d}`} className="mb-2 last:mb-0">
+              <div className="font-mono text-[11px] mb-0.5">
+                {d}″ diameter
+              </div>
+              <div className="grid grid-cols-[80px,1fr,80px,1fr] gap-1.5 items-center">
+                <label
+                  className="text-[10px] text-muted-foreground text-right pr-1"
+                  htmlFor={`r-sup-${d}`}
+                >
+                  Supply (ft)
+                </label>
+                <input
+                  id={`r-sup-${d}`}
+                  type="number" min="0" step="0.1"
+                  className="h-7 px-2 text-right rounded border bg-background text-xs"
+                  placeholder="—"
+                  value={value[`round_supply:${d}`] ?? ""}
+                  onChange={(e) => setVal(`round_supply:${d}`, e.target.value)}
+                />
+                <label
+                  className="text-[10px] text-muted-foreground text-right pr-1"
+                  htmlFor={`r-ret-${d}`}
+                >
+                  Return (ft)
+                </label>
+                <input
+                  id={`r-ret-${d}`}
+                  type="number" min="0" step="0.1"
+                  className="h-7 px-2 text-right rounded border bg-background text-xs"
+                  placeholder="—"
+                  value={value[`round_return:${d}`] ?? ""}
+                  onChange={(e) => setVal(`round_return:${d}`, e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rectSizes.length > 0 && (
+        <div>
+          <div className="font-medium text-muted-foreground mb-1 mt-2">
+            Rectangular duct
+          </div>
+          {rectSizes.map((s) => (
+            <div key={`rect-${s}`} className="mb-2 last:mb-0">
+              <div className="font-mono text-[11px] mb-0.5">
+                {s}″ (W × H)
+              </div>
+              <div className="grid grid-cols-[80px,1fr,80px,1fr] gap-1.5 items-center">
+                <label
+                  className="text-[10px] text-muted-foreground text-right pr-1"
+                  htmlFor={`x-sup-${s}`}
+                >
+                  Supply (ft)
+                </label>
+                <input
+                  id={`x-sup-${s}`}
+                  type="number" min="0" step="0.1"
+                  className="h-7 px-2 text-right rounded border bg-background text-xs"
+                  placeholder="—"
+                  value={value[`rect_supply:${s}`] ?? ""}
+                  onChange={(e) => setVal(`rect_supply:${s}`, e.target.value)}
+                />
+                <label
+                  className="text-[10px] text-muted-foreground text-right pr-1"
+                  htmlFor={`x-ret-${s}`}
+                >
+                  Return (ft)
+                </label>
+                <input
+                  id={`x-ret-${s}`}
+                  type="number" min="0" step="0.1"
+                  className="h-7 px-2 text-right rounded border bg-background text-xs"
+                  placeholder="—"
+                  value={value[`rect_return:${s}`] ?? ""}
+                  onChange={(e) => setVal(`rect_return:${s}`, e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totalEntered > 0 && (
+        <div className="pt-1 border-t flex items-center justify-between">
+          <span className="text-muted-foreground">
+            Total linear feet entered
+          </span>
+          <span className="font-semibold text-foreground">
+            {totalEntered.toLocaleString("en-US", { maximumFractionDigits: 1 })} ft
+          </span>
+        </div>
+      )}
     </div>
   );
 }

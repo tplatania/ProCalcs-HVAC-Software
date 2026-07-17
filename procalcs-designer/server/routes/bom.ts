@@ -21,8 +21,17 @@ const router = Router();
 router.all("/*splat", async (req: Request, res: Response) => {
   const upstreamUrl = `${config.flaskBomBaseUrl}/api/v1/bom${req.path}`;
 
-  // ─── Multipart / raw-binary branch: /parse-rup ──────────────────────
-  if (req.path === "/parse-rup") {
+  // ─── Multipart / raw-binary branch: /parse-rup, /rup-inspect ───────
+  // Both endpoints accept a .rup upload (multipart-or-raw) and return
+  // JSON. Streaming the request body lets us forward 6-20 MB binary
+  // files without buffering them through Express's JSON parser (which
+  // is skipped for these paths in server/index.ts).
+  if (
+    req.path === "/parse-rup" ||
+    req.path === "/rup-inspect" ||
+    req.path === "/from-wrightsoft" ||
+    req.path === "/from-wrightsoft-bundle"
+  ) {
     try {
       const headers: Record<string, string> = { ...buildUpstreamHeaders(req) };
       const ct = req.headers["content-type"];
@@ -59,8 +68,11 @@ router.all("/*splat", async (req: Request, res: Response) => {
     return;
   }
 
-  // ─── JSON in, binary out: /render-pdf ───────────────────────────────
-  if (req.path === "/render-pdf") {
+  // ─── JSON in, binary out: /render-pdf, /render-xls ──────────────────
+  // Same shape: POST a BOM dict, stream a binary file response back.
+  // Express's default text serialization corrupts XLSX (zip) bytes,
+  // so we stream the upstream body verbatim.
+  if (req.path === "/render-pdf" || req.path === "/render-xls") {
     try {
       const upstream = await fetch(upstreamUrl, {
         method: "POST",
@@ -69,7 +81,7 @@ router.all("/*splat", async (req: Request, res: Response) => {
       });
 
       res.status(upstream.status);
-      // Forward the PDF-relevant response headers (Content-Type,
+      // Forward the binary-relevant response headers (Content-Type,
       // Content-Disposition). Drop Content-Length since we're streaming.
       upstream.headers.forEach((v, k) => {
         if (k.toLowerCase() === "content-length") return;
@@ -88,7 +100,7 @@ router.all("/*splat", async (req: Request, res: Response) => {
         res.end();
       }
     } catch (err: any) {
-      res.status(502).json({ error: err?.message ?? "render-pdf upstream failed" });
+      res.status(502).json({ error: err?.message ?? `${req.path} upstream failed` });
     }
     return;
   }

@@ -5,6 +5,7 @@
 import {
   useQuery,
   useMutation,
+  useQueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
 import type { ClientProfile, DashboardSummary } from "@/types/procalcs";
@@ -45,6 +46,79 @@ export interface RupDesignData {
     section_count?: number;
   };
   raw_rup_context?: string;
+  // Day-10: Wrightsoft-catalog cross-reference verdict bundled into
+  // /parse-rup response so the BOM Engine can route to the
+  // deterministic Wrightsoft BOM upload BEFORE running AI estimation.
+  // Always present on a successful parse; bom_is_in_binary is False
+  // on every Wrightsoft file we've sampled.
+  catalog_xref?: CatalogXref;
+  // Day-14 Phase 2 — duct-system metadata pulled deterministically
+  // from the RUP. Used by the SPA's known-duct-totals form to know
+  // which sizes to pre-populate, and by the AI prompt to constrain
+  // output to RUP-actual sizes/types.
+  duct_summary?: {
+    type_counts?:               Record<string, number>;
+    round_diameters_present?:   number[];
+    rect_sizes_present?:        string[];
+    supply_path_count?:         number;
+    return_path_count?:         number;
+    path_count_by_prefix?:      Record<string, number>;
+    // Day-14 Phase 4 — populated by the SPA when the user pastes
+    // Wrightsoft's Supply Actual Ln table. Sent back to /generate
+    // unchanged so the backend emits one deterministic duct line per
+    // entry (no AI estimation).
+    known_lengths_ft?: {
+      round_supply?: Record<string, number>;
+      round_return?: Record<string, number>;
+      rect_supply?:  Record<string, number>;
+      rect_return?:  Record<string, number>;
+    };
+    // Audit fields surfaced when known_lengths_ft was loaded from the
+    // server-side cache (re-upload of the same RUP). Used by the form
+    // to badge "Pre-filled from <email> on <date>".
+    known_lengths_cached_at?: string;
+    known_lengths_cached_by?: string | null;
+  };
+  // Day-14 Phase 4 — SHA-256 of the .rup bytes; the cache key for
+  // per-RUP known-duct-LF persistence. Always present on a successful
+  // /parse-rup response.
+  rup_hash?: string;
+}
+
+// Day-14 Phase 4 — REST surface for the known-duct-LF cache.
+export interface RupDuctTotalsUpsertInput {
+  rup_hash: string;
+  known_lengths_ft: {
+    round_supply?: Record<string, number>;
+    round_return?: Record<string, number>;
+    rect_supply?:  Record<string, number>;
+    rect_return?:  Record<string, number>;
+  };
+  source_filename?: string;
+}
+
+export function useUpsertRupDuctTotals() {
+  return useMutation<
+    { id: number; rup_hash: string; updated_by: string | null; updated_at: string },
+    { error: string; status?: number },
+    RupDuctTotalsUpsertInput
+  >({
+    mutationFn: async (input) => {
+      const res = await fetch("/api/rup-duct-totals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok || !body?.success) {
+        throw {
+          error: body?.error ?? `Save failed (${res.status})`,
+          status: res.status,
+        };
+      }
+      return body.data;
+    },
+  });
 }
 
 export interface BomLineItem {
@@ -81,6 +155,12 @@ export interface BomResponse {
   // Optional because pre-rules-engine clients may not return them.
   rules_engine_item_count?: number;
   ai_item_count?: number;
+  // Phase 3.7: catalog-augmented per-equipment matching (procalcs-bom).
+  catalog_match_item_count?: number;
+  // Phase 3 persistence: every successful generation lands a bom_runs
+  // row and the new id is surfaced here so the SPA can deep-link to
+  // the run-history page right after a regenerate.
+  run_id?: number;
 }
 
 // ─── Query keys ──────────────────────────────────────────────────────────
@@ -180,6 +260,50 @@ export function useDeleteClientProfile() {
   });
 }
 
+// ─── Day-17: Consumables rules + supplier costs ──────────────────────────
+
+export type ConsumableBasis = "joints" | "flex_runs" | "fittings" | "duct_lf" | "per_job";
+
+export interface ConsumableItem {
+  key: string;
+  name: string;
+  description?: string;
+  basis: ConsumableBasis;
+  per_container: number;
+  qty_per_job?: number;
+  container: string;     // "gallon" | "roll" | "box" | "each" | ...
+  unit_price: number;
+  enabled: boolean;
+}
+
+export interface ContractorConsumables {
+  items: ConsumableItem[];
+}
+
+export const getContractorConsumablesQueryKey = (id: string) =>
+  ["contractor-consumables", id] as const;
+
+export function useGetContractorConsumables(id: string) {
+  return useQuery({
+    queryKey: getContractorConsumablesQueryKey(id),
+    queryFn: () =>
+      apiFetch<ContractorConsumables>(
+        `/api/client-profiles/${encodeURIComponent(id)}/consumables`
+      ),
+    enabled: !!id,
+  });
+}
+
+export function useUpdateContractorConsumables() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ContractorConsumables }) =>
+      apiFetch<{ success: boolean }>(
+        `/api/client-profiles/${encodeURIComponent(id)}/consumables`,
+        { method: "PUT", body: JSON.stringify(data) }
+      ),
+  });
+}
+
 // ─── BOM pipeline hooks ──────────────────────────────────────────────────
 
 // POST a .rup file to /api/bom/parse-rup as multipart/form-data.
@@ -250,6 +374,52 @@ export function useRenderBomPdf() {
       const cd = res.headers.get("Content-Disposition") ?? "";
       const match = cd.match(/filename="([^"]+)"/);
       const filename = match?.[1] ?? `${bom.job_id || "bom"}.pdf`;
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+  });
+}
+
+// POST an already-generated BOM dict to /api/bom/render-xls and trigger
+// a browser download of the returned .xlsx workbook. Designers paste the
+// SKU + qty columns into supplier ordering portals — the .xlsx keeps the
+// same section grouping the SPA renders so on-screen and downloaded
+// layouts match cell-for-cell.
+export function useRenderBomXls() {
+  return useMutation<
+    void,
+    { error: string; status?: number },
+    { bom: BomResponse }
+  >({
+    mutationFn: async ({ bom }) => {
+      const res = await fetch("/api/bom/render-xls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bom }),
+      });
+
+      if (!res.ok) {
+        let message = res.statusText;
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          /* ignore */
+        }
+        throw { error: message, status: res.status };
+      }
+
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? `${bom.job_id || "bom"}.xlsx`;
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -446,7 +616,7 @@ interface FlaskEnvelope<T> {
   meta?: Record<string, unknown>;
 }
 
-async function apiFetchEnvelope<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetchEnvelope<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: {
       "Content-Type": "application/json",
@@ -672,5 +842,651 @@ export function useBulkImportSku() {
         method: "POST",
         body: JSON.stringify({ items }),
       }),
+  });
+}
+
+// ─── Run history (bom_runs) — Phase 4 (May 2026) ───────────────────────
+//
+// Backed by procalcs-bom commit 27990eb. Proxied via Express at
+// /api/bom-runs/* — see server/routes/bomRuns.ts. The persistence
+// layer landed in Phase 3 (every BOM /generate writes one row); these
+// hooks expose the list/detail/review/regenerate API to the SPA.
+
+export interface BomRunSummary {
+  id: number;
+  created_at: string;
+  created_by_email: string | null;
+  source_rup_filename: string | null;
+  client_id: string;
+  job_id: string;
+  output_mode: string | null;
+  reviewer_status: "unset" | "good" | "needs_fix" | "blocked";
+  reviewer_email: string | null;
+  regenerated_from_id: number | null;
+  tags: string[];
+  anthropic_duration_ms: number | null;
+  bom_service_revision: string | null;
+  item_count: number | null;
+  total_price: number | null;
+}
+
+export interface BomRunDetail extends BomRunSummary {
+  parsed_design_data: Record<string, any> | null;
+  generated_bom: BomResponse | null;
+  anthropic_input_tokens: number | null;
+  anthropic_output_tokens: number | null;
+  reviewer_notes: string | null;
+  reviewed_at: string | null;
+}
+
+export interface BomRunsListResponse {
+  runs: BomRunSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type ReviewerStatus = "unset" | "good" | "needs_fix" | "blocked";
+
+export interface BomRunsListFilter {
+  client_id?: string;
+  reviewer_status?: ReviewerStatus;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const getListBomRunsQueryKey = (filter?: BomRunsListFilter) =>
+  ["bom-runs", filter ?? {}] as const;
+export const getGetBomRunQueryKey = (id: number | null) =>
+  ["bom-runs", id] as const;
+
+export function useListBomRuns(filter?: BomRunsListFilter) {
+  return useQuery({
+    queryKey: getListBomRunsQueryKey(filter),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (filter?.client_id) qs.set("client_id", filter.client_id);
+      if (filter?.reviewer_status) qs.set("reviewer_status", filter.reviewer_status);
+      if (filter?.q) qs.set("q", filter.q);
+      if (filter?.limit !== undefined) qs.set("limit", String(filter.limit));
+      if (filter?.offset !== undefined) qs.set("offset", String(filter.offset));
+      const url = qs.toString() ? `/api/bom-runs?${qs.toString()}` : "/api/bom-runs";
+      return apiFetchEnvelope<BomRunsListResponse>(url);
+    },
+    // Tester rapidly clicks rows + flips status — keep results fresh
+    // but don't blow the cache on every focus change.
+    staleTime: 5_000,
+  });
+}
+
+export function useGetBomRun(id: number | null) {
+  return useQuery({
+    queryKey: getGetBomRunQueryKey(id),
+    queryFn: () =>
+      apiFetchEnvelope<BomRunDetail>(`/api/bom-runs/${encodeURIComponent(String(id))}`),
+    enabled: id !== null && id !== undefined && id > 0,
+  });
+}
+
+export function useReviewBomRun() {
+  return useMutation<
+    BomRunSummary,
+    { error: string; status?: number },
+    { id: number; status: ReviewerStatus; notes?: string | null }
+  >({
+    mutationFn: ({ id, status, notes }) =>
+      apiFetchEnvelope<BomRunSummary>(
+        `/api/bom-runs/${encodeURIComponent(String(id))}/review`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            status,
+            // Send notes only when the caller provided a value — omitting
+            // preserves any existing note (matches the model contract).
+            ...(notes !== undefined ? { notes } : {}),
+          }),
+        },
+      ),
+  });
+}
+
+export function useRegenerateBomRun() {
+  return useMutation<
+    BomResponse,
+    { error: string; status?: number },
+    {
+      id: number;
+      new_job_id?: string;
+      output_mode?: BomResponse["output_mode"];
+      design_data?: Record<string, any>;
+    }
+  >({
+    mutationFn: ({ id, ...body }) =>
+      apiFetchEnvelope<BomResponse>(
+        `/api/bom-runs/${encodeURIComponent(String(id))}/regenerate`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      ),
+  });
+}
+
+// ─── Sample BOM comparison (Phase 7) ───────────────────────────────
+//
+// Backed by procalcs-bom commit 85960c6 — POST /api/v1/bom-runs/<id>/compare.
+// Accepts either a multipart .xls/.xlsx upload or a JSON body with
+// pre-parsed sample lines. Returns a per-line report + headline
+// metrics (sku_match_rate, sku_match_with_qty_rate, etc.).
+
+export interface CompareSampleLine {
+  sku?: string;
+  description?: string;
+  quantity?: number;
+  unit?: string | null;
+  manufacturer?: string | null;
+  section?: string | null;
+}
+
+export interface CompareLineMatch {
+  status: "matched" | "qty_mismatch" | "missing" | "extra";
+  sku: string | null;
+  description: string | null;
+  sample_qty: number | null;
+  generated_qty: number | null;
+  sample: Record<string, any> | null;
+  generated: Record<string, any> | null;
+}
+
+export interface CompareMetrics {
+  sample_count: number;
+  generated_count: number;
+  matched: number;
+  qty_mismatch: number;
+  missing: number;
+  extra: number;
+  sku_match_rate: number;
+  sku_match_with_qty_rate: number;
+}
+
+export interface CompareReport {
+  run_id: number;
+  sample_filename: string | null;
+  sample_lines: CompareSampleLine[];
+  metrics: CompareMetrics;
+  lines: CompareLineMatch[];
+}
+
+// Multipart upload variant — file goes through fetch as FormData so
+// the Express BFF can stream it to the BOM service unchanged. Note
+// we DO NOT set Content-Type explicitly; the browser fills in the
+// multipart boundary string for us.
+export function useCompareBomRunFile() {
+  return useMutation<
+    CompareReport,
+    { error: string; status?: number },
+    { id: number; file: File }
+  >({
+    mutationFn: async ({ id, file }) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(
+        `/api/bom-runs/${encodeURIComponent(String(id))}/compare`,
+        { method: "POST", body: fd },
+      );
+      let body: any = null;
+      try { body = await res.json(); } catch { /* ignore */ }
+      if (!res.ok || !body?.success) {
+        throw { error: body?.error ?? `Compare failed (${res.status})`, status: res.status };
+      }
+      return body.data as CompareReport;
+    },
+  });
+}
+
+// ─── Tags + regression suites (Phase 9) ────────────────────────────
+//
+// Backed by procalcs-bom commit 94b684f. Suite tag = the JSONB
+// `tags` column on bom_runs. Powers the regression-suites page +
+// the tag chips on run-history detail.
+
+export interface TagCount {
+  tag: string;
+  count: number;
+}
+
+export interface SuiteDiffSummary {
+  left_item_count: number;
+  right_item_count: number;
+  item_count_delta: number;
+  left_total_cost: number;
+  right_total_cost: number;
+  total_cost_delta: number;
+  left_total_price: number;
+  right_total_price: number;
+  total_price_delta: number;
+  added: number;
+  removed: number;
+  changed: number;
+  unchanged: number;
+}
+
+export interface SuiteRunMember {
+  parent_id: number;
+  parent_job: string;
+  // Day-5: who originally generated the parent run. Surfaced in the
+  // suite-result table so you can see at a glance whose runs are
+  // regressing.
+  parent_created_by_email?: string | null;
+  child_id: number | null;
+  status: "ok" | "error";
+  error: string | null;
+  item_count: number | null;
+  // Phase 11 — auto-detected drift between parent and child.
+  diff?: SuiteDiffSummary;
+  regression_detected?: boolean;
+}
+
+export interface SuiteRunReport {
+  tag: string;
+  summary: {
+    ok: number;
+    errors: number;
+    total: number;
+    // Phase 11 — number of members where parent ↔ child diff shows drift.
+    regressions?: number;
+  };
+  members: SuiteRunMember[];
+}
+
+export const getListBomRunTagsQueryKey = () => ["bom-runs", "tags"] as const;
+
+export function useListBomRunTags() {
+  return useQuery({
+    queryKey: getListBomRunTagsQueryKey(),
+    queryFn: () =>
+      apiFetchEnvelope<{ tags: TagCount[]; total: number }>("/api/bom-runs/tags"),
+    staleTime: 5_000,
+  });
+}
+
+export function useUpdateBomRunTags() {
+  return useMutation<
+    BomRunSummary,
+    { error: string; status?: number },
+    { id: number; add?: string[]; remove?: string[] }
+  >({
+    mutationFn: ({ id, add, remove }) =>
+      apiFetchEnvelope<BomRunSummary>(
+        `/api/bom-runs/${encodeURIComponent(String(id))}/tags`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...(add ? { add } : {}),
+            ...(remove ? { remove } : {}),
+          }),
+        },
+      ),
+  });
+}
+
+export function useRunRegressionSuite() {
+  return useMutation<
+    SuiteRunReport,
+    { error: string; status?: number },
+    { tag: string; new_job_suffix?: string }
+  >({
+    mutationFn: ({ tag, ...body }) =>
+      apiFetchEnvelope<SuiteRunReport>(
+        `/api/bom-runs/regression-suites/${encodeURIComponent(tag)}/run`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      ),
+  });
+}
+
+// ─── Missing-SKU backlog (Day-2 polish) ─────────────────────────────
+//
+// Backed by procalcs-bom GET /api/v1/bom-runs/missing-sku-backlog.
+// Aggregates every missing SKU across all stored comparisons —
+// sorted by demand so Richard's team knows which catalog rows to
+// encode next.
+
+export interface MissingSkuBacklogItem {
+  sku:              string | null;
+  sku_display:      string | null;
+  description:      string | null;
+  occurrence_count: number;
+  total_qty:        number;
+  first_seen:       string | null;
+  last_seen:        string | null;
+  run_ids:          number[];
+  // Day-5: emails of testers who've flagged this SKU as missing.
+  contributors?:    string[];
+}
+
+export interface MissingSkuBacklogResponse {
+  total_comparisons:         number;
+  total_missing_skus_unique: number;
+  items:                     MissingSkuBacklogItem[];
+}
+
+export const getMissingSkuBacklogQueryKey = (filter?: { client_id?: string }) =>
+  ["bom-runs", "missing-sku-backlog", filter ?? {}] as const;
+
+export function useMissingSkuBacklog(filter?: { client_id?: string }) {
+  return useQuery({
+    queryKey: getMissingSkuBacklogQueryKey(filter),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (filter?.client_id) qs.set("client_id", filter.client_id);
+      const url = qs.toString()
+        ? `/api/bom-runs/missing-sku-backlog?${qs.toString()}`
+        : `/api/bom-runs/missing-sku-backlog`;
+      return apiFetchEnvelope<MissingSkuBacklogResponse>(url);
+    },
+    staleTime: 10_000,
+  });
+}
+
+// ─── RUP Inspector (Day-3 diagnostic) ──────────────────────────────
+//
+// Backed by procalcs-bom POST /api/v1/bom/rup-inspect. Decodes the
+// ZEQUIP ↔ ECDUCTSYS pairing for an uploaded .rup so we can spot-
+// check our parser's view of the binary against Wrightsoft's UI.
+
+export interface RupInspectRow {
+  index:             number;
+  zequip_record_id:  number | null;
+  ecductsys_label:   string | null;
+}
+
+// Day-10: catalog cross-reference signals the new deterministic-first
+// pipeline. Tells designers whether this binary can answer the BOM
+// question on its own (almost always no — Wrightsoft computes the
+// BOM at output time) or whether to use the Wrightsoft BOM upload.
+export interface CatalogXref {
+  bom_is_in_binary:        boolean;
+  generic_ids_in_catalog:  number;
+  generic_ids_found:       number;
+  found_sample:            string[];
+  recommendation:          string;
+}
+
+export interface RupInspectResponse {
+  source_file:  string;
+  summary: {
+    zequip_total:        number;
+    ecductsys_total:     number;
+    labeled_count:       number;
+    label_distribution:  Record<string, number>;
+  };
+  rows: RupInspectRow[];
+  catalog_xref?: CatalogXref;
+}
+
+export function useRupInspect() {
+  return useMutation<RupInspectResponse, { error: string; status?: number }, File>({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/bom/rup-inspect", { method: "POST", body: fd });
+      let body: any = null;
+      try { body = await res.json(); } catch { /* ignore */ }
+      if (!res.ok || !body?.success) {
+        throw {
+          error: body?.error ?? `Inspect failed (${res.status})`,
+          status: res.status,
+        };
+      }
+      return body.data as RupInspectResponse;
+    },
+  });
+}
+
+// ─── Catalog coverage (Day-11) ─────────────────────────────────────
+
+export interface CatalogCoverageSupplier {
+  supplier_code: string;
+  name:          string;
+  mapped_count:  number;
+}
+
+export interface CatalogCoverageCategory {
+  category:         string;
+  description:      string;
+  total_generics:   number;
+  covered_generics: number;
+  coverage_pct:     number;
+  suppliers:        CatalogCoverageSupplier[];
+}
+
+export interface CatalogCoverageReport {
+  totals: {
+    generic_parts:             number;
+    covered_generics:          number;
+    overall_coverage_pct:      number;
+    mapped_supplier_variants:  number;
+    suppliers:                 number;
+    dfunit_models:             number;
+  };
+  categories: CatalogCoverageCategory[];
+  suppliers: Array<{
+    supplier_code:              string;
+    name:                       string;
+    distinct_generics_covered:  number;
+  }>;
+}
+
+export function useCatalogCoverage() {
+  return useQuery({
+    queryKey: ["catalog-coverage"] as const,
+    queryFn: () => apiFetchEnvelope<CatalogCoverageReport>("/api/bom/catalog-coverage"),
+    staleTime: 60_000,
+  });
+}
+
+// ─── DFUnit equipment library browser (Day-12) ─────────────────────
+
+export interface DFUnitItem {
+  manufacturer: string | null;
+  model:        string | null;
+  sys_type:     string | null;
+  unit_type:    string | null;
+  series:       string | null;
+  cooling_btu:  number | null;
+  heating_btu:  number | null;
+  width_in:     number | null;
+  depth_in:     number | null;
+  height_in:    number | null;
+  weight_lb:    number | null;
+}
+
+export interface DFUnitBrowseResponse {
+  items:    DFUnitItem[];
+  total:    number;
+  returned: number;
+  facets: {
+    manufacturers: string[];
+    unit_types:    string[];
+    sys_types:     string[];
+  };
+}
+
+export interface DFUnitFilters {
+  manufacturer?: string;
+  sys_type?:     string;
+  unit_type?:    string;
+  q?:            string;
+  min_clg_btu?:  number;
+  max_clg_btu?:  number;
+  min_htg_btu?:  number;
+  max_htg_btu?:  number;
+  limit?:        number;
+}
+
+export function useDfunitBrowse(filters: DFUnitFilters) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+  }
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["dfunit-browse", filters] as const,
+    queryFn: () => apiFetchEnvelope<DFUnitBrowseResponse>(
+      `/api/bom/dfunit${qs ? `?${qs}` : ""}`,
+    ),
+    staleTime: 60_000,
+  });
+}
+
+// ─── Wrightsoft mapping browser (Day-12) ───────────────────────────
+
+export interface MappingItem {
+  generic_id:           string;
+  description:          string | null;
+  category:             string | null;
+  supplier:             string;
+  manufacturer_partnum: string;
+  quantity_variant:     string | null;
+}
+
+export interface MappingBrowseResponse {
+  items:    MappingItem[];
+  total:    number;
+  returned: number;
+  facets: {
+    suppliers:  string[];
+    categories: string[];
+  };
+}
+
+export interface MappingFilters {
+  generic_id?: string;
+  supplier?:   string;
+  category?:   string;
+  q?:          string;
+  limit?:      number;
+}
+
+export function useMappingsBrowse(filters: MappingFilters) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+  }
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["mappings-browse", filters] as const,
+    queryFn: () => apiFetchEnvelope<MappingBrowseResponse>(
+      `/api/bom/mappings${qs ? `?${qs}` : ""}`,
+    ),
+    staleTime: 60_000,
+  });
+}
+
+// ─── Contractor overrides (Day-13) ─────────────────────────────────
+//
+// Per-contractor manual corrections to Wrightsoft-emitted lines:
+// SKU translation fixes, supplier swaps, and Tom's "we collect prices
+// from each client and put them in" pricing workflow. The edit drawer
+// on the Wrightsoft BOM result page hits the upsert hook; the
+// per-contractor overrides ledger uses the list hook.
+
+export interface ContractorOverride {
+  id:                 number;
+  contractor_id:      string;
+  supplier:           string;
+  sku:                string;
+  corrected_sku:      string | null;
+  corrected_supplier: string | null;
+  unit_price:         number | null;
+  notes:              string | null;
+  created_at:         string | null;
+  updated_at:         string | null;
+  updated_by:         string | null;
+}
+
+export interface ContractorOverridesList {
+  client_id: string;
+  items:     ContractorOverride[];
+  count:     number;
+}
+
+export const getListContractorOverridesQueryKey = (clientId: string) =>
+  ["contractor-overrides", clientId] as const;
+
+export function useListContractorOverrides(clientId: string) {
+  return useQuery({
+    queryKey: getListContractorOverridesQueryKey(clientId),
+    queryFn: () => apiFetchEnvelope<ContractorOverridesList>(
+      `/api/contractor-overrides?client_id=${encodeURIComponent(clientId)}`,
+    ),
+    enabled: !!clientId,
+    staleTime: 30_000,
+  });
+}
+
+export interface ContractorOverrideUpsertInput {
+  client_id:          string;
+  supplier:           string;
+  sku:                string;
+  corrected_sku?:     string | null;
+  corrected_supplier?: string | null;
+  unit_price?:        number | null;
+  notes?:             string | null;
+}
+
+export function useUpsertContractorOverride() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ContractorOverride,
+    { error: string; status?: number },
+    ContractorOverrideUpsertInput
+  >({
+    mutationFn: async (input) => {
+      const res = await fetch("/api/contractor-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        throw { error: body?.error ?? `Save failed (${res.status})`, status: res.status };
+      }
+      return body.data as ContractorOverride;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: getListContractorOverridesQueryKey(variables.client_id),
+      });
+    },
+  });
+}
+
+export function useDeleteContractorOverride() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    { deleted_id: number },
+    { error: string; status?: number },
+    { id: number; client_id: string }
+  >({
+    mutationFn: async ({ id }) => {
+      const res = await fetch(`/api/contractor-overrides/${id}`, {
+        method: "DELETE",
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        throw { error: body?.error ?? `Delete failed (${res.status})`, status: res.status };
+      }
+      return body.data as { deleted_id: number };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: getListContractorOverridesQueryKey(variables.client_id),
+      });
+    },
   });
 }

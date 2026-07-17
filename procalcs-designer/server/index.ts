@@ -19,9 +19,18 @@ import { config } from "./config.js";
 import clientProfilesRouter from "./routes/clientProfiles.js";
 import dashboardRouter from "./routes/dashboard.js";
 import bomRouter from "./routes/bom.js";
+import bomRunsRouter from "./routes/bomRuns.js";
 import skuCatalogRouter from "./routes/skuCatalog.js";
+import contractorOverridesRouter from "./routes/contractorOverrides.js";
+import rupDuctTotalsRouter from "./routes/rupDuctTotals.js";
 import pdfCleanupRouter from "./routes/pdfCleanup.js";
 import billingRouter from "./routes/billing.js";
+import observerRouter from "./routes/observer.js";
+import catalogRouter from "./routes/catalog.js";
+import bomChatRouter from "./routes/bomChat.js";
+import bomChatAttachmentsRouter from "./routes/bomChatAttachments.js";
+import questionsRouter from "./routes/questions.js";
+import usageRouter from "./routes/usage.js";
 import authRouter from "./auth/routes.js";
 import { requireAuth } from "./auth/middleware.js";
 import { authConfig } from "./auth/config.js";
@@ -43,6 +52,27 @@ app.use(cookieParser());
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/pdf-cleanup")) return next();
   if (req.path === "/api/bom/parse-rup") return next();
+  if (req.path === "/api/bom/rup-inspect") return next();
+  // Wrightsoft BOM upload — multipart (file + client_id + job_id fields).
+  // Must skip JSON parsing so the form fields actually reach Flask.
+  if (req.path === "/api/bom/from-wrightsoft") return next();
+  // Wrightsoft BOM v2 (bundle path) — multipart (file + equipment_bundle
+  // + client_id + job_id). Same bypass reason as /from-wrightsoft.
+  if (req.path === "/api/bom/from-wrightsoft-bundle") return next();
+  // Observer bundle uploads — multipart .tar.gz per HANDOFF_OBSERVER_AGENT.md.
+  // We consume the raw stream ourselves; JSON parsing would break it.
+  if (req.path === "/api/observer/upload") return next();
+  // Chat attachments — multipart via multer; JSON parsing would break it.
+  if (req.path === "/api/bom-chat/attachments") return next();
+  // Chat bodies can carry base64 image attachments — needs headroom.
+  if (req.path === "/api/bom-chat") {
+    return express.json({ limit: "30mb" })(req, res, next);
+  }
+  // Sample-BOM XLS upload (Phase 7) — must skip JSON parsing so the
+  // multipart body streams through to the BOM service unchanged.
+  if (req.path.startsWith("/api/bom-runs/") && req.path.endsWith("/compare")) {
+    return next();
+  }
   if (req.path === "/api/billing/webhook") return next();
   express.json({ limit: "10mb" })(req, res, next);
 });
@@ -72,12 +102,25 @@ app.use("/api/auth", authRouter);
 // procalcs-bom against STRIPE_WEBHOOK_SECRET.
 app.use("/api/billing/webhook", billingRouter);
 
+// Observer agent — machine-to-machine, bearer token auth (owned inside
+// the router). Mounted before requireAuth-protected routes so the
+// agent doesn't need a browser cookie.
+app.use("/api/observer", observerRouter);
+
 // Protected API routes — every request past this line has req.user
 // set by requireAuth, or was 401'd before reaching the router.
 app.use("/api/client-profiles", requireAuth, clientProfilesRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/bom", requireAuth, bomRouter);
+app.use("/api/bom-runs", requireAuth, bomRunsRouter);
 app.use("/api/sku-catalog", requireAuth, skuCatalogRouter);
+app.use("/api/contractor-overrides", requireAuth, contractorOverridesRouter);
+app.use("/api/rup-duct-totals", requireAuth, rupDuctTotalsRouter);
+app.use("/api/catalog", requireAuth, catalogRouter);
+app.use("/api/bom-chat/attachments", requireAuth, bomChatAttachmentsRouter);
+app.use("/api/bom-chat", requireAuth, bomChatRouter);
+app.use("/api/questions", requireAuth, questionsRouter);
+app.use("/api/usage", requireAuth, usageRouter);
 app.use("/api/pdf-cleanup", requireAuth, pdfCleanupRouter);
 app.use("/api/billing", requireAuth, billingRouter);
 

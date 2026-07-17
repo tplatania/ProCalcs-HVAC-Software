@@ -64,8 +64,24 @@ describe("normalizeCategory", () => {
 });
 
 describe("normalizeSource", () => {
-  it("returns 'rules' only for the explicit string", () => {
+  it("maps catalog-emitted backend sources to 'rules'", () => {
     assert.equal(normalizeSource("rules"), "rules");
+    assert.equal(normalizeSource("rules_engine"), "rules");
+    assert.equal(normalizeSource("catalog_match"), "rules");
+  });
+
+  it("maps wrightsoft_* and catalog_verified_* to 'verified'", () => {
+    assert.equal(normalizeSource("wrightsoft_mapped"), "verified");
+    assert.equal(normalizeSource("wrightsoft_dfunit"), "verified");
+    assert.equal(normalizeSource("wrightsoft_passthrough"), "verified");
+    assert.equal(normalizeSource("catalog_verified_mapped"), "verified");
+    assert.equal(normalizeSource("catalog_verified_dfunit"), "verified");
+  });
+
+  it("maps ai_* (and unknowns) to 'ai'", () => {
+    assert.equal(normalizeSource("ai_inferred"), "ai");
+    assert.equal(normalizeSource("ai_with_catalog_sku"), "ai");
+    assert.equal(normalizeSource("wrightsoft_unmapped"), "ai"); // not verified
   });
 
   it("treats absent or unknown source as 'ai' (safer default — surfaces line for review)", () => {
@@ -73,7 +89,9 @@ describe("normalizeSource", () => {
     assert.equal(normalizeSource(""), "ai");
     assert.equal(normalizeSource("ai"), "ai");
     assert.equal(normalizeSource("manual"), "ai");
-    assert.equal(normalizeSource("RULES"), "ai"); // case-sensitive on purpose
+    // Case-insensitive — backend has emitted both 'RULES_ENGINE' and
+    // 'rules_engine' at different points; normalize the whole space.
+    assert.equal(normalizeSource("RULES"), "rules");
   });
 });
 
@@ -132,36 +150,50 @@ describe("mapLineItem", () => {
 });
 
 describe("computeProvenanceCounts", () => {
-  it("prefers backend-reported counts when present", () => {
-    const counts = computeProvenanceCounts(
-      makeBom({
-        rules_engine_item_count: 4,
-        ai_item_count: 12,
-        line_items: [makeItem(), makeItem()], // mismatched on purpose — backend wins
-      })
-    );
-    assert.equal(counts.rules, 4);
-    assert.equal(counts.ai, 12);
-    assert.equal(counts.hasProvenance, true);
-  });
-
-  it("derives counts from line_items.source when backend totals absent", () => {
+  it("derives counts from line_items.source (always, ignoring backend totals)", () => {
+    // Backend per-source totals can drift once the Day-12 verifier
+    // promotes AI lines to catalog_verified_*; deriving from the
+    // line_items themselves keeps the badge counts honest.
     const counts = computeProvenanceCounts(
       makeBom({
         line_items: [
-          makeItem({ source: "rules" }),
-          makeItem({ source: "rules" }),
-          makeItem({ source: "ai" }),
+          makeItem({ source: "rules_engine" }),
+          makeItem({ source: "catalog_match" }),
+          makeItem({ source: "wrightsoft_mapped" }),
+          makeItem({ source: "wrightsoft_dfunit" }),
+          makeItem({ source: "wrightsoft_passthrough" }),
+          makeItem({ source: "catalog_verified_dfunit" }),
+          makeItem({ source: "catalog_verified_mapped" }),
+          makeItem({ source: "ai_inferred" }),
+          makeItem({ source: "ai_with_catalog_sku" }),
           makeItem({}), // no source → counted as AI
         ],
       })
     );
+    // rules: rules_engine + catalog_match = 2
+    // verified: wrightsoft_* (3) + catalog_verified_* (2) = 5
+    // ai: ai_* + missing = 3
     assert.equal(counts.rules, 2);
-    assert.equal(counts.ai, 2);
+    assert.equal(counts.verified, 5);
+    assert.equal(counts.ai, 3);
     assert.equal(counts.hasProvenance, true);
   });
 
-  it("hasProvenance is false only when both counts are zero", () => {
+  it("handles the legacy 'rules' / 'ai' string values", () => {
+    const counts = computeProvenanceCounts(
+      makeBom({
+        line_items: [
+          makeItem({ source: "rules" }),
+          makeItem({ source: "ai" }),
+        ],
+      })
+    );
+    assert.equal(counts.rules, 1);
+    assert.equal(counts.verified, 0);
+    assert.equal(counts.ai, 1);
+  });
+
+  it("hasProvenance is false only when line_items is empty", () => {
     const empty = computeProvenanceCounts(makeBom({ line_items: [] }));
     assert.equal(empty.hasProvenance, false);
   });
