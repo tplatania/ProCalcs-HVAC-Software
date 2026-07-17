@@ -670,6 +670,31 @@ def _record_bom_run(
         regenerated_from_id=regenerated_from_id,
     )
     db.session.commit()
+
+    # Day-25 telemetry — one bom_generated event per run, carrying the
+    # override_ids that auto-applied. This is the forward record of
+    # the learning loop closing (the /impact endpoint also computes it
+    # retroactively from generated_bom). Best-effort: telemetry must
+    # never poison the BOM response.
+    try:
+        from models.usage_event import UsageEvent
+        ov_ids = sorted({
+            li["override_id"]
+            for li in (generated_bom or {}).get("line_items", [])
+            if isinstance(li, dict) and isinstance(li.get("override_id"), int)
+        })
+        UsageEvent.record(
+            event="bom_generated",
+            actor_email=created_by_email,
+            client_id=client_id,
+            job_id=job_id,
+            run_id=run.id,
+            detail={"override_hits": len(ov_ids), "override_ids": ov_ids},
+        )
+    except Exception:
+        logger.exception("bom_generated usage-event failed (non-fatal)")
+        db.session.rollback()
+
     return run.id
 
 

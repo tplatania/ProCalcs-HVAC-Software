@@ -137,6 +137,22 @@ def upsert_override():
             updated_by=_actor(),
         )
         db.session.commit()
+        # Day-25 telemetry — the input side of the learning loop.
+        try:
+            from models.usage_event import UsageEvent
+            UsageEvent.record(
+                event="override_saved",
+                actor_email=_actor(),
+                client_id=client_id,
+                detail={
+                    "supplier": supplier, "sku": sku,
+                    "has_price": unit_price is not None,
+                    "has_sku_fix": bool(body.get("corrected_sku")),
+                },
+            )
+        except Exception:
+            logger.warning("override_saved usage-event failed", exc_info=True)
+            db.session.rollback()
         return jsonify({
             "success": True, "data": row.to_dict(), "error": None,
         }), 200

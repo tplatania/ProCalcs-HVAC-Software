@@ -109,6 +109,7 @@ def register_blueprints(app):
     # Day-14 Phase 4 — per-RUP known-duct-LF cache. Pre-populates the
     # BOM Engine form on re-upload of the same file.
     from routes.rup_duct_totals_routes import rup_duct_totals_bp
+    from routes.usage_events_routes import usage_events_bp
 
     # Keep /health for Cloud Run probes AND expose /api/v1/health so a
     # second API consumer can hit the versioned namespace consistently.
@@ -123,6 +124,8 @@ def register_blueprints(app):
                            url_prefix='/api/v1/contractor-overrides')
     app.register_blueprint(rup_duct_totals_bp,
                            url_prefix='/api/v1/rup-duct-totals')
+    app.register_blueprint(usage_events_bp,
+                           url_prefix='/api/v1/usage-events')
 
 
 # ===============================
