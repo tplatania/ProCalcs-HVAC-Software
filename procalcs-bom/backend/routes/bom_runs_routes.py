@@ -25,6 +25,7 @@ designer email forwarded by designer-desktop's BFF.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import Blueprint, g, jsonify, request
@@ -264,6 +265,84 @@ def regenerate_run(run_id: int):
 # heavy formatting they're under 1 MB. Cap at 5 MB so a malformed
 # upload can't OOM the worker.
 _MAX_SAMPLE_BYTES = 5 * 1024 * 1024
+
+
+@bom_runs_bp.route("/<int:run_id>/patches", methods=["POST"])
+def add_patch(run_id: int):
+    """Append one surgical correction to this run's patch list.
+
+    Body:
+        op          — "update_line" | "remove_line" | "add_line"
+        sku         — line key (generic_id / part number)
+        fields      — for update/add: {quantity?, unit_price?, description?, source?}
+        reason      — one-line justification (required; shown in review)
+        snipe_ref   — optional chat snipe ref this correction came from
+        rule_candidate — bool; true when the user phrased it as a
+                      standing rule ("always", "every plan") — recorded
+                      for ledger review, NOT auto-promoted.
+
+    Patches fix THIS run only. Prices should go through contractor
+    overrides instead (they're remembered forever); the SPA enforces
+    that split. Returns the full updated ops list.
+    """
+    run = BomRun.query.get(run_id)
+    if run is None:
+        return _err(f"Run {run_id} not found", 404)
+
+    body = request.get_json(silent=True) or {}
+    op_kind = str(body.get("op") or "").strip()
+    if op_kind not in ("update_line", "remove_line", "add_line"):
+        return _err("op must be update_line | remove_line | add_line", 400)
+    sku = str(body.get("sku") or "").strip()
+    reason = str(body.get("reason") or "").strip()
+    if not sku or not reason:
+        return _err("sku and reason are required", 400)
+    fields = body.get("fields") if isinstance(body.get("fields"), dict) else {}
+    if op_kind in ("update_line", "add_line") and not fields:
+        return _err(f"{op_kind} requires a non-empty fields object", 400)
+
+    entry = {
+        "op": op_kind,
+        "sku": sku,
+        "fields": fields,
+        "reason": reason,
+        "snipe_ref": body.get("snipe_ref") or None,
+        "author": _reviewer_email_from_request(),
+        "at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
+    }
+    ops = list(run.patch_ops or [])
+    ops.append(entry)
+    run.patch_ops = ops
+    db.session.commit()
+
+    # Day-25 telemetry — patches are loop input too.
+    try:
+        from models.usage_event import UsageEvent
+        UsageEvent.record(
+            event="patch_applied",
+            actor_email=entry["author"],
+            client_id=run.client_id,
+            job_id=run.job_id,
+            run_id=run.id,
+            detail={"op": op_kind, "sku": sku, "snipe_ref": entry["snipe_ref"]},
+            commit=False,
+        )
+        if body.get("rule_candidate"):
+            UsageEvent.record(
+                event="rule_candidate",
+                actor_email=entry["author"],
+                client_id=run.client_id,
+                job_id=run.job_id,
+                run_id=run.id,
+                detail={"op": op_kind, "sku": sku, "reason": reason},
+                commit=False,
+            )
+        db.session.commit()
+    except Exception:  # noqa: BLE001 — telemetry never blocks the patch
+        logger.warning("patch telemetry failed", exc_info=True)
+        db.session.rollback()
+
+    return _ok({"run_id": run.id, "patch_ops": ops})
 
 
 @bom_runs_bp.route("/<int:run_id>/compare", methods=["POST"])

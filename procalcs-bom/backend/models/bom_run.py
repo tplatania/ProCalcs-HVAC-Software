@@ -100,6 +100,12 @@ class BomRun(db.Model):
     reviewer_email  = db.Column(db.String(255), nullable=True)
     reviewed_at     = db.Column(db.DateTime, nullable=True)
 
+    # Day-25 — run-scoped surgical corrections from the review chat.
+    # List of ops: {op, sku, fields?, reason, author, at, snipe_ref?}.
+    # Fix THIS run only; never promoted to standing rules directly
+    # (rule-level corrections go through the question ledger).
+    patch_ops = db.Column(_JSONType, nullable=True)
+
     # Self-referential FK for regeneration chains (Phase 4). When set,
     # this run was triggered by clicking "Regenerate" on the parent.
     # Null = first generation for this RUP+contractor combination.
@@ -208,6 +214,7 @@ class BomRun(db.Model):
             **self.to_summary(),
             "parsed_design_data":     self.parsed_design_data,
             "generated_bom":          self.generated_bom,
+            "patch_ops":              self.patch_ops or [],
             "anthropic_input_tokens": self.anthropic_input_tokens,
             "anthropic_output_tokens": self.anthropic_output_tokens,
             "reviewer_notes":         self.reviewer_notes,

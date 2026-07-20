@@ -48,6 +48,8 @@ _ALLOWED_EVENTS = {
     "attachment_uploaded",
     "override_saved",
     "proposal_applied",
+    "patch_applied",
+    "rule_candidate",
     "question_answered",
 }
 
