@@ -176,6 +176,23 @@ router.post("/:id/review", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Day-25 — run-scoped surgical patches (chat corrections) ──────────
+
+router.post("/:id/patches", async (req: Request, res: Response) => {
+  try {
+    const id = encodeURIComponent(String(req.params.id));
+    send(
+      res,
+      await callFlask(req, `/${id}/patches`, {
+        method: "POST",
+        body: JSON.stringify(req.body ?? {}),
+      }),
+    );
+  } catch (err) {
+    sendUpstreamError(res, err, `Patch run ${req.params.id}`);
+  }
+});
+
 // ─── Compare with sample BOM (Phase 7) ────────────────────────────────
 //
 // Two intake shapes from the SPA:

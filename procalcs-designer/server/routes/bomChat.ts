@@ -94,7 +94,13 @@ const TOOLS: Anthropic.Tool[] = [
         sku: { type: "string", description: "The generic_id / part number of the line" },
         unit_price: { type: "number", description: "New unit price in dollars" },
         quantity: { type: "number", description: "New quantity" },
+        description: { type: "string", description: "Corrected description text" },
         reason: { type: "string", description: "One-line justification shown to the user" },
+        rule_candidate: {
+          type: "boolean",
+          description: "true when the user phrased this as a standing rule " +
+            "('always', 'every plan') — it gets queued for expert review",
+        },
       },
       required: ["sku", "reason"],
     },
@@ -115,6 +121,43 @@ const TOOLS: Anthropic.Tool[] = [
         reason: { type: "string", description: "One-line justification shown to the user" },
       },
       required: ["sku", "description", "quantity", "reason"],
+    },
+  },
+  {
+    name: "propose_remove_line",
+    description:
+      "Propose removing a line from this BOM (wrong part, duplicate, " +
+      "not used on this plan). The user sees the proposal with an " +
+      "Apply button — it does NOT auto-apply. Applies to THIS BOM " +
+      "only; it does not create a standing rule.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        sku: { type: "string", description: "The generic_id / part number of the line" },
+        reason: { type: "string", description: "One-line justification shown to the user" },
+        rule_candidate: {
+          type: "boolean",
+          description: "true when the user phrased this as a standing rule " +
+            "('always', 'every plan', 'never') — it gets queued for expert review",
+        },
+      },
+      required: ["sku", "reason"],
+    },
+  },
+  {
+    name: "propose_regenerate",
+    description:
+      "Propose regenerating the whole BOM from the stored design data. " +
+      "Use AFTER corrections were applied so they fold into a fresh " +
+      "run, or when the user asks for a clean re-run. The chat " +
+      "conversation is preserved. The user sees an Apply button — it " +
+      "does NOT auto-run.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        reason: { type: "string", description: "One-line justification shown to the user" },
+      },
+      required: ["reason"],
     },
   },
 ];
@@ -160,7 +203,9 @@ const SYSTEM_PROMPT = `You are the BOM review assistant inside ProCalcs Designer
 The user is reviewing a Bill of Materials draft generated from a Wrightsoft .rup design file. Your job:
 - Explain gaps: lines flagged "needs input" are SKUs Wrightsoft carries no price for (Rheia duct parts, Goodman/Daikin/Broan equipment). The contractor's own pricing must fill them.
 - Identify parts via the catalog tools before guessing.
-- When the user provides a price, quantity, or correction, immediately call propose_line_update (or propose_add_line for missing items) so they can apply it with one click. Every applied fill is remembered — the same SKU never asks twice.
+- When the user provides a price, quantity, or correction, immediately call propose_line_update (or propose_add_line for missing items, propose_remove_line for wrong/duplicate lines) so they can apply it with one click.
+- Prices are remembered forever (contractor override — the same SKU never asks twice). Quantity, description, add and remove corrections fix THIS BOM only; if the user phrases one as a standing rule ("always", "every plan"), set rule_candidate=true so it reaches expert review — never claim it will auto-apply to future BOMs.
+- After one or more corrections are applied, offer propose_regenerate so everything folds into a fresh consistent run. The chat survives regeneration.
 - Keep answers short and concrete. This user is busy; one question at a time.
 Domain notes: RHEA = Rheia (small-diameter duct system, rheiacomfort.com). BOMs historically exist only for Rheia projects; standard projects are the new territory. "RE" suffix files are revisions.`;
 

@@ -76,13 +76,54 @@ import { cn } from "@/lib/utils";
 // Default contractor — applied on first load when this profile exists
 // in the list. Lets reviewers click "Build BOM" without first hunting
 // the dropdown for the contractor 99% of staging runs use anyway.
-const DEFAULT_CLIENT_ID = "procalcs-direct";
+// Day-26 — Richard's team is the pilot user group, so their profile
+// is the default. Falls back to the first profile if it's absent.
+const DEFAULT_CLIENT_ID = "reliable-heating-and-cooling";
 
 // Cross-tab signal — the profile-detail page posts a "profiles-updated"
 // message after a successful save. Other open tabs (like this one)
 // listen and refresh the client-profiles cache so the dropdown reflects
 // edits without a manual reload.
 const PROFILES_CHANNEL = "procalcs-profiles";
+
+/** Day-26 — replay run-scoped patch ops (chat corrections) over a
+ * stored generated_bom so a reloaded permalink shows the corrected
+ * BOM, not the original. Mirrors the optimistic in-session logic. */
+function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
+  if (!Array.isArray(ops) || ops.length === 0) return bom;
+  const items = ((bom?.line_items as any[]) ?? []).map((li) => ({ ...li }));
+  for (const op of ops) {
+    const idx = items.findIndex(
+      (li) => (li.sku ?? li.generic_id) === op.sku);
+    if (op.op === "remove_line") {
+      if (idx >= 0) items.splice(idx, 1);
+    } else if (op.op === "add_line") {
+      const f = op.fields ?? {};
+      const qty = f.quantity ?? 1;
+      const price = f.unit_price ?? 0;
+      items.push({
+        generic_id: op.sku, sku: op.sku,
+        description: f.description ?? op.sku,
+        quantity: qty, unit: "ea",
+        unit_cost: price, unit_price: price,
+        total_price: Math.round(price * qty * 100) / 100,
+        source: "wrightsoft_manual", section: f.section ?? "Other",
+        patched: true,
+      });
+    } else if (op.op === "update_line" && idx >= 0) {
+      const f = op.fields ?? {};
+      const li = { ...items[idx], patched: true };
+      if (f.quantity != null) {
+        li.quantity = f.quantity;
+        const unit = li.unit_price ?? li.unit_cost ?? 0;
+        li.total_price = Math.round(unit * f.quantity * 100) / 100;
+      }
+      if (f.description != null) li.description = f.description;
+      items[idx] = li;
+    }
+  }
+  return { ...bom, line_items: items, item_count: items.length };
+}
 
 export default function WrightsoftBomV2Page() {
   const [, setLocation] = useLocation();
@@ -165,7 +206,10 @@ export default function WrightsoftBomV2Page() {
     const data: any = persistedRun.data;
     const gen = data?.generated_bom;
     if (gen && (result === null || (result as any).run_id !== urlRunId)) {
-      setResult({ ...gen, run_id: data.id ?? urlRunId } as any);
+      // Day-26 — re-apply run-scoped patches on rehydrate, otherwise a
+      // reload silently shows the pre-correction BOM.
+      const patched = applyPatchOps(gen, data?.patch_ops);
+      setResult({ ...patched, run_id: data.id ?? urlRunId } as any);
       if (data?.client_id && !clientId) setClientId(data.client_id);
       if (data?.job_id && !jobId)       setJobId(data.job_id);
     }
@@ -545,6 +589,94 @@ export default function WrightsoftBomV2Page() {
           clientId={clientId}
           brandColor={brandColor}
           onChatOpenChange={setChatOpen}
+          onApplyPatch={async (action) => {
+            // Day-25 — surgical corrections from the chat. Persist as
+            // a run-scoped patch (fixes THIS run only), then mirror
+            // the edit locally so the tables update immediately.
+            const runId = (result as any)?.run_id;
+            if (!runId) return false;
+            const op = action.kind === "propose_remove_line" ? "remove_line"
+                     : action.kind === "propose_add_line"    ? "add_line"
+                     : "update_line";
+            const fields: Record<string, unknown> = {};
+            if (action.quantity != null)    fields.quantity    = action.quantity;
+            if (action.description != null) fields.description = action.description;
+            if (op === "add_line" && action.unit_price != null) fields.unit_price = action.unit_price;
+            if (action.source) fields.source = action.source;
+            try {
+              const res = await fetch(`/api/bom-runs/${runId}/patches`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                  op, sku: action.sku, fields, reason: action.reason,
+                  rule_candidate: !!action.rule_candidate,
+                }),
+              });
+              const body = await res.json();
+              if (!res.ok || !body.success) return false;
+            } catch { return false; }
+            setResult((prev) => {
+              if (!prev) return prev;
+              const items = (prev.line_items as any[]).slice();
+              const idx = items.findIndex(
+                (li: any) => (li.sku ?? li.generic_id) === action.sku);
+              if (op === "remove_line") {
+                if (idx >= 0) items.splice(idx, 1);
+              } else if (op === "add_line") {
+                items.push({
+                  generic_id: action.sku, sku: action.sku,
+                  description: action.description ?? action.sku,
+                  quantity: action.quantity ?? 1, unit: "ea",
+                  unit_cost: action.unit_price ?? 0,
+                  unit_price: action.unit_price ?? 0,
+                  total_price: (action.unit_price ?? 0) * (action.quantity ?? 1),
+                  source: "wrightsoft_manual", section: "Other",
+                  patched: true,
+                });
+              } else if (idx >= 0) {
+                const li = { ...items[idx], patched: true };
+                if (action.quantity != null) {
+                  li.quantity = action.quantity;
+                  const unit = li.unit_price ?? li.unit_cost ?? 0;
+                  li.total_price = Math.round(unit * action.quantity * 100) / 100;
+                }
+                if (action.description != null) li.description = action.description;
+                items[idx] = li;
+              }
+              return { ...prev, line_items: items,
+                       item_count: items.length } as any;
+            });
+            return true;
+          }}
+          onRegenerate={async () => {
+            // Day-25 — full re-run from stored design data. Result is
+            // swapped in place; the chat sidebar stays mounted, so the
+            // conversation survives.
+            const runId = (result as any)?.run_id;
+            if (!runId) return false;
+            try {
+              const res = await fetch(`/api/bom-runs/${runId}/regenerate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({}),
+              });
+              const body = await res.json();
+              if (!res.ok || !body.success) return false;
+              const fresh = body.data as BomResponse;
+              setResult(fresh);
+              const newRunId = (fresh as any)?.run_id;
+              if (newRunId && typeof window !== "undefined") {
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("run", String(newRunId));
+                  window.history.replaceState({}, "", url.toString());
+                } catch { /* ignore */ }
+              }
+              return true;
+            } catch { return false; }
+          }}
           onLineUpdated={(idx, patch) => {
             // Optimistic in-place update so the edit drawer's save is
             // reflected immediately without a full BOM re-run.
@@ -563,7 +695,7 @@ export default function WrightsoftBomV2Page() {
 
 // ─── Result view ───────────────────────────────────────────────────
 
-function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenChange }: {
+function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenChange, onApplyPatch, onRegenerate }: {
   bom: BomResponse & {
     source_pipeline?: string;
     wrightsoft_mapped_item_count?: number;
@@ -578,6 +710,10 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenCha
   onLineUpdated: (lineIndex: number, patch: Record<string, any>) => void;
   /** Page-level hook: reflow the content column while the chat is open. */
   onChatOpenChange?: (open: boolean) => void;
+  /** Day-25 — surgical patch + full regenerate, owned by the page
+   * because both mutate the result object in place. */
+  onApplyPatch?: (a: import("@/components/wrightsoft-bom/bom-chat-sidebar").ProposedAction) => Promise<boolean>;
+  onRegenerate?: () => Promise<boolean>;
 }) {
   // Edit drawer state lives here because we own the in-place line
   // mutation that runs after a save. The line index is preserved so
@@ -1546,6 +1682,8 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenCha
           drawer, so chat answers are learned once and reused. */}
       <BomChatSidebar
         clientId={clientId}
+        onApplyPatch={onApplyPatch}
+        onRegenerate={onRegenerate}
         openSignal={chatOpenSignal}
         onOpenChange={onChatOpenChange}
         snipes={snipes}

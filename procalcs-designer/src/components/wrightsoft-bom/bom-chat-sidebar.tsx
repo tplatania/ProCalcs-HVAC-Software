@@ -35,13 +35,15 @@ interface ChatTurn {
 }
 
 export interface ProposedAction {
-  kind: "propose_line_update" | "propose_add_line";
-  sku: string;
+  kind: "propose_line_update" | "propose_add_line"
+      | "propose_remove_line" | "propose_regenerate";
+  sku?: string;
   description?: string;
   quantity?: number;
   unit_price?: number;
   source?: string;
   reason: string;
+  rule_candidate?: boolean;
   applied?: boolean;
 }
 
@@ -64,12 +66,18 @@ export interface Snipe {
 const SNIPE_COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
 export const snipeColor = (i: number) => SNIPE_COLORS[i % SNIPE_COLORS.length];
 
-export function BomChatSidebar({ bom, onApplyPrice, clientId, snipes = [], onRemoveSnipe, onClearSnipes, openSignal, onOpenChange }: {
+export function BomChatSidebar({ bom, onApplyPrice, onApplyPatch, onRegenerate, clientId, snipes = [], onRemoveSnipe, onClearSnipes, openSignal, onOpenChange }: {
   /** The BOM response object — sent as context to the agent. */
   bom: unknown;
   /** Persist a price for a SKU via contractor overrides. Returns
    * true when the SKU was found and the save was kicked off. */
   onApplyPrice: (sku: string, price: number) => boolean;
+  /** Day-25 — surgical corrections: qty/description edits, removes,
+   * adds. Persisted as run-scoped patches (NOT overrides). */
+  onApplyPatch?: (a: ProposedAction) => Promise<boolean>;
+  /** Day-25 — full regenerate from stored design data. Resolves true
+   * on success; the chat stays mounted through the swap. */
+  onRegenerate?: () => Promise<boolean>;
   /** Contractor id — drives the pending-questions ledger lookup. */
   clientId?: string;
   /** Sniped tables/rows from the page (crosshair buttons). */
@@ -219,23 +227,52 @@ export function BomChatSidebar({ bom, onApplyPrice, clientId, snipes = [], onRem
     }
   };
 
-  const applyAction = (turnIdx: number, actionIdx: number) => {
+  const markApplied = (turnIdx: number, actionIdx: number) => {
+    setTurns((prev) => {
+      const next = prev.slice();
+      const actions = next[turnIdx].actions!.slice();
+      actions[actionIdx] = { ...actions[actionIdx], applied: true };
+      next[turnIdx] = { ...next[turnIdx], actions };
+      return next;
+    });
+  };
+
+  const applyAction = async (turnIdx: number, actionIdx: number) => {
     const action = turns[turnIdx]?.actions?.[actionIdx];
     if (!action || action.applied) return;
-    if (action.kind === "propose_line_update" && action.unit_price != null) {
-      const ok = onApplyPrice(action.sku, action.unit_price);
+    setError(null);
+
+    if (action.kind === "propose_regenerate") {
+      const ok = await onRegenerate?.();
+      if (ok) markApplied(turnIdx, actionIdx);
+      else setError("Regeneration failed — see the page banner.");
+      return;
+    }
+
+    // Prices → contractor override (remembered forever). Everything
+    // else (qty, description, add, remove) → run-scoped patch that
+    // fixes THIS BOM only.
+    let ok = true;
+    if (action.kind === "propose_line_update" && action.unit_price != null && action.sku) {
+      ok = onApplyPrice(action.sku, action.unit_price);
       if (!ok) {
         setError(`SKU ${action.sku} not found in the current draft.`);
         return;
       }
-      setTurns((prev) => {
-        const next = prev.slice();
-        const actions = next[turnIdx].actions!.slice();
-        actions[actionIdx] = { ...actions[actionIdx], applied: true };
-        next[turnIdx] = { ...next[turnIdx], actions };
-        return next;
-      });
     }
+    const needsPatch =
+      action.kind === "propose_remove_line" ||
+      action.kind === "propose_add_line" ||
+      (action.kind === "propose_line_update" &&
+        (action.quantity != null || action.description != null));
+    if (needsPatch) {
+      ok = (await onApplyPatch?.(action)) ?? false;
+      if (!ok) {
+        setError("Couldn't save the correction — is this BOM saved as a run?");
+        return;
+      }
+    }
+    if (ok) markApplied(turnIdx, actionIdx);
   };
 
   // Portal to <body>: a transformed ancestor in the page layout was
@@ -357,30 +394,40 @@ export function BomChatSidebar({ bom, onApplyPrice, clientId, snipes = [], onRem
                    className="mt-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-left">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <div className="font-mono font-medium">{a.sku}</div>
+                    <div className="font-mono font-medium">
+                      {a.kind === "propose_regenerate" ? "Regenerate BOM" : a.sku}
+                    </div>
                     <div className="text-muted-foreground">
-                      {a.kind === "propose_line_update"
-                        ? <>Set price to <b>${a.unit_price?.toFixed(2)}</b>
-                            {a.quantity != null && <> · qty {a.quantity}</>}</>
-                        : <>Add line: {a.description} · qty {a.quantity}
-                            {a.unit_price != null && <> · ${a.unit_price.toFixed(2)}</>}</>}
+                      {a.kind === "propose_line_update" && (
+                        <>{a.unit_price != null && <>Set price to <b>${a.unit_price.toFixed(2)}</b></>}
+                          {a.quantity != null && <> · qty → {a.quantity}</>}
+                          {a.description != null && <> · "{a.description}"</>}</>
+                      )}
+                      {a.kind === "propose_add_line" && (
+                        <>Add line: {a.description} · qty {a.quantity}
+                          {a.unit_price != null && <> · ${a.unit_price.toFixed(2)}</>}</>
+                      )}
+                      {a.kind === "propose_remove_line" && <>Remove this line from the BOM</>}
+                      {a.kind === "propose_regenerate" && <>Re-run from the stored design — applied fixes fold in; this chat stays.</>}
                     </div>
                     <div className="italic mt-0.5">{a.reason}</div>
+                    {a.rule_candidate && (
+                      <div className="mt-0.5 text-[10px] text-sky-700 dark:text-sky-300">
+                        Sounds like a standing rule — queued for expert review; not auto-applied to future BOMs.
+                      </div>
+                    )}
                   </div>
-                  {a.kind === "propose_line_update" ? (
-                    a.applied ? (
-                      <Badge variant="outline" className="gap-1 text-emerald-700 border-emerald-300">
-                        <Check className="w-3 h-3" /> Applied
-                      </Badge>
-                    ) : (
-                      <Button size="sm" className="h-7"
-                              onClick={() => applyAction(ti, ai)}
-                              data-testid={`apply-${a.sku}`}>
-                        Apply
-                      </Button>
-                    )
+                  {a.applied ? (
+                    <Badge variant="outline" className="gap-1 text-emerald-700 border-emerald-300">
+                      <Check className="w-3 h-3" /> Applied
+                    </Badge>
                   ) : (
-                    <Badge variant="outline">manual add</Badge>
+                    <Button size="sm" className="h-7"
+                            variant={a.kind === "propose_remove_line" ? "destructive" : "default"}
+                            onClick={() => applyAction(ti, ai)}
+                            data-testid={`apply-${a.sku ?? a.kind}`}>
+                      Apply
+                    </Button>
                   )}
                 </div>
               </div>
