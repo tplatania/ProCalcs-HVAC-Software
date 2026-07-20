@@ -239,6 +239,49 @@ def regenerate_run(run_id: int):
     new_job_id  = (body.get("new_job_id") or f"{parent.job_id}-rerun-{parent.id}").strip()
     output_mode = body.get("output_mode") or parent.output_mode
 
+    # Day-26 — dispatch on the run's source pipeline. Wrightsoft v2
+    # runs store their generic-part listing as wrightsoft_lines; the
+    # AI/bom_service path CANNOT rebuild those (it produced 9 junk
+    # lines when tried). Re-run them through the wrightsoft builder,
+    # which also re-applies contractor overrides — so corrections
+    # entered since the parent run fold into the fresh BOM.
+    ws_lines = design_data.get("wrightsoft_lines") if isinstance(design_data, dict) else None
+    if ws_lines:
+        from models.client_profile import ClientProfile
+        from services.bom_from_wrightsoft import build_bom_from_wrightsoft_lines
+        from services.profile_service import get_profile_by_id
+
+        profile_data = get_profile_by_id(parent.client_id)
+        if not profile_data:
+            return _err(f"No profile found for client_id '{parent.client_id}'", 404)
+        try:
+            bom = build_bom_from_wrightsoft_lines(
+                lines=ws_lines,
+                profile=ClientProfile.from_dict(profile_data),
+                job_id=new_job_id,
+                output_mode=output_mode or "full",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("wrightsoft regenerate failed parent=%s: %s",
+                         run_id, exc, exc_info=True)
+            return _err("BOM regeneration failed. Please try again.", 500)
+        try:
+            run = BomRun.record(
+                client_id=parent.client_id,
+                job_id=new_job_id,
+                output_mode=output_mode,
+                parsed_design_data=parent.parsed_design_data,
+                generated_bom=bom,
+                created_by_email=_reviewer_email_from_request(),
+                regenerated_from_id=parent.id,
+            )
+            db.session.commit()
+            bom["run_id"] = run.id
+        except Exception as exc:  # noqa: BLE001 — persistence is best-effort
+            logger.warning("wrightsoft regenerate persistence failed: %s", exc)
+            db.session.rollback()
+        return _ok(bom)
+
     try:
         bom = bom_service.generate(
             client_id=parent.client_id,

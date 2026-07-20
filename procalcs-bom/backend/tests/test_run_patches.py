@@ -127,3 +127,49 @@ def test_rule_candidate_event(app, client, run_id):
         assert "rule_candidate" in events
         rc = UsageEvent.query.filter_by(event="rule_candidate").one()
         assert "ALWAYS" in rc.detail["reason"]
+
+
+# ─── Day-26 — regenerate dispatches wrightsoft runs correctly ──────
+
+def test_regenerate_wrightsoft_run_uses_wrightsoft_builder(app, client, monkeypatch):
+    """A run whose parsed_design_data carries wrightsoft_lines must
+    re-run through build_bom_from_wrightsoft_lines (which re-applies
+    contractor overrides), NOT bom_service.generate — the AI path
+    produced junk (9 null-sku lines) when fed wrightsoft data."""
+    import services.profile_service as ps
+
+    profile = {
+        "client_id": "test-contractor", "client_name": "Test", "is_active": True,
+        "supplier": {"supplier_name": "S"},
+        "markup": {"equipment_pct": 15, "materials_pct": 25,
+                   "consumables_pct": 30, "labor_pct": 0},
+        "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+        "default_output_mode": "full", "include_labor": False, "notes": "",
+    }
+    monkeypatch.setattr(ps, "get_profile_by_id", lambda cid: profile)
+
+    with app.app_context():
+        parent = BomRun.record(
+            client_id="test-contractor", job_id="ws-job", output_mode="full",
+            parsed_design_data={
+                "source_pipeline": "wrightsoft_bom",
+                "wrightsoft_lines": [
+                    {"generic_id": "10-00-190", "quantity": 5,
+                     "description": "3-in Duct Uninsulated", "src": "Rheia"},
+                ],
+            },
+            generated_bom={"line_items": [{"sku": "10-00-190", "quantity": 5}]},
+        )
+        db.session.commit()
+        parent_id = parent.id
+
+    resp = client.post(f"/api/v1/bom-runs/{parent_id}/regenerate", json={})
+    assert resp.status_code == 200, resp.get_json()
+    bom = resp.get_json()["data"]
+    skus = [(li.get("sku") or li.get("generic_id")) for li in bom["line_items"]]
+    # The wrightsoft builder echoes real part ids — never null skus.
+    assert "10-00-190" in skus
+    assert all(s for s in skus)
+    with app.app_context():
+        child = BomRun.query.get(bom["run_id"])
+        assert child.regenerated_from_id == parent_id
