@@ -28,14 +28,31 @@ function optionalEnv(name: string, fallback: string): string {
 // synthetic dev user so downstream code keeps working.
 export const authEnabled = process.env.AUTH_ENABLED === "true";
 
+// Day-27 — seeded password accounts can carry non-procalcs identities
+// (Richard's team). ALLOWED_DOMAINS is a comma-separated list; the
+// legacy singular ALLOWED_DOMAIN still works as a fallback.
+function allowedDomainsFromEnv(): string[] {
+  const multi = process.env.ALLOWED_DOMAINS;
+  const single = process.env.ALLOWED_DOMAIN;
+  const raw = multi ?? single ?? "procalcs.net";
+  return raw.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+}
+
+// When seeded password auth is active, Google OAuth becomes optional —
+// a staging deploy can be password-only. requireEnv still guards the
+// case where NEITHER method is configured.
+const hasSeeds = !!process.env.SEED_USERS_JSON;
+const googleEnv = (name: string): string =>
+  hasSeeds ? optionalEnv(name, "") : requireEnv(name);
+
 export const authConfig = authEnabled
   ? {
       enabled: true as const,
-      googleClientId:     requireEnv("GOOGLE_OAUTH_CLIENT_ID"),
-      googleClientSecret: requireEnv("GOOGLE_OAUTH_CLIENT_SECRET"),
-      redirectUri:        requireEnv("OAUTH_REDIRECT_URI"),
+      googleClientId:     googleEnv("GOOGLE_OAUTH_CLIENT_ID"),
+      googleClientSecret: googleEnv("GOOGLE_OAUTH_CLIENT_SECRET"),
+      redirectUri:        googleEnv("OAUTH_REDIRECT_URI"),
       sessionSigningKey:  requireEnv("SESSION_SIGNING_KEY"),
-      allowedDomain:      optionalEnv("ALLOWED_DOMAIN", "procalcs.net"),
+      allowedDomains:     allowedDomainsFromEnv(),
       cookieName:         optionalEnv("COOKIE_NAME", "procalcs_session"),
       sessionTtlSeconds:  Number(optionalEnv("SESSION_TTL_SECONDS", String(30 * 24 * 60 * 60))), // 30 days
     }
@@ -45,10 +62,13 @@ export const authConfig = authEnabled
       googleClientSecret: "",
       redirectUri:        "",
       sessionSigningKey:  "dev-only-do-not-ship",
-      allowedDomain:      "procalcs.net",
+      allowedDomains:     ["procalcs.net"],
       cookieName:         "procalcs_session",
       sessionTtlSeconds:  30 * 24 * 60 * 60,
     };
+
+export const googleOauthConfigured =
+  !!(authConfig.googleClientId && authConfig.googleClientSecret && authConfig.redirectUri);
 
 export type AuthConfig = typeof authConfig;
 
@@ -66,6 +86,6 @@ export const GOOGLE_JWKS_URL  = "https://www.googleapis.com/oauth2/v3/certs";
 // for our use case.
 export function isEmailAllowed(email: string | undefined, emailVerified: boolean | undefined): boolean {
   if (!email || !emailVerified) return false;
-  const suffix = "@" + authConfig.allowedDomain.toLowerCase();
-  return email.toLowerCase().endsWith(suffix);
+  const lower = email.toLowerCase();
+  return authConfig.allowedDomains.some((d) => lower.endsWith("@" + d));
 }

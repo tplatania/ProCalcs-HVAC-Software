@@ -15,7 +15,7 @@
     "typecheck:client": "tsc -p tsconfig.json --noEmit",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
-    "test:auth": "tsx --test server/auth/token.test.ts server/auth/middleware.test.ts",
+    "test:auth": "tsx --test server/auth/token.test.ts server/auth/middleware.test.ts server/auth/seedUsers.test.ts",
     "test:client": "tsx --test src/lib/bom-mapping.test.ts src/lib/bom-diff.test.ts",
     "test": "npm run test:auth && npm run test:client"
   },
@@ -54,6 +54,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/js-yaml": "^4.0.9",
     "@types/multer": "^2.2.0",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

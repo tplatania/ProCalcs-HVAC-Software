@@ -9,9 +9,9 @@
 // with a synthetic dev user, which means AuthGuard is a pass-through
 // locally without any extra gating.
 
-import { useEffect } from "react";
 import { useCurrentUser } from "@/lib/auth-hooks";
 import { Spinner } from "@/components/ui/spinner";
+import { LoginScreen } from "@/components/login-screen";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -19,17 +19,6 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const { data, isLoading, isError } = useCurrentUser();
-
-  // Kick off the redirect in an effect so React doesn't complain about
-  // side effects during render.
-  useEffect(() => {
-    if (!isLoading && data === null) {
-      const returnTo = encodeURIComponent(
-        window.location.pathname + window.location.search
-      );
-      window.location.href = `/api/auth/login?return_to=${returnTo}`;
-    }
-  }, [isLoading, data]);
 
   if (isLoading) {
     return (
@@ -52,14 +41,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  // Redirect in flight — render the spinner instead of the app to avoid
-  // a flash of the unauthenticated state.
+  // Day-27 — render the login screen (password + optional Google)
+  // instead of hard-redirecting to Google consent. Password-only
+  // deploys (Richard's team) have no Google flow to redirect to.
   if (data === null) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Spinner className="size-8 text-muted-foreground" />
-      </div>
-    );
+    return <LoginScreen />;
   }
 
   return <>{children}</>;
