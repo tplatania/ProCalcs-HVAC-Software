@@ -907,6 +907,27 @@ def bom_from_wrightsoft():
             )
             db.session.commit()
             bom["run_id"] = run.id
+            # Day-27 — bom_generated telemetry for the v2 path. This was
+            # only logged on the bom_service.generate (AI) path, so
+            # Richard's primary flow was invisible to adoption counts.
+            try:
+                from models.usage_event import UsageEvent
+                ov_ids = sorted({
+                    li["override_id"] for li in bom.get("line_items", [])
+                    if isinstance(li, dict) and isinstance(li.get("override_id"), int)
+                })
+                UsageEvent.record(
+                    event="bom_generated",
+                    actor_email=created_by_email,
+                    client_id=client_id,
+                    job_id=job_id,
+                    run_id=run.id,
+                    detail={"pipeline": "wrightsoft",
+                            "override_hits": len(ov_ids), "override_ids": ov_ids},
+                )
+            except Exception:  # noqa: BLE001 — telemetry never blocks the BOM
+                logger.warning("bom_generated telemetry failed (non-fatal)", exc_info=True)
+                db.session.rollback()
         except Exception as exc:  # noqa: BLE001
             logger.warning("Wrightsoft-BOM persistence failed for job %s — %s",
                            job_id, exc)
