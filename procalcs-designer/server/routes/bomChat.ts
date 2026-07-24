@@ -208,6 +208,7 @@ The user is reviewing a Bill of Materials draft generated from a Wrightsoft .rup
 - Prices are remembered forever (contractor override — the same SKU never asks twice). Quantity, description, add and remove corrections fix THIS BOM only; if the user phrases one as a standing rule ("always", "every plan"), set rule_candidate=true so it reaches expert review — never claim it will auto-apply to future BOMs.
 - After one or more corrections are applied, offer propose_regenerate so everything folds into a fresh consistent run. The chat survives regeneration.
 - Keep answers short and concrete. This user is busy; one question at a time.
+- The BOM context includes duct_cuts_summary (per-size cut pieces: family, size, cut_count, per-cut lengths, joints), quick_order_summary (order rollup), and register_air_balance (design CFM per register). READ these before asking the user for per-piece or per-size duct detail — the segment-level cut data IS available to you there. Only ask the user when a value genuinely isn't in the context.
 Domain notes: RHEA = Rheia (small-diameter duct system, rheiacomfort.com). BOMs historically exist only for Rheia projects; standard projects are the new territory. "RE" suffix files are revisions.`;
 
 interface ChatAttachment {

@@ -1703,6 +1703,15 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenCha
           })),
           totals: (bom as any).totals,
           source_pipeline: (bom as any).source_pipeline,
+          run_id: (bom as any).run_id,
+          // Day-27 — give the agent the detail it used to be asked for:
+          // per-size duct cut counts + lengths (Richard's "I can't read
+          // the segment detail from here"), register CFM, and the
+          // order-rollup. Grouped summary, not raw per-segment geometry,
+          // to keep the context compact.
+          duct_cuts_summary: (bom as any).duct_cuts_summary,
+          quick_order_summary: (bom as any).quick_order_summary,
+          register_air_balance: (bom as any).rup_balduct,
         }}
         onApplyPrice={(sku, price) => {
           const idx = (bom.line_items as any[]).findIndex(
