@@ -388,6 +388,50 @@ def add_patch(run_id: int):
     return _ok({"run_id": run.id, "patch_ops": ops})
 
 
+@bom_runs_bp.route("/<int:run_id>/chat", methods=["GET"])
+def get_chat(run_id: int):
+    """Return the persisted conversation for a run, oldest first, so
+    the SPA can rehydrate the Review Assistant on open."""
+    from models import ChatMessage, BomRun
+    if BomRun.query.get(run_id) is None:
+        return _err(f"Run {run_id} not found", 404)
+    msgs = ChatMessage.for_run(run_id)
+    return _ok({"run_id": run_id, "messages": [m.to_dict() for m in msgs]})
+
+
+@bom_runs_bp.route("/<int:run_id>/chat", methods=["POST"])
+def append_chat(run_id: int):
+    """Append one or more turns to a run's conversation. Called
+    server-side by the designer BFF after each chat exchange.
+
+    Body: {turns: [{role, content?, actions?, attachments?}, ...]}
+    author_email is taken from the forwarded identity header, not the
+    body, so it can't be spoofed."""
+    from models import ChatMessage, BomRun
+    if BomRun.query.get(run_id) is None:
+        return _err(f"Run {run_id} not found", 404)
+    body = request.get_json(silent=True) or {}
+    turns = body.get("turns")
+    if not isinstance(turns, list) or not turns:
+        return _err("turns (non-empty array) is required", 400)
+    author = _reviewer_email_from_request()
+    saved = []
+    for tn in turns[:20]:
+        role = str(tn.get("role") or "").strip()
+        if role not in ("user", "assistant"):
+            continue
+        saved.append(ChatMessage.record(
+            run_id=run_id, role=role,
+            content=(tn.get("content") or None),
+            actions=tn.get("actions") or None,
+            attachments=tn.get("attachments") or None,
+            author_email=author if role == "user" else None,
+            commit=False,
+        ))
+    db.session.commit()
+    return _ok({"run_id": run_id, "saved": len(saved)})
+
+
 @bom_runs_bp.route("/<int:run_id>/compare", methods=["POST"])
 def compare_run(run_id: int):
     """Compare a saved BOM run against a contractor's reference sample.
