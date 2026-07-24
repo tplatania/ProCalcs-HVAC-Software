@@ -432,6 +432,17 @@ def append_chat(run_id: int):
     return _ok({"run_id": run_id, "saved": len(saved)})
 
 
+@bom_runs_bp.route("/<int:run_id>/chat", methods=["DELETE"])
+def clear_chat(run_id: int):
+    """Delete a run's conversation (clear chat / cleanup)."""
+    from models import ChatMessage, BomRun
+    if BomRun.query.get(run_id) is None:
+        return _err(f"Run {run_id} not found", 404)
+    n = db.session.query(ChatMessage).filter_by(run_id=run_id).delete()
+    db.session.commit()
+    return _ok({"run_id": run_id, "deleted": n})
+
+
 @bom_runs_bp.route("/<int:run_id>/compare", methods=["POST"])
 def compare_run(run_id: int):
     """Compare a saved BOM run against a contractor's reference sample.
