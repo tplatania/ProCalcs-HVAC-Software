@@ -193,21 +193,25 @@ def build_lines_from_rup(file_bytes: bytes,
             src = row.get("part_source") or _MFR_NAME_TO_SRC.get(mfr_name) \
                   or _MFR_NAME_TO_SRC.get(mfr_name.title()) or "WSF"
             type_label = row.get("equipment_type") or "Equipment"
+            # Day-27 — quantity from the placed-instance count (2 identical
+            # systems → qty 2). Defaults to 1 for older parser output.
+            qty = float(row.get("quantity") or 1.0)
             # Emit the primary (condenser) line
             lines.append({
                 "generic_id":   cond,
-                "quantity":     1.0,
+                "quantity":     qty,
                 "description":  f"{type_label} — {mfr_name} {cond}".strip(" —"),
                 "src":          src,
                 "section_hint": "Equipment",
                 "unit":         "EA",
             })
             seen_models.add(cond)
-            # Emit the paired coil/AH line when present
+            # Emit the paired coil/AH line when present — same count as
+            # the system it belongs to.
             if coil and coil != cond:
                 lines.append({
                     "generic_id":   coil,
-                    "quantity":     1.0,
+                    "quantity":     qty,
                     "description":  f"Air Handler — {mfr_name} {coil}".strip(" —"),
                     "src":          src,
                     "section_hint": "Equipment",

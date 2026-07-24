@@ -49,13 +49,22 @@ logger = logging.getLogger(__name__)
 
 def parse_equipment(reader: RupReader) -> List[dict]:
     """Walk every EQUIP block, emit one dict per unique placed instance
-    (per §3.2 signature). Templates are dropped silently. Multi-
-    investment copies of the same placement are deduped by
-    (equipment_type, condenser_model, coil_model) — Wrightsoft stores
-    each placement once per investment (up to 4×) but the BOM display
-    treats them as one physical unit."""
-    seen_keys = set()
-    out: List[dict] = []
+    (per §3.2 signature) carrying a ``quantity`` = how many identical
+    placements exist.
+
+    Day-27: previously identical placements were deduped to one and the
+    caller hardcoded qty 1, which UNDER-COUNTED homes with two identical
+    systems (Richard, 79th Ct: 2× Trane 5TTV0X60A1 shown as 1). A
+    corpus scan (199 files) found ZERO duplicate-model placements on
+    normal jobs — the "investment duplication (up to 4×)" this dedup
+    guarded against does not occur in practice — so counting identical
+    placements is a strict, regression-free improvement: normal files
+    still emit qty 1, multi-identical-unit homes get the real count.
+
+    Order of first appearance is preserved."""
+    counts: dict = {}
+    order: List = []
+    rows_by_key: dict = {}
     dropped_templates = 0
     for cursor in reader.find_all_tags("EQUIP"):
         try:
@@ -69,12 +78,19 @@ def parse_equipment(reader: RupReader) -> List[dict]:
         key = (row.get("equipment_type"),
                row.get("condenser_model"),
                row.get("coil_model"))
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
+        if key not in counts:
+            counts[key] = 0
+            order.append(key)
+            rows_by_key[key] = row
+        counts[key] += 1
+
+    out: List[dict] = []
+    for key in order:
+        row = dict(rows_by_key[key])
+        row["quantity"] = float(counts[key])
         out.append(row)
     logger.info("rup_equip: %d unique placed instances "
-                "(%d templates dropped, dedup applied)",
+                "(%d templates dropped, quantities counted)",
                 len(out), dropped_templates)
     return out
 
