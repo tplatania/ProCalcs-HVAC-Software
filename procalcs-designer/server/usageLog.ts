@@ -14,32 +14,35 @@ import type { Request } from "express";
 import { config } from "./config.js";
 import { buildUpstreamHeaders } from "./upstreamHeaders.js";
 
-export function logUsage(
+// Returns a promise that ALWAYS resolves (never rejects) so callers can
+// safely `await logUsage(...)` before responding. Awaiting matters:
+// Cloud Run runs with cpu-throttling on by default, so CPU is
+// de-allocated the moment the response is flushed — a fire-and-forget
+// POST issued after res.json() gets its callback frozen and never
+// lands. Real (spaced-out) traffic hit this: the crew's 14 chats
+// recorded 0 chat_message events until this was awaited. The internal
+// 3s timeout bounds the worst case if the BOM service is degraded.
+export async function logUsage(
   req: Request,
   event: string,
   detail?: Record<string, unknown>,
   extra?: { client_id?: string; job_id?: string; run_id?: number },
-): void {
+): Promise<void> {
   try {
     const url = `${config.flaskBomBaseUrl}/api/v1/usage-events`;
-    fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...buildUpstreamHeaders(req),
       },
       body: JSON.stringify({ event, detail, ...extra }),
-      signal: AbortSignal.timeout(5_000),
-    }).then((res) => {
-      if (!res.ok) console.warn(`[usage] ${event} → HTTP ${res.status}`);
-    }).catch((err) => {
-      console.warn(`[usage] ${event} event failed (non-fatal):`,
-        err instanceof Error ? err.message : err);
+      signal: AbortSignal.timeout(3_000),
     });
+    if (!res.ok) console.warn(`[usage] ${event} → HTTP ${res.status}`);
   } catch (err) {
-    // Sync throws (bad config, header encoding) must not reach the
-    // caller — a telemetry bug once double-sent a chat response here.
-    console.warn(`[usage] ${event} sync failure (non-fatal):`,
+    // Telemetry must never break the user's flow — swallow everything.
+    console.warn(`[usage] ${event} event failed (non-fatal):`,
       err instanceof Error ? `${err.name}: ${err.message}` : err);
   }
 }

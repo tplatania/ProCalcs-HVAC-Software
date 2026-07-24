@@ -167,11 +167,14 @@ router.post("/", upload.array("files", 5),
                      summary: `Could not read this file: ${err instanceof Error ? err.message : err}` });
     }
   }
-  res.json({ success: true, data: { attachments: results }, error: null });
-  logUsage(req, "attachment_uploaded", {
+  // Await before responding — Cloud Run freezes CPU after res.json(),
+  // so a post-response fire-and-forget POST is lost (same bug that
+  // dropped chat_message).
+  await logUsage(req, "attachment_uploaded", {
     files: results.length,
     kinds: results.map((r) => r.kind),
   });
+  res.json({ success: true, data: { attachments: results }, error: null });
 });
 
 export default router;

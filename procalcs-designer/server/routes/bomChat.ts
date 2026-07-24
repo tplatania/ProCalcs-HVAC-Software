@@ -18,6 +18,7 @@
 
 import { Router, type Request, type Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
+import { logUsage } from "../usageLog.js";
 
 const router = Router();
 
@@ -299,15 +300,18 @@ router.post("/", async (req: Request, res: Response) => {
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("\n");
-        res.json({ success: true, data: { reply, actions }, error: null });
-        // Day-25 telemetry — adoption signal + "using it right" shape
-        // (snipes and attachments per message, proposals returned).
-        logUsage(req, "chat_message", {
+        // Day-27 — await BEFORE responding. Cloud Run cpu-throttling
+        // freezes the instance after res.json(), so a post-response
+        // fire-and-forget POST never lands (dropped all of the crew's
+        // real chats). Telemetry adds ~one fast round-trip to a call
+        // that already took seconds.
+        await logUsage(req, "chat_message", {
           snipes: attachments.filter((a) => a.kind === "snipe").length,
           attachments: attachments.filter((a) => a.kind !== "snipe").length,
           actions_proposed: actions.length,
           turns: messages.length,
         }, { client_id });
+        res.json({ success: true, data: { reply, actions }, error: null });
         return;
       }
 
