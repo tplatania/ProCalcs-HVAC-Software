@@ -18,7 +18,7 @@
 
 import { Router, type Request, type Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { logUsage } from "../usageLog.js";
+import { logUsage, persistChatTurns } from "../usageLog.js";
 
 const router = Router();
 
@@ -311,6 +311,29 @@ router.post("/", async (req: Request, res: Response) => {
           actions_proposed: actions.length,
           turns: messages.length,
         }, { client_id });
+        // Day-27 — persist this exchange so the conversation survives
+        // reload (Richard's save/resume). Only the NEW user turn + the
+        // assistant reply are stored; the client sends full history but
+        // earlier turns are already persisted. Attachments as metadata
+        // only (name/kind), never bytes.
+        const runId = Number((bom_context as any)?.run_id) || 0;
+        if (runId) {
+          const lastUser = [...messages].reverse()
+            .find((m) => m.role === "user");
+          const userText = typeof lastUser?.content === "string"
+            ? lastUser.content
+            : Array.isArray(lastUser?.content)
+              ? (lastUser!.content as any[])
+                  .filter((b) => b?.type === "text").map((b) => b.text).join("\n")
+              : "";
+          const attMeta = attachments.map((a) => ({ name: a.name, kind: a.kind }));
+          await persistChatTurns(req, runId, [
+            { role: "user", content: userText,
+              attachments: attMeta.length ? attMeta : undefined },
+            { role: "assistant", content: reply,
+              actions: actions.length ? actions : undefined },
+          ]);
+        }
         res.json({ success: true, data: { reply, actions }, error: null });
         return;
       }

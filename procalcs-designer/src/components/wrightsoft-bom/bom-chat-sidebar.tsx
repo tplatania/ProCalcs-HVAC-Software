@@ -66,7 +66,7 @@ export interface Snipe {
 const SNIPE_COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
 export const snipeColor = (i: number) => SNIPE_COLORS[i % SNIPE_COLORS.length];
 
-export function BomChatSidebar({ bom, onApplyPrice, onApplyPatch, onRegenerate, clientId, snipes = [], onRemoveSnipe, onClearSnipes, openSignal, onOpenChange }: {
+export function BomChatSidebar({ bom, onApplyPrice, onApplyPatch, onRegenerate, clientId, runId, snipes = [], onRemoveSnipe, onClearSnipes, openSignal, onOpenChange }: {
   /** The BOM response object — sent as context to the agent. */
   bom: unknown;
   /** Persist a price for a SKU via contractor overrides. Returns
@@ -80,6 +80,8 @@ export function BomChatSidebar({ bom, onApplyPrice, onApplyPatch, onRegenerate, 
   onRegenerate?: () => Promise<boolean>;
   /** Contractor id — drives the pending-questions ledger lookup. */
   clientId?: string;
+  /** Run id — hydrates the saved conversation on open (save/resume). */
+  runId?: number;
   /** Sniped tables/rows from the page (crosshair buttons). */
   snipes?: Snipe[];
   onRemoveSnipe?: (ref: string) => void;
@@ -149,6 +151,29 @@ export function BomChatSidebar({ bom, onApplyPrice, onApplyPatch, onRegenerate, 
       })
       .catch(() => { /* ledger optional */ });
   }, [open, clientId]);
+
+  // Day-27 — rehydrate the saved conversation on open so Richard can
+  // resume where he left off (and Gerald can read it). Only seeds when
+  // the panel has no in-memory turns yet, so we never clobber a live
+  // session.
+  useEffect(() => {
+    if (!open || !runId || turns.length > 0) return;
+    fetch(`/api/bom-runs/${runId}/chat`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        const msgs = body?.data?.messages;
+        if (Array.isArray(msgs) && msgs.length) {
+          setTurns(msgs.map((m: any) => ({
+            role: m.role,
+            text: m.content ?? "",
+            actions: (m.actions ?? []).map((a: any) => ({ ...a, applied: true })),
+            attachments: m.attachments ?? [],
+          })));
+        }
+      })
+      .catch(() => { /* history optional */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, runId]);
 
   // Day-25 — impact strip. Shows the team that their corrections are
   // compounding (saved once → auto-applied on every later BOM).

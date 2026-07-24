@@ -1682,6 +1682,7 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenCha
           drawer, so chat answers are learned once and reused. */}
       <BomChatSidebar
         clientId={clientId}
+        runId={(bom as any).run_id}
         onApplyPatch={onApplyPatch}
         onRegenerate={onRegenerate}
         openSignal={chatOpenSignal}

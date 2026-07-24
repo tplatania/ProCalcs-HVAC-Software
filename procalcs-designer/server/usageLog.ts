@@ -22,6 +22,31 @@ import { buildUpstreamHeaders } from "./upstreamHeaders.js";
 // lands. Real (spaced-out) traffic hit this: the crew's 14 chats
 // recorded 0 chat_message events until this was awaited. The internal
 // 3s timeout bounds the worst case if the BOM service is degraded.
+// Persist a chat exchange to the run's conversation (save/resume).
+// Awaited by the caller before responding for the same CPU-throttle
+// reason as logUsage. Always resolves — chat persistence must never
+// break the reply.
+export async function persistChatTurns(
+  req: Request,
+  runId: number,
+  turns: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (!runId || turns.length === 0) return;
+  try {
+    const url = `${config.flaskBomBaseUrl}/api/v1/bom-runs/${runId}/chat`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...buildUpstreamHeaders(req) },
+      body: JSON.stringify({ turns }),
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!res.ok) console.warn(`[chat-persist] run ${runId} → HTTP ${res.status}`);
+  } catch (err) {
+    console.warn(`[chat-persist] run ${runId} failed (non-fatal):`,
+      err instanceof Error ? `${err.name}: ${err.message}` : err);
+  }
+}
+
 export async function logUsage(
   req: Request,
   event: string,

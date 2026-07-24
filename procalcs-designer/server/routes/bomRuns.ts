@@ -176,6 +176,17 @@ router.post("/:id/review", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Day-27 — persisted chat history (save/resume) ───────────────────
+
+router.get("/:id/chat", async (req: Request, res: Response) => {
+  try {
+    const id = encodeURIComponent(String(req.params.id));
+    send(res, await callFlask(req, `/${id}/chat`, { method: "GET" }));
+  } catch (err) {
+    sendUpstreamError(res, err, `Chat history ${req.params.id}`);
+  }
+});
+
 // ─── Day-25 — run-scoped surgical patches (chat corrections) ──────────
 
 router.post("/:id/patches", async (req: Request, res: Response) => {
