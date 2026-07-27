@@ -317,12 +317,24 @@ def build_lines_from_rup(file_bytes: bytes,
     fit_count = 0  # keeps the summary log valid whichever branch runs
     if has_priced_bom(reader):
         priced = parse_priced_lines(reader)
-        # Deduplicate parts that recur across parallel investments
-        # (§1.4). Take the first occurrence per part_no in file order.
+        # Day-28 — SUM quantities per part_no (was: keep first only).
+        # Richard, SW 55th Ave: Wrightsoft's priced BOM (RPITEM) is the
+        # authoritative bill and splits one duct size across zones into
+        # multiple lines (DDVn04 = 49 + 77). Keeping only the first
+        # under-counted every multi-zone size (49 shown vs 126 real).
+        # RPITEM is a FINAL bill, not design alternatives, so duplicate
+        # part_no rows are genuine and must be summed. First occurrence
+        # keeps the metadata (desc/price/units); quantity + extended
+        # accumulate.
         first_by_pn: Dict[str, dict] = {}
         for L in priced:
-            if L["part_no"] not in first_by_pn:
-                first_by_pn[L["part_no"]] = L
+            pn = L["part_no"]
+            if pn not in first_by_pn:
+                first_by_pn[pn] = dict(L)
+            else:
+                agg = first_by_pn[pn]
+                agg["quantity"] = (agg.get("quantity") or 0) + (L.get("quantity") or 0)
+                agg["extended"] = (agg.get("extended") or 0) + (L.get("extended") or 0)
         for L in first_by_pn.values():
             lines.append({
                 "generic_id":   L["part_no"],
@@ -453,6 +465,29 @@ def build_lines_from_rup(file_bytes: bytes,
     # (mount type per register); until then we use the corpus-median
     # ceiling share (~0.42) and flag the lines low-confidence so the
     # review UI renders them as needs-verification, not fact.
+    #
+    # Day-28 — PER-PROJECT gate (Richard, SW 55th Ave). rheia_takeoff
+    # came from the CONTRACTOR PROFILE ("rheia" in supplier), so a Rheia
+    # contractor's CONVENTIONAL jobs got 9 phantom Rheia lines + a
+    # phantom ERV on every upload. Detection by *volume* of the priced
+    # duct system (validated on 50 known-Rheia pairs + 2 conventional
+    # files): a Rheia .rup prices only equipment + a 1-2 SKU duct stub
+    # (Wrightsoft's Rheia plugin derives the real duct separately),
+    # while a conventional job prices its FULL duct system (SW 55th=29,
+    # 79th Ct=26 distinct DDVn/DRFg run SKUs; every Rheia pair had ≤2).
+    # Threshold 5 sits in the gap with a 3-SKU margin above the Rheia
+    # max, so it never suppresses a real Rheia takeoff.
+    if rheia_takeoff:
+        _duct_run_skus = {
+            (l.get("generic_id") or "")
+            for l in lines
+            if (l.get("generic_id") or "").startswith(("DDVn", "DRFg"))
+        }
+        if len(_duct_run_skus) >= 5:
+            logger.info("rup: %d conventional duct-run SKUs in priced BOM "
+                        "— conventional project, suppressing Rheia takeoff",
+                        len(_duct_run_skus))
+            rheia_takeoff = False
     if rheia_takeoff:
         # Day-22b — home-run decode (DUCT block, per-runout routed
         # lengths). Runout count == boot-assembly count on every
