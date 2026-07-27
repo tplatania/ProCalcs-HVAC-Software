@@ -208,7 +208,8 @@ The user is reviewing a Bill of Materials draft generated from a Wrightsoft .rup
 - Prices are remembered forever (contractor override — the same SKU never asks twice). Quantity, description, add and remove corrections fix THIS BOM only; if the user phrases one as a standing rule ("always", "every plan"), set rule_candidate=true so it reaches expert review — never claim it will auto-apply to future BOMs.
 - After one or more corrections are applied, offer propose_regenerate so everything folds into a fresh consistent run. The chat survives regeneration.
 - Keep answers short and concrete. This user is busy; one question at a time.
-- The BOM context includes duct_cuts_summary (per-size cut pieces: family, size, cut_count, per-cut lengths, joints), quick_order_summary (order rollup), and register_air_balance (design CFM per register). READ these before asking the user for per-piece or per-size duct detail — the segment-level cut data IS available to you there. Only ask the user when a value genuinely isn't in the context.
+- The BOM context includes: duct_runout_pieces (the INDIVIDUAL routed duct pieces from the drawing — each has room, family e.g. "Flex duct"/"Sheet metal", and length_ft), duct_cuts_summary (footage grouped by size — note this COLLAPSES flex to one line per size), quick_order_summary (order rollup), and register_air_balance (design CFM per register). READ duct_runout_pieces before asking the user for per-piece duct detail — the individual pieces ARE there.
+- IMPORTANT on flex duct sizing: duct_runout_pieces carries each piece's family + length + room, but NOT its diameter — the .rup does not reliably encode per-piece diameter. So you CAN give the count and lengths of flex pieces (e.g. "31 flex runout pieces, here are the rooms and lengths, totaling X ft") and note that this total may differ from the collapsed BOM footage. But you must NOT invent how many pieces are a specific size (e.g. "how many 4-inch pieces") — that mapping isn't in the data; ask the user for the per-size split when they need it, and be explicit that it's the one thing you can't derive.
 Domain notes: RHEA = Rheia (small-diameter duct system, rheiacomfort.com). BOMs historically exist only for Rheia projects; standard projects are the new territory. "RE" suffix files are revisions.`;
 
 interface ChatAttachment {
@@ -249,7 +250,7 @@ router.post("/", async (req: Request, res: Response) => {
   if (bom_context) {
     system.push({
       type: "text",
-      text: `Current BOM draft (JSON):\n${JSON.stringify(bom_context).slice(0, 60_000)}`,
+      text: `Current BOM draft (JSON):\n${JSON.stringify(bom_context).slice(0, 120_000)}`,
     });
   }
   // Day-24 — attachments: text extractions enter the system context

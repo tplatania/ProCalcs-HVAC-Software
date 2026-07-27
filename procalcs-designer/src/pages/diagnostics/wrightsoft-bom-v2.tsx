@@ -1710,6 +1710,10 @@ function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenCha
           // order-rollup. Grouped summary, not raw per-segment geometry,
           // to keep the context compact.
           duct_cuts_summary: (bom as any).duct_cuts_summary,
+          // Day-27 — individual routed duct pieces (room + family +
+          // length). The per-size cut detail Richard needs; the summary
+          // above collapses flex to one line per size.
+          duct_runout_pieces: (bom as any).duct_runout_pieces,
           quick_order_summary: (bom as any).quick_order_summary,
           register_air_balance: (bom as any).rup_balduct,
         }}
