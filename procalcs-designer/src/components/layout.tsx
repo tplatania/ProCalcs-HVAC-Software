@@ -53,6 +53,11 @@ function userInitials(name: string | undefined, email: string | undefined): stri
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "Overview" },
+  // Day-28 — BREAD: the primary reviewer surface. Browse previously
+  // generated BOMs (each hydrates the full canvas — tables, edits,
+  // sniping, chat, regenerate) or generate a new one.
+  { name: "Browse BOMs",      href: "/bom-tool/browse", icon: ListChecks,  section: "BOM Tool" },
+  { name: "Generate New BOM", href: "/bom-tool/new",    icon: PackagePlus, section: "BOM Tool" },
   { name: "All Profiles", href: "/profiles", icon: Users, section: "BOM Management" },
   { name: "New Profile", href: "/profiles/new", icon: PlusCircle, section: "BOM Management" },
   { name: "SKU Catalog", href: "/sku-catalog", icon: PackageSearch, section: "BOM Management" },
@@ -76,7 +81,7 @@ const navigation = [
   { name: "Consumables",       href: "/pricing/consumables",           icon: Beaker,       section: "Pricing" },
 ];
 
-const sections = ["Overview", "BOM Management", "Processing", "Pricing", "Diagnostics"];
+const sections = ["Overview", "BOM Tool", "BOM Management", "Processing", "Pricing", "Diagnostics"];
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();

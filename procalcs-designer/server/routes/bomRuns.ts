@@ -176,6 +176,17 @@ router.post("/:id/review", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Day-28 — delete a run (BREAD Delete) ────────────────────────────
+
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const id = encodeURIComponent(String(req.params.id));
+    send(res, await callFlask(req, `/${id}`, { method: "DELETE" }));
+  } catch (err) {
+    sendUpstreamError(res, err, `Delete run ${req.params.id}`);
+  }
+});
+
 // ─── Day-27 — persisted chat history (save/resume) ───────────────────
 
 router.get("/:id/chat", async (req: Request, res: Response) => {

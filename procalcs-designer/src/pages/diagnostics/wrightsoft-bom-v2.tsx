@@ -33,6 +33,8 @@ import {
   GitCompareArrows,
   ShieldCheck,
   Crosshair,
+  ChevronLeft,
+  Trash2,
 } from "lucide-react";
 import { EditLineDrawer, type EditableLine } from "@/components/wrightsoft-bom/edit-line-drawer";
 import { BomChatSidebar, type Snipe } from "@/components/wrightsoft-bom/bom-chat-sidebar";
@@ -89,7 +91,7 @@ const PROFILES_CHANNEL = "procalcs-profiles";
 /** Day-26 — replay run-scoped patch ops (chat corrections) over a
  * stored generated_bom so a reloaded permalink shows the corrected
  * BOM, not the original. Mirrors the optimistic in-session logic. */
-function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
+export function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
   if (!Array.isArray(ops) || ops.length === 0) return bom;
   const items = ((bom?.line_items as any[]) ?? []).map((li) => ({ ...li }));
   for (const op of ops) {
@@ -125,7 +127,9 @@ function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
   return { ...bom, line_items: items, item_count: items.length };
 }
 
-export default function WrightsoftBomV2Page() {
+export default function WrightsoftBomV2Page(
+  { runId: propRunId, bread }: { runId?: number; bread?: "canvas" | "generate" } = {},
+) {
   const [, setLocation] = useLocation();
   const profiles = useListClientProfiles();
   const { data: currentUser } = useCurrentUser();
@@ -189,6 +193,7 @@ export default function WrightsoftBomV2Page() {
   // shareable in Slack/email.
   const searchString = useSearch();
   const urlRunId = (() => {
+    if (propRunId && propRunId > 0) return propRunId;   // BREAD canvas mode
     try {
       const sp = new URLSearchParams(searchString);
       const raw = sp.get("run");
@@ -283,6 +288,11 @@ export default function WrightsoftBomV2Page() {
       // pre-build empty page; user can still hit back to leave the
       // result view entirely.
       const newRunId = (bomData as any)?.run_id;
+      if (newRunId && bread === "generate") {
+        // BREAD — a fresh build lands on the hydrated canvas.
+        setLocation(`/bom-tool/bom/${newRunId}`);
+        return;
+      }
       if (newRunId && typeof window !== "undefined") {
         try {
           const url = new URL(window.location.href);
@@ -297,6 +307,46 @@ export default function WrightsoftBomV2Page() {
     }
   };
 
+  // BREAD Delete — remove this run (canvas mode) and return to Browse.
+  const [deleting, setDeleting] = useState(false);
+  const deleteRun = async () => {
+    const rid = urlRunId ?? (result as any)?.run_id;
+    if (!rid) return;
+    if (!window.confirm("Delete this BOM and its chat history? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/bom-runs/${rid}`, {
+        method: "DELETE", credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setLocation("/bom-tool/browse");
+    } catch (e: any) {
+      setError(`Couldn't delete: ${e?.message ?? e}`);
+      setDeleting(false);
+    }
+  };
+
+  // BREAD canvas header — shown when a run is opened as a canvas.
+  const canvasHeader = bread === "canvas" ? (
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setLocation("/bom-tool/browse")}>
+          <ChevronLeft className="w-4 h-4 mr-1" /> Browse BOMs
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {(result as any)?.job_id
+            ? `Job ${(result as any).job_id}`
+            : urlRunId ? `BOM #${urlRunId}` : "BOM"}
+        </span>
+      </div>
+      <Button variant="outline" size="sm"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={deleteRun} disabled={deleting}>
+        <Trash2 className="w-4 h-4 mr-1.5" /> {deleting ? "Deleting…" : "Delete BOM"}
+      </Button>
+    </div>
+  ) : null;
+
   return (
     // Chat open → drop the centered 1200px cap and use the full main
     // column minus the 380px panel (+16px gutter). No dead margins.
@@ -304,6 +354,8 @@ export default function WrightsoftBomV2Page() {
       "space-y-6 transition-all duration-200",
       chatOpen ? "max-w-none pr-[396px]" : "max-w-[1200px] mx-auto",
     )}>
+      {canvasHeader}
+      {bread !== "canvas" && (<>
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -567,6 +619,7 @@ export default function WrightsoftBomV2Page() {
           )}
         </CardContent>
       </Card>
+      </>)}
 
       {/* Day-17 — rehydration spinner while ?run= is being fetched */}
       {urlRunId && !result && persistedRun.isLoading && (
@@ -695,7 +748,7 @@ export default function WrightsoftBomV2Page() {
 
 // ─── Result view ───────────────────────────────────────────────────
 
-function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenChange, onApplyPatch, onRegenerate }: {
+export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChatOpenChange, onApplyPatch, onRegenerate }: {
   bom: BomResponse & {
     source_pipeline?: string;
     wrightsoft_mapped_item_count?: number;

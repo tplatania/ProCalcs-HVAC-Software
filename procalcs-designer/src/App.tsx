@@ -22,6 +22,7 @@ import ConfidenceTrendPage from "@/pages/diagnostics/confidence-trend";
 import SkuBacklogPage from "@/pages/diagnostics/sku-backlog";
 import WrightsoftBomPage from "@/pages/diagnostics/wrightsoft-bom";
 import WrightsoftBomV2Page from "@/pages/diagnostics/wrightsoft-bom-v2";
+import BrowseBomsPage from "@/pages/bom-tool/browse";
 import CatalogCoveragePage from "@/pages/diagnostics/catalog-coverage";
 import RupInspectPage from "@/pages/diagnostics/rup-inspect";
 import DFUnitExplorerPage from "@/pages/diagnostics/dfunit-explorer";
@@ -51,7 +52,13 @@ function Router() {
         <Route path="/diagnostics/confidence-trend" component={ConfidenceTrendPage} />
         <Route path="/diagnostics/sku-backlog" component={SkuBacklogPage} />
         <Route path="/diagnostics/wrightsoft-bom" component={WrightsoftBomPage} />
-        <Route path="/diagnostics/wrightsoft-bom-v2" component={WrightsoftBomV2Page} />
+        <Route path="/diagnostics/wrightsoft-bom-v2">{() => <WrightsoftBomV2Page />}</Route>
+        {/* Day-28 — BREAD BOM Tool */}
+        <Route path="/bom-tool/browse" component={BrowseBomsPage} />
+        <Route path="/bom-tool/new">{() => <WrightsoftBomV2Page bread="generate" />}</Route>
+        <Route path="/bom-tool/bom/:runId">
+          {(params) => <WrightsoftBomV2Page runId={Number(params.runId)} bread="canvas" />}
+        </Route>
         <Route path="/diagnostics/catalog-coverage" component={CatalogCoveragePage} />
         <Route path="/diagnostics/rup-inspect" component={RupInspectPage} />
         <Route path="/diagnostics/dfunit-explorer" component={DFUnitExplorerPage} />
