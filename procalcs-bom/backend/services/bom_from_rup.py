@@ -412,6 +412,35 @@ def build_lines_from_rup(file_bytes: bytes,
         if geometry_rows and lines:
             lines[0].setdefault("rup_duct_geometry", geometry_rows)
 
+    # Day-27 — per-piece duct RUNOUTS (individual cut pieces, one per
+    # room/register). Richard's finding: the .rup carries flex duct as
+    # many separate pieces, but line-items + duct_cuts_summary collapse
+    # them into one total-footage line per size, so the review chat
+    # could only see the collapsed number. These rows expose the real
+    # individual pieces (room + family + length). IMPORTANT: the .rup
+    # does NOT reliably encode each piece's DIAMETER (documented decode
+    # gap in rup_duct_geometry), so we deliberately do NOT invent a
+    # per-size split — pieces carry family + length + room only, and
+    # per-diameter footage still comes from the priced BOM. The chat
+    # agent is told exactly this so it never fabricates a per-size count.
+    _FAMILY = {"VinlFlx": "Flex duct", "ShtMetl": "Sheet metal",
+               "RectFbg": "Rect fiberglass"}
+    try:
+        from utils.rup_home_run_parser import parse_home_run_lengths
+        _pieces = parse_home_run_lengths(reader)
+    except Exception:  # noqa: BLE001
+        _pieces = []
+    if _pieces and lines:
+        lines[0].setdefault("duct_runout_pieces", [
+            {
+                "room":      p.get("label"),
+                "duct_code": p.get("duct_code"),
+                "family":    _FAMILY.get(p.get("duct_code"), p.get("duct_code")),
+                "length_ft": round(float(p.get("length_ft") or 0), 2),
+            }
+            for p in _pieces[:400]
+        ])
+
     # Day-22 — Rheia register-driven takeoff v1. The Rheia duct-system
     # section is NOT in the .rup (byte-probe proven: Wrightsoft's Rheia
     # plugin derives it from drawing geometry at export time), so for

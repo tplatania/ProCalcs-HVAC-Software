@@ -714,7 +714,8 @@ def bom_from_wrightsoft():
                     _rup_extras = {}
                     if lines:
                         for key in ("rup_balduct", "rup_unbuilt_hint",
-                                     "rup_duct_geometry", "rup_file_type_hint"):
+                                     "rup_duct_geometry", "rup_file_type_hint",
+                                     "duct_runout_pieces"):
                             val = lines[0].get(key)
                             if val is not None:
                                 _rup_extras[key] = val
