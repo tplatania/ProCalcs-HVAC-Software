@@ -443,6 +443,22 @@ def clear_chat(run_id: int):
     return _ok({"run_id": run_id, "deleted": n})
 
 
+@bom_runs_bp.route("/<int:run_id>", methods=["DELETE"])
+def delete_run(run_id: int):
+    """Delete a BOM run and its dependent chat/rows (BREAD Delete).
+    ChatMessage cascades via FK; patch_ops live on the row itself.
+    Contractor overrides are intentionally NOT deleted — they are
+    contractor-wide learning, not owned by one run."""
+    from models import BomRun, ChatMessage
+    run = BomRun.query.get(run_id)
+    if run is None:
+        return _err(f"Run {run_id} not found", 404)
+    db.session.query(ChatMessage).filter_by(run_id=run_id).delete()
+    db.session.delete(run)
+    db.session.commit()
+    return _ok({"deleted": run_id})
+
+
 @bom_runs_bp.route("/<int:run_id>/compare", methods=["POST"])
 def compare_run(run_id: int):
     """Compare a saved BOM run against a contractor's reference sample.

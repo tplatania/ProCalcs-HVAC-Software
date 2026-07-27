@@ -65,3 +65,19 @@ def test_bad_roles_skipped(client, run_id):
     r=client.post(f"/api/v1/bom-runs/{run_id}/chat", json={"turns":[
         {"role":"system","content":"nope"},{"role":"user","content":"ok"}]})
     assert r.get_json()["data"]["saved"]==1
+
+
+# ─── Day-28 — delete run (BREAD Delete) ────────────────────────────
+
+def test_delete_run_cascades_chat(app, client, run_id):
+    client.post(f"/api/v1/bom-runs/{run_id}/chat", json={"turns":[
+        {"role":"user","content":"hi"}]})
+    r = client.delete(f"/api/v1/bom-runs/{run_id}")
+    assert r.status_code == 200 and r.get_json()["data"]["deleted"] == run_id
+    with app.app_context():
+        assert BomRun.query.get(run_id) is None
+        assert ChatMessage.query.filter_by(run_id=run_id).count() == 0
+    assert client.get(f"/api/v1/bom-runs/{run_id}").status_code == 404
+
+def test_delete_missing_run_404(client):
+    assert client.delete("/api/v1/bom-runs/99999").status_code == 404
