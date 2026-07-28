@@ -241,6 +241,9 @@ def build_bom_from_wrightsoft_lines(
                 wsf_psrc=_wsf_psrc,
                 wsf_pn=_wsf_pn,
             )
+            # Day-29 — review-flag passthrough (heat-strip policy).
+            if raw.get("verify_reason"):
+                line["verify_reason"] = raw["verify_reason"]
             # Attach the spec dict so PDF / SPA can display capacity,
             # dimensions, weight without re-looking up DFUnit downstream.
             line["dfunit_spec"] = dfunit_spec
@@ -265,6 +268,9 @@ def build_bom_from_wrightsoft_lines(
                 wsf_psrc=_wsf_psrc,
                 wsf_pn=_wsf_pn,
             )
+            # Day-29 — review-flag passthrough (heat-strip policy).
+            if raw.get("verify_reason"):
+                line["verify_reason"] = raw["verify_reason"]
         elif wsf_src:
             # Wrightsoft told us who supplies this part (Src column) and
             # what the part number is (Name column). Trust it — the
@@ -353,6 +359,12 @@ def build_bom_from_wrightsoft_lines(
                 wsf_psrc=_wsf_psrc,
                 wsf_pn=_wsf_pn,
             )
+
+            # Day-29 — review-flag passthrough (heat-strip policy).
+
+            if raw.get("verify_reason"):
+
+                line["verify_reason"] = raw["verify_reason"]
         else:
             # No catalog match AND no Src column — genuinely unmapped.
             # These are the lines worth investigating; everything else
@@ -376,6 +388,9 @@ def build_bom_from_wrightsoft_lines(
                 wsf_psrc=_wsf_psrc,
                 wsf_pn=_wsf_pn,
             )
+            # Day-29 — review-flag passthrough (heat-strip policy).
+            if raw.get("verify_reason"):
+                line["verify_reason"] = raw["verify_reason"]
 
         # Day-13 — apply contractor-level overrides on every line that
         # got emitted, regardless of which branch (mapped / dfunit /

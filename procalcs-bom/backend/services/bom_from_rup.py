@@ -196,15 +196,28 @@ def build_lines_from_rup(file_bytes: bytes,
             # Day-27 — quantity from the placed-instance count (2 identical
             # systems → qty 2). Defaults to 1 for older parser output.
             qty = float(row.get("quantity") or 1.0)
-            # Emit the primary (condenser) line
-            lines.append({
+            primary = {
                 "generic_id":   cond,
                 "quantity":     qty,
                 "description":  f"{type_label} — {mfr_name} {cond}".strip(" —"),
                 "src":          src,
                 "section_hint": "Equipment",
                 "unit":         "EA",
-            })
+            }
+            # Day-29 — expert-ratified heat-strip policy (Richard,
+            # q.heat_strip_rule): no standing rule exists; "1 per split
+            # is general but not set in stone". A multi-count strip may
+            # be real or Wrightsoft investment duplication (79th Ct: we
+            # count 4, Richard says 3) — flag for review, never guess.
+            # Condensers/AHUs are NOT flagged (multi-count confirmed
+            # correct by Richard).
+            if qty > 1 and "strip" in (type_label or "").lower():
+                primary["verify_reason"] = (
+                    f"{int(qty)} identical heat strips counted in the design "
+                    "file — no standing per-strip rule (expert-confirmed); "
+                    "verify the count for this project.")
+            # Emit the primary (condenser) line
+            lines.append(primary)
             seen_models.add(cond)
             # Emit the paired coil/AH line when present — same count as
             # the system it belongs to.
