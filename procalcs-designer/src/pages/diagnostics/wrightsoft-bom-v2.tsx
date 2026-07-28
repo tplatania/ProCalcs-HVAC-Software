@@ -1875,6 +1875,21 @@ function SectionBlock({
                   non-standard
                 </Badge>
               )}
+              {li.verify_reason && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="ml-1 text-[10px] border-orange-500/60 bg-orange-50 text-orange-800 dark:bg-orange-950/30 dark:text-orange-300 cursor-help"
+                    >
+                      verify
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs max-w-[280px]">
+                    {li.verify_reason}
+                  </TooltipContent>
+                </Tooltip>
+              )}
               {li.ahri_spec && (
                 <Tooltip>
                   <TooltipTrigger asChild>
