@@ -248,7 +248,14 @@ def parse_duct_segments(reader: RupReader) -> List[dict]:
         for i, (lpos, label) in enumerate(label_positions):
             next_pos = (label_positions[i + 1][0]
                          if i + 1 < len(label_positions) else end)
-            row = _parse_instance(buf, lpos, label, next_pos, side)
+            # Day-29 (Richard's screenshot): side from the LABEL, not
+            # the class region. MFC CArchive declares each class once
+            # (first instance) — after both declarations, supply and
+            # return instances interleave freely, so region-based
+            # attribution mislabeled e.g. "Supply Duct56" as return.
+            # Wrightsoft's own object name carries the side.
+            label_side = "supply" if label.startswith("Supply") else "return"
+            row = _parse_instance(buf, lpos, label, next_pos, label_side)
             if row is None:
                 rejected += 1
                 continue
