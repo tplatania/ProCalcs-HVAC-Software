@@ -448,9 +448,17 @@ def build_quick_order(line_items: List[Dict[str, Any]],
             continue
         pkg = _lookup_packaging(sku)
         if pkg is None:
-            # Unknown family — bucket by description so the contractor
-            # still sees the total. Avoids silently dropping work.
-            family = "_misc"
+            # Unknown family — keep the SKU's REAL prefix as the group
+            # family. Day-29 (Richard, Irvine Rd): the old "_misc"
+            # bucket keyed unknown parts by size token alone, merging
+            # DIFFERENT part types that share a digit pattern — the
+            # rect tee FRTE-2018-2012 absorbed end cap FMEC-2018
+            # (both token "2018"), showing tee ×2 and dropping the
+            # 20×18 cap from the summary entirely. Grouping by the
+            # actual letter prefix keeps distinct parts distinct while
+            # still rolling up true same-part rows.
+            _m = re.match(r"^[A-Z]+", sku.upper())
+            family = _m.group(0) if _m else "_misc"
             category = "Other items"
             unit = (li.get("unit") or "ea").lower()
             container = unit
