@@ -96,8 +96,25 @@ questions:
   - id: q.heat_strip_rule
     asked_in: P0
     question: "What sizes the electric heat strip (HKTSD05X1 on 79%)?"
-    status: provisional
+    status: closed-expert
     closed_in: P2
+    confirmed: 2026-07-29
+    confirmed_by: "Richard (Reliable), via Gerald, Slack"
+    expert_answer: >
+      Verbatim: "There is no one rule for the heat strip. Really depends
+      on the project, equipment type and client. The one heat strip per
+      unit is general but not set in stone. There are equipment and
+      projects that may not have heat strips at all."
+    resolution: >
+      Confirms the P2 hypothesis exactly. Engine policy (already in
+      place, now expert-ratified): (1) trust the placed EQUIP strip —
+      the designer's placement IS the per-project decision record;
+      (2) NEVER inject a strip that isn't in the file; (3) where the
+      count is ambiguous (79th Ct investment duplication, 4 vs
+      Richard's 3), flag needs-verification instead of guessing —
+      "1 per split system" is a sanity-check default, not a rule.
+      For accuracy reporting: heat strips are a review-flagged class,
+      excluded from auto-accuracy claims.
     answer_hypothesis: >
       Two-part: (a) the placed strip model is ALREADY in the .rup EQUIP
       block on 68% of pairs — copying it matches the xls 725/734
