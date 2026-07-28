@@ -910,6 +910,15 @@ def bom_from_wrightsoft():
         if rup_equipment_lines:
             bom["rup_equipment_merged"] = len(rup_equipment_lines)
 
+        # Day-29 — merge the structural extras BEFORE persistence.
+        # They were merged after BomRun.record, so every stored run
+        # had rup_duct_geometry / rup_balduct / duct_runout_pieces = 0
+        # and reopening a run from Browse silently lost the duct
+        # tables (fresh view ≠ rehydrated view — Richard's screenshot
+        # showed a live 68-segment table that no stored run contains).
+        for _k, _v in (_rup_extras or {}).items():
+            bom.setdefault(_k, _v)
+
         # ── Persist as a bom_run so the BOM shows up in Run History
         # next to /generate output. Best-effort: a DB failure must
         # NOT swallow the successful BOM result — same contract as
