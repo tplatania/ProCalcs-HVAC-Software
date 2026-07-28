@@ -863,9 +863,37 @@ def bom_from_wrightsoft():
             # Unconditional on the .rup path: duplicates also arise
             # INSIDE build_lines_from_rup (design-block vs structural
             # EQUIP extraction), not only from the route-level merge.
+            #
+            # Day-28 (Richard, SW 55th) — the priced BOM carries a BARE
+            # handler stub (e.g. FE5BNXC48L*, desc "Part or assembly is
+            # not in the database") while the structural EQUIP parse
+            # carries the REAL "+UI" model (FE5BNXC48L*+UI). Different
+            # generic_ids, so exact-dedup keeps both → phantom duplicate
+            # equipment lines every upload. Drop a line only when it is
+            # BOTH stub-marked AND a strict prefix of another equipment
+            # line's id (the real one) — so a genuinely distinct model
+            # is never removed.
+            eq_ids = [
+                (li.get("generic_id") or "").strip().upper()
+                for li in merged_lines
+                if li.get("section_hint") == "Equipment" and li.get("generic_id")
+            ]
+
+            def _is_stub_prefix(li) -> bool:
+                gid = (li.get("generic_id") or "").strip().upper()
+                if not gid or li.get("section_hint") != "Equipment":
+                    return False
+                desc = str(li.get("description") or "").lower()
+                if "not in the database" not in desc:
+                    return False
+                return any(other != gid and other.startswith(gid)
+                           for other in eq_ids)
+
             seen_ids: set = set()
             deduped: list = []
             for li in merged_lines:
+                if _is_stub_prefix(li):
+                    continue
                 gid = (li.get("generic_id") or "").strip().upper()
                 if gid and li.get("section_hint") == "Equipment":
                     if gid in seen_ids:
