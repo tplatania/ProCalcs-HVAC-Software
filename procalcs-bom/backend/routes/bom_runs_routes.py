@@ -158,11 +158,20 @@ def list_runs():
 
 @bom_runs_bp.route("/<int:run_id>", methods=["GET"])
 def get_run(run_id: int):
-    """Full record including parsed_design_data + generated_bom."""
+    """Full record including parsed_design_data + generated_bom.
+
+    Day-30 (Tim): when the run carries patch ops, the derived
+    summaries (quick order, duct cuts) are rebuilt from the PATCHED
+    line items so every surface agrees with the corrections. Stored
+    data stays raw; the SPA still replays ops over line items."""
     run = BomRun.query.get(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
-    return _ok(run.to_dict())
+    d = run.to_dict()
+    if run.patch_ops:
+        from services.bom_patches import bom_with_patched_summaries
+        d["generated_bom"] = bom_with_patched_summaries(run)
+    return _ok(d)
 
 
 # ─── Review ─────────────────────────────────────────────────────────
@@ -286,6 +295,11 @@ def regenerate_run(run_id: int):
             db.session.commit()
             bom["run_id"] = run.id
             bom["patch_ops"] = list(parent.patch_ops or [])
+            # Day-30 (Tim): summaries must reflect the carried
+            # corrections — his 10→2 fix showed 2 in lines, 10 in the
+            # Quick Order Summary after regeneration.
+            from services.bom_patches import rebuild_summaries
+            rebuild_summaries(bom, bom["patch_ops"])
         except Exception as exc:  # noqa: BLE001 — persistence is best-effort
             logger.warning("wrightsoft regenerate persistence failed: %s", exc)
             db.session.rollback()
@@ -394,7 +408,15 @@ def add_patch(run_id: int):
         logger.warning("patch telemetry failed", exc_info=True)
         db.session.rollback()
 
-    return _ok({"run_id": run.id, "patch_ops": ops})
+    # Day-30 (Tim): hand back summaries rebuilt from the patched
+    # lines so the Quick Order / Duct Cuts cards sync immediately.
+    from services.bom_patches import rebuild_summaries
+    import copy as _copy
+    _bom = _copy.deepcopy(run.generated_bom or {})
+    rebuild_summaries(_bom, ops)
+    return _ok({"run_id": run.id, "patch_ops": ops,
+                "quick_order_summary": _bom.get("quick_order_summary"),
+                "duct_cuts_summary": _bom.get("duct_cuts_summary")})
 
 
 @bom_runs_bp.route("/<int:run_id>/chat", methods=["GET"])

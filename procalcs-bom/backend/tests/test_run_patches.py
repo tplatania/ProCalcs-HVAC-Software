@@ -223,3 +223,56 @@ def test_regenerate_carries_patch_ops_to_child(app, client, monkeypatch):
     with app.app_context():
         child = BomRun.query.get(bom["run_id"])
         assert child.patch_ops and child.patch_ops[0]["fields"] == {"quantity": 4}
+
+
+# ─── Day-30 — summaries rebuilt from patched lines (Tim, Test 2) ───
+
+def test_patched_summaries_sync_everywhere(app, client, monkeypatch):
+    """Tim corrected FBTI-4 10→2, regenerated: line items showed 2 but
+    the Quick Order Summary still showed 10. Summaries must rebuild
+    from patched lines on run detail, patch POST, and regenerate."""
+    import services.profile_service as ps
+    profile = {
+        "client_id": "test-contractor", "client_name": "Test", "is_active": True,
+        "supplier": {"supplier_name": "S"},
+        "markup": {"equipment_pct": 15, "materials_pct": 25,
+                   "consumables_pct": 30, "labor_pct": 0},
+        "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+        "default_output_mode": "full", "include_labor": False, "notes": "",
+    }
+    monkeypatch.setattr(ps, "get_profile_by_id", lambda cid: profile)
+
+    def qo_total(qo, needle):
+        return sum(float(r.get("total") or 0) for r in (qo or [])
+                   if needle in str(r.get("label", "")) or needle in str(r.get("size", "")))
+
+    with app.app_context():
+        from services.bom_quick_order import build_quick_order
+        li = [{"generic_id": "FBTI-4", "sku": "FBTI-4", "quantity": 10.0,
+               "unit": "EA", "description": 'Ceiling round register, size 4"',
+               "section": "Duct System Equipment"}]
+        parent = BomRun.record(
+            client_id="test-contractor", job_id="t2", output_mode="full",
+            parsed_design_data={"source_pipeline": "wrightsoft_bom",
+                                "wrightsoft_lines": list(li)},
+            generated_bom={"line_items": li,
+                           "quick_order_summary": build_quick_order(li)},
+        )
+        db.session.commit()
+        pid = parent.id
+
+    # patch POST returns rebuilt summaries
+    r = client.post(f"/api/v1/bom-runs/{pid}/patches", json={
+        "op": "update_line", "sku": "FBTI-4",
+        "fields": {"quantity": 2}, "reason": "M Sheets show 2"})
+    assert qo_total(r.get_json()["data"]["quick_order_summary"], "4") == 2.0
+
+    # run detail serves patched summaries
+    d = client.get(f"/api/v1/bom-runs/{pid}").get_json()["data"]
+    assert qo_total(d["generated_bom"]["quick_order_summary"], "4") == 2.0
+
+    # regenerate: carried ops reflected in the response summary
+    resp = client.post(f"/api/v1/bom-runs/{pid}/regenerate", json={})
+    bom = resp.get_json()["data"]
+    assert qo_total(bom.get("quick_order_summary"), "4") == 2.0, \
+        "Tim's bug: summary must not show the raw 10 after regeneration"
