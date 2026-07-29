@@ -668,6 +668,16 @@ export default function WrightsoftBomV2Page(
               });
               const body = await res.json();
               if (!res.ok || !body.success) return false;
+              // Day-30 (Tim): server rebuilds the derived summaries
+              // from the patched lines — adopt them so the Quick
+              // Order / Duct Cuts cards agree with the correction.
+              const qo = body.data?.quick_order_summary;
+              const dc = body.data?.duct_cuts_summary;
+              if (qo || dc) setResult((prev) => prev && ({
+                ...prev,
+                ...(qo ? { quick_order_summary: qo } : {}),
+                ...(dc ? { duct_cuts_summary: dc } : {}),
+              }) as any);
             } catch { return false; }
             setResult((prev) => {
               if (!prev) return prev;
@@ -958,6 +968,21 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
         style={{ background: brandColor }}
         aria-hidden
       />
+
+      {/* Day-30 — build-first guidance (Tim's Test 2: results are
+          markedly better when the BOM was generated + saved inside
+          Wrightsoft before uploading). rup_unbuilt_hint was computed
+          by the engine all along but never shown. */}
+      {(bom as any).rup_unbuilt_hint && (
+        <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <span className="font-semibold">Better accuracy available:</span>{" "}
+          this .rup has no Wrightsoft-built BOM inside, so quantities are
+          best-effort estimates. In Wrightsoft run{" "}
+          <span className="font-mono text-xs">Reports → Bill of Materials</span>,
+          save the project, and re-upload — the BOM then comes from
+          Wrightsoft's own numbers.
+        </div>
+      )}
 
       {/* Day-16 — .rup best-effort notice */}
       {(bom as any).source_pipeline === "wrightsoft_rup" && (
