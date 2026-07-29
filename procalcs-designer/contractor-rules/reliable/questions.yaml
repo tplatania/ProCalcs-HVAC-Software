@@ -168,8 +168,21 @@ questions:
   - id: q.rheia_unit_prices
     asked_in: P0
     question: "Per-unit prices for the Rheia SKUs?"
-    status: not-in-data
+    status: closed-expert
     closed_in: P3
+    confirmed: 2026-07-29
+    confirmed_by: "Richard (Reliable), via Gerald, Slack"
+    expert_answer: >
+      Verbatim: "There should be no Rheia at all since what we are
+      doing is conventional ductworks. Rheia has its own BOM plugin in
+      Rightsuite which is already working."
+    resolution: >
+      Scoped out. Reliable uses this tool for CONVENTIONAL projects
+      only; Rheia BOMs (and their pricing) are handled end-to-end by
+      Wrightsoft's Rheia plugin. Rheia pricing is not needed for this
+      pilot — the remaining pricing ask is the equipment cost sheet
+      (q.equipment_prices). If a future contractor wants Rheia
+      derivation + pricing through this tool, reopen then.
     evidence: >
       Sample estimate PDF read (Estimate_15681, Acuera Lot 22): the
       archive's pricing documents are ProCalcs' DESIGN-SERVICE
