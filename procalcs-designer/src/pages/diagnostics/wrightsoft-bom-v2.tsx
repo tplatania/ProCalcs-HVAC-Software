@@ -717,7 +717,12 @@ export default function WrightsoftBomV2Page(
               });
               const body = await res.json();
               if (!res.ok || !body.success) return false;
-              const fresh = body.data as BomResponse;
+              // Day-29 (Tim, Randolph): the backend now carries the
+              // parent run's applied corrections into the regenerated
+              // run — replay them so the canvas shows the corrected
+              // BOM, not the raw rebuild.
+              const fresh = applyPatchOps(
+                body.data, (body.data as any).patch_ops) as BomResponse;
               setResult(fresh);
               const newRunId = (fresh as any)?.run_id;
               if (newRunId && typeof window !== "undefined") {
