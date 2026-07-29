@@ -173,3 +173,53 @@ def test_regenerate_wrightsoft_run_uses_wrightsoft_builder(app, client, monkeypa
     with app.app_context():
         child = BomRun.query.get(bom["run_id"])
         assert child.regenerated_from_id == parent_id
+
+
+# ─── Day-29 — regenerate carries applied corrections forward ───────
+
+def test_regenerate_carries_patch_ops_to_child(app, client, monkeypatch):
+    """Tim (Randolph Cabin) built a 26-op grille reconciliation, hit
+    regenerate, and lost every correction — twice. Corrections must
+    carry into the regenerated run and ride the response."""
+    import services.profile_service as ps
+    profile = {
+        "client_id": "test-contractor", "client_name": "Test", "is_active": True,
+        "supplier": {"supplier_name": "S"},
+        "markup": {"equipment_pct": 15, "materials_pct": 25,
+                   "consumables_pct": 30, "labor_pct": 0},
+        "markup_tiers": [], "brands": {}, "part_name_overrides": [],
+        "default_output_mode": "full", "include_labor": False, "notes": "",
+    }
+    monkeypatch.setattr(ps, "get_profile_by_id", lambda cid: profile)
+
+    with app.app_context():
+        parent = BomRun.record(
+            client_id="test-contractor", job_id="ws-job", output_mode="full",
+            parsed_design_data={
+                "source_pipeline": "wrightsoft_bom",
+                "wrightsoft_lines": [
+                    {"generic_id": "FRGRMFT-1212", "quantity": 29,
+                     "description": "Rect metal floor grille 12x12", "src": "WSF"},
+                ],
+            },
+            generated_bom={"line_items": [{"sku": "FRGRMFT-1212", "quantity": 29}]},
+        )
+        db.session.commit()
+        parent_id = parent.id
+
+    # apply an expert correction to the parent
+    client.post(f"/api/v1/bom-runs/{parent_id}/patches", json={
+        "op": "update_line", "sku": "FRGRMFT-1212",
+        "fields": {"quantity": 4}, "reason": "M Sheets show 4, not 29",
+    }, headers={"X-Procalcs-User-Email": "tim@reliableheating.team"})
+
+    resp = client.post(f"/api/v1/bom-runs/{parent_id}/regenerate", json={})
+    assert resp.status_code == 200, resp.get_json()
+    bom = resp.get_json()["data"]
+    # response carries the ops for immediate client-side replay
+    assert any(o["sku"] == "FRGRMFT-1212" for o in bom.get("patch_ops", [])), \
+        "regenerate response must carry parent's corrections"
+    # child run persists them
+    with app.app_context():
+        child = BomRun.query.get(bom["run_id"])
+        assert child.patch_ops and child.patch_ops[0]["fields"] == {"quantity": 4}

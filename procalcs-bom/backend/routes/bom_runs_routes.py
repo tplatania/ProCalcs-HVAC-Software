@@ -275,8 +275,17 @@ def regenerate_run(run_id: int):
                 created_by_email=_reviewer_email_from_request(),
                 regenerated_from_id=parent.id,
             )
+            # Day-29 (Tim, Randolph Cabin): CARRY the parent's applied
+            # corrections into the regenerated run. Tim built a 26-op
+            # grille reconciliation, regenerated, and lost it all —
+            # twice. Regenerate = fresh engine build + the expert's
+            # corrections replayed on top (idempotent ops: removes of
+            # absent lines and updates of missing SKUs no-op).
+            if parent.patch_ops:
+                run.patch_ops = list(parent.patch_ops)
             db.session.commit()
             bom["run_id"] = run.id
+            bom["patch_ops"] = list(parent.patch_ops or [])
         except Exception as exc:  # noqa: BLE001 — persistence is best-effort
             logger.warning("wrightsoft regenerate persistence failed: %s", exc)
             db.session.rollback()
