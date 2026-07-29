@@ -81,3 +81,31 @@ def test_delete_run_cascades_chat(app, client, run_id):
 
 def test_delete_missing_run_404(client):
     assert client.delete("/api/v1/bom-runs/99999").status_code == 404
+
+
+# ─── Day-29 — chat hydration follows regeneration lineage ──────────
+
+def test_child_run_chat_includes_parent_thread(app, client):
+    """Tim's refresh-context loss: conversation lived on the parent
+    run; the regenerated child hydrated empty. Child GET must merge
+    the ancestor thread chronologically."""
+    with app.app_context():
+        parent = BomRun.record(client_id="c1", job_id="p", output_mode="full",
+                               parsed_design_data={}, generated_bom={"line_items": []})
+        db.session.commit()
+        child = BomRun.record(client_id="c1", job_id="p-rerun", output_mode="full",
+                              parsed_design_data={}, generated_bom={"line_items": []},
+                              regenerated_from_id=parent.id)
+        db.session.commit()
+        pid, cid = parent.id, child.id
+    client.post(f"/api/v1/bom-runs/{pid}/chat", json={"turns": [
+        {"role": "user", "content": "established correction context"}]})
+    client.post(f"/api/v1/bom-runs/{cid}/chat", json={"turns": [
+        {"role": "user", "content": "post-regen question"}]})
+    got = client.get(f"/api/v1/bom-runs/{cid}/chat").get_json()["data"]
+    texts = [m["content"] for m in got["messages"]]
+    assert texts == ["established correction context", "post-regen question"]
+    assert got["lineage"] == [cid, pid]
+    # parent's own view unchanged (no child bleed-through)
+    pgot = client.get(f"/api/v1/bom-runs/{pid}/chat").get_json()["data"]
+    assert [m["content"] for m in pgot["messages"]] == ["established correction context"]

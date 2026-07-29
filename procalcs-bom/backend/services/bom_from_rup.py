@@ -234,6 +234,15 @@ def build_lines_from_rup(file_bytes: bytes,
     # Empirical safety net — only add models the structural pass didn't
     # already surface. Keeps regression coverage on file variants the
     # sister session's Increment 3 hasn't accounted for.
+    #
+    # Day-29 (Tim/Richard, SW 55th + Irvine): when the structural pass
+    # DID find placed instances, an empirical-only model is suspect —
+    # the CERIData design block retains earlier/alternate selections
+    # (FE4BNBD60L on SW 55th: "not part of the actual equipment used").
+    # Flag those for review instead of asserting them; when structural
+    # found nothing (Ally-type files), empirical is the primary source
+    # and stays unflagged.
+    _structural_found = bool(structural_equipment)
     for unit in design.get("equipment", []) or []:
         model = (unit.get("model") or "").strip()
         if not model or model in seen_models:
@@ -251,6 +260,12 @@ def build_lines_from_rup(file_bytes: bytes,
             "section_hint": "Equipment",
             "unit":         "EA",
         })
+        if _structural_found:
+            lines[-1]["verify_reason"] = (
+                f"{model} appears in the design data but not among the "
+                "placed equipment instances — possibly an earlier or "
+                "alternate selection; verify it belongs on this project "
+                "or remove it.")
 
     # ── Duct-system summary lines ──────────────────────────────────
     # DTYPREF type_counts is a per-run breakdown (one count per duct

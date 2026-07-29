@@ -399,13 +399,37 @@ def add_patch(run_id: int):
 
 @bom_runs_bp.route("/<int:run_id>/chat", methods=["GET"])
 def get_chat(run_id: int):
-    """Return the persisted conversation for a run, oldest first, so
-    the SPA can rehydrate the Review Assistant on open."""
+    """Return the persisted conversation for a run — INCLUDING its
+    regeneration ancestors — oldest first, so the SPA rehydrates the
+    full thread.
+
+    Day-29 (Tim, Randolph): chat is keyed per run, but regenerating
+    moves the canvas to a CHILD run while the conversation so far
+    lives on the parent. A refresh on the child hydrated an empty
+    thread — "after the page refresh it no longer carried forward the
+    established correction context." Walk regenerated_from_id up the
+    chain (bounded) and merge chronologically; new turns keep writing
+    to the current run, so storage stays canonical with no copying."""
     from models import ChatMessage, BomRun
-    if BomRun.query.get(run_id) is None:
+    run = BomRun.query.get(run_id)
+    if run is None:
         return _err(f"Run {run_id} not found", 404)
-    msgs = ChatMessage.for_run(run_id)
-    return _ok({"run_id": run_id, "messages": [m.to_dict() for m in msgs]})
+    chain = [run.id]
+    node = run
+    for _ in range(10):  # bounded ancestor walk
+        pid = node.regenerated_from_id
+        if not pid:
+            break
+        node = BomRun.query.get(pid)
+        if node is None:
+            break
+        chain.append(node.id)
+    msgs: list = []
+    for rid in chain:
+        msgs.extend(ChatMessage.for_run(rid))
+    msgs.sort(key=lambda m: (m.created_at, m.id))
+    return _ok({"run_id": run_id, "lineage": chain,
+                "messages": [m.to_dict() for m in msgs]})
 
 
 @bom_runs_bp.route("/<int:run_id>/chat", methods=["POST"])
