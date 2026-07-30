@@ -934,8 +934,31 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
   // BOM (Equipment / Duct System Equipment / Rheia / Labor) with a
   // subtotal row at the end of each block. Order is intentional —
   // Equipment first because that's what reviewers scan first.
+  // Day-30 (Richard, Jappeloup): "I have grouped the items the way I
+  // review each project. You may categorize the BOM the same way."
+  // Duct System Equipment splits into his review-order subsections
+  // (tagged server-side as review_group, same taxonomy as Quick
+  // Order). Equipment first, then grilles, boots, take-offs, duct
+  // sizes, fittings — the order he walks a project.
+  const REVIEW_GROUP_ORDER = [
+    "Grilles / registers",
+    "Registers (from .rup)",
+    "Ceiling boots",
+    "Take-offs",
+    "Plenums / take-offs",
+    "Collars",
+    "Junction boxes",
+    "Flex duct",
+    "Sheet metal duct",
+    "Fiberglass duct (cut from 4×8 board)",
+    "Duct runs (from .rup)",
+    "End caps",
+    "Fittings (from .rup)",
+    "Other items",
+  ];
   const SECTION_ORDER = [
     "Equipment",
+    ...REVIEW_GROUP_ORDER.map((g) => `Duct — ${g}`),
     "Duct System Equipment",
     "Rheia Duct System Equipment",
     "Labor",
@@ -945,7 +968,11 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
     const buckets = new Map<string, any[]>();
     for (const sec of SECTION_ORDER) buckets.set(sec, []);
     for (const li of (bom.line_items as any[])) {
-      const sec = (li.section as string) || "Other";
+      let sec = (li.section as string) || "Other";
+      if (sec === "Duct System Equipment" && (li as any).review_group) {
+        sec = `Duct — ${(li as any).review_group}`;
+        if (!buckets.has(sec)) buckets.set(sec, []);
+      }
       if (!buckets.has(sec)) buckets.set(sec, []);
       buckets.get(sec)!.push(li);
     }
@@ -981,6 +1008,21 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
           <span className="font-mono text-xs">Reports → Bill of Materials</span>,
           save the project, and re-upload — the BOM then comes from
           Wrightsoft's own numbers.
+        </div>
+      )}
+
+      {/* Day-30 — equipment mentioned in drawing NOTES but absent as
+          records (Richard: "dehumidifiers not read"). The tool can't
+          invent a model from a text label — prompt the manual add. */}
+      {Array.isArray((bom as any).drawing_annotations) &&
+        (bom as any).drawing_annotations.length > 0 && (
+        <div className="rounded-md border border-sky-400 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          <span className="font-semibold">Drawing notes mention equipment
+          not in the BOM records:</span>{" "}
+          {((bom as any).drawing_annotations as string[]).join(" · ")}
+          {" — "}the design file carries these only as canvas text (no
+          model/part). If they belong on this project, add them via the
+          assistant.
         </div>
       )}
 
@@ -1793,6 +1835,7 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
           // order-rollup. Grouped summary, not raw per-segment geometry,
           // to keep the context compact.
           duct_cuts_summary: (bom as any).duct_cuts_summary,
+          drawing_annotations: (bom as any).drawing_annotations,
           // Day-27 — individual routed duct pieces (room + family +
           // length). The per-size cut detail Richard needs; the summary
           // above collapses flex to one line per size.
