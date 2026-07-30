@@ -580,6 +580,23 @@ def build_bom_from_wrightsoft_lines(
     # see at a glance what to purchase without scanning the detailed
     # row-per-run table below.
     try:
+        # Day-30 (Richard, Jappeloup) — review_group: tag every line
+        # with the category a reviewer checks it under ("I have grouped
+        # the items the way I review each project. You may categorize
+        # the BOM the same way"). Uses the same packaging taxonomy as
+        # the Quick Order rollup so both views group identically.
+        try:
+            from services.bom_quick_order import _lookup_packaging
+            for _li in line_items:
+                if (_li.get("section") or "") == "Equipment":
+                    _li["review_group"] = "HVAC Equipment"
+                    continue
+                _pkg = _lookup_packaging(
+                    str(_li.get("sku") or _li.get("generic_id") or ""))
+                _li["review_group"] = (_pkg or {}).get("category") or "Other items"
+        except Exception:  # noqa: BLE001 — grouping is cosmetic
+            logger.warning("review_group tagging skipped", exc_info=True)
+
         from services.bom_quick_order import build_quick_order, build_duct_cuts_summary
         # Day-17 — per-piece duct cuts summary (Richard Jun 30).
         # Each cut creates two end joints needing fastener + mastic

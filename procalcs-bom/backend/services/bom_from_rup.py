@@ -389,6 +389,30 @@ def build_lines_from_rup(file_bytes: bytes,
             })
         logger.info("rup: emitted %d per-code lines from RPITEM/RPRPART "
                     "(%d rows before dedup)", len(first_by_pn), len(priced))
+
+        # Day-30 (Richard, Jappeloup + Randolph) — grille-size lumping
+        # detector. Twice now the file's own BOM collapsed diverse
+        # floor-grille sizes into ONE SKU (FRGRMFT-1212 x42 while the
+        # register boots show 5+ distinct sizes; his plan counted
+        # 11/12/15/4 across four sizes = the same 42). We can't know
+        # the true split, but we CAN see the smell: boots diverse,
+        # grilles concentrated. Flag for review — never guess.
+        _boot_sizes = {p[5:] for p in first_by_pn if p.startswith("FBTI-")}
+        _grille_qty = {p: (first_by_pn[p].get("quantity") or 0)
+                       for p in first_by_pn if p.startswith("FRGR")}
+        _gr_total = sum(_grille_qty.values())
+        if len(_boot_sizes) >= 3 and _gr_total > 0:
+            for _pn, _q in _grille_qty.items():
+                if _q >= 10 and _q / _gr_total >= 0.5:
+                    for _l in lines:
+                        if _l.get("generic_id") == _pn:
+                            _l["verify_reason"] = (
+                                f"{int(_q)} of {int(_gr_total)} grilles are a "
+                                f"single size ({_pn}) while the register boots "
+                                "span multiple sizes — the design file may have "
+                                "lumped grille sizes together (seen on other "
+                                "projects). Verify the size split against the "
+                                "M Sheets.")
     else:
         # Un-built .rup — no RPITEM records. Fall back to the
         # synthetic FITTINGS aggregate + surface an actionable hint
@@ -470,6 +494,18 @@ def build_lines_from_rup(file_bytes: bytes,
         _pieces = parse_home_run_lengths(reader)
     except Exception:  # noqa: BLE001
         _pieces = []
+    # Day-30 — equipment-relevant drawing annotations (dehumidifier
+    # etc. typed on the canvas with no equipment record — Richard,
+    # Jappeloup). Surfaced so the reviewer is PROMPTED to add the
+    # model instead of assuming the tool missed it.
+    try:
+        from utils.rup_annotations import extract_equipment_annotations
+        _notes = extract_equipment_annotations(file_bytes)
+    except Exception:  # noqa: BLE001
+        _notes = []
+    if _notes and lines:
+        lines[0].setdefault("drawing_annotations", _notes)
+
     if _pieces and lines:
         lines[0].setdefault("duct_runout_pieces", [
             {
