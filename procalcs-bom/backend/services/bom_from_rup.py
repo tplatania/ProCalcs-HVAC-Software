@@ -506,6 +506,33 @@ def build_lines_from_rup(file_bytes: bytes,
     if _notes and lines:
         lines[0].setdefault("drawing_annotations", _notes)
 
+    # Day-31 — register grille-size pre-flight (DREGINFO decode, see
+    # designer-desktop docs/rup-dreginfo-decode.md). Auto-mode records
+    # will land in a built BOM as the stored default (12x12); we flag
+    # the count so the reviewer sees it BEFORE trusting the grille
+    # lines — the true size is not in the file, so never guessed.
+    try:
+        from utils.rup_register_preflight import extract_register_preflight
+        _preflight = extract_register_preflight(file_bytes)
+    except Exception:  # noqa: BLE001
+        _preflight = None
+    if _preflight and lines:
+        lines[0].setdefault("register_preflight", _preflight)
+        # Strengthen the Day-30 grille-lump heuristic (boots diverse,
+        # grilles concentrated) with the structural evidence when both
+        # fire. NOT a new flag on its own — auto records exist in most
+        # files (62% corpus-wide) without producing a lumped BOM line,
+        # so structural-only would be noise.
+        if _preflight["auto_count"]:
+            for _l in lines:
+                _vr = _l.get("verify_reason")
+                if _vr and "lumped grille sizes" in _vr:
+                    _l["verify_reason"] = (
+                        f"{_vr} File check: {_preflight['auto_count']} of "
+                        f"{_preflight['total']} register records are "
+                        "auto-sized (stored at the 12x12 default), which "
+                        "matches this lump.")
+
     if _pieces and lines:
         lines[0].setdefault("duct_runout_pieces", [
             {

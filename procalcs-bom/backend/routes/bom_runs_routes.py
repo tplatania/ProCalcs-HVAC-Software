@@ -274,6 +274,17 @@ def regenerate_run(run_id: int):
             logger.error("wrightsoft regenerate failed parent=%s: %s",
                          run_id, exc, exc_info=True)
             return _err("BOM regeneration failed. Please try again.", 500)
+        # Day-31 — carry the parent's structural extras (duct tables,
+        # annotations, register pre-flight). They come from the .rup
+        # bytes at upload time; the wrightsoft builder strips unknown
+        # keys, so without this every regenerated run silently lost
+        # its Duct Cuts tables and hint cards.
+        parent_bom = parent.generated_bom if isinstance(parent.generated_bom, dict) else {}
+        for _k in ("rup_balduct", "rup_unbuilt_hint", "rup_duct_geometry",
+                   "rup_file_type_hint", "duct_runout_pieces",
+                   "drawing_annotations", "register_preflight"):
+            if _k in parent_bom:
+                bom.setdefault(_k, parent_bom[_k])
         try:
             run = BomRun.record(
                 client_id=parent.client_id,
