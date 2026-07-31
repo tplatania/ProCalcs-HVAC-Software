@@ -541,16 +541,28 @@ def build_lines_from_rup(file_bytes: bytes,
     # 79th Ct=26 distinct DDVn/DRFg run SKUs; every Rheia pair had ≤2).
     # Threshold 5 sits in the gap with a 3-SKU margin above the Rheia
     # max, so it never suppresses a real Rheia takeoff.
+    # Day-31 (Tim, Melko) — the day-28 gate counted only DDVn/DRFg
+    # duct-run SKUs (threshold 5). A small sheet-metal-dominant
+    # conventional home (Melko: 2 flex sizes) fell below it and looked
+    # like a Rheia stub → 7 phantom Rheia lines + ERV returned. The
+    # robust signature is the FULL conventional duct-system family
+    # spread: conventional projects price dozens of fitting/register/
+    # grille SKUs, Rheia stubs price a handful. Calibrated on all 50
+    # known-Rheia pairs (max 7) vs six conventional projects (min 27 —
+    # Melko itself): threshold 15, mid-gap, wide margins both ways.
+    _CONV_FAMS = ("DDVn", "DRFg", "DMS", "FBTI", "FTOB", "FTOA", "FTOD",
+                  "FRGR", "FREL", "FPLH", "FPLI", "FPLB", "FPLJ", "FRTE",
+                  "FMEC", "FBEC", "FRRTR")
     if rheia_takeoff:
-        _duct_run_skus = {
+        _conv_skus = {
             (l.get("generic_id") or "")
             for l in lines
-            if (l.get("generic_id") or "").startswith(("DDVn", "DRFg"))
+            if (l.get("generic_id") or "").startswith(_CONV_FAMS)
         }
-        if len(_duct_run_skus) >= 5:
-            logger.info("rup: %d conventional duct-run SKUs in priced BOM "
+        if len(_conv_skus) >= 15:
+            logger.info("rup: %d conventional duct-system SKUs in priced BOM "
                         "— conventional project, suppressing Rheia takeoff",
-                        len(_duct_run_skus))
+                        len(_conv_skus))
             rheia_takeoff = False
     if rheia_takeoff:
         # Day-22b — home-run decode (DUCT block, per-runout routed
