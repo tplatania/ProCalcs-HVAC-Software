@@ -35,10 +35,15 @@ diff = wasted capture.
 
 Ranked by which decode wall they attack:
 
+> **Day-31 update:** the grille-size encoding was decoded from
+> accumulated data (see `docs/rup-dreginfo-decode.md`) — DREGINFO
+> stores W×H f64s plus an auto/user flag. Captures #1–#2 are now
+> confirmation-only; if session time is short, start at #3.
+
 | # | Change | Attacks |
 |---|--------|---------|
-| 1 | One register's **grille size** property (e.g. blank/default → 10x8) | 12×12 lumping |
-| 2 | Same register's grille size → a second value (10x8 → 12x6) | confirms encoding |
+| 1 | One register's **grille size** property (e.g. blank/default → 10x8) | 12×12 lumping (confirmation-only) |
+| 2 | Same register's grille size → a second value (10x8 → 12x6) | confirms encoding (confirmation-only) |
 | 3 | One duct run's **diameter/size** property | per-piece flex sizing |
 | 4 | One duct run's **material/family** (flex ↔ metal) | flex piece detection |
 | 5 | Add a **dehumidifier** via whatever WS flow creates a real record (not a text label) | accessory extraction |

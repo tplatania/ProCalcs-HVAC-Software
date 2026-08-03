@@ -1026,6 +1026,30 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
         </div>
       )}
 
+      {/* Day-31 — register grille-size pre-flight (DREGINFO decode:
+          Wrightsoft stores unset sizes as a literal 12x12 default with
+          an auto flag — docs/rup-dreginfo-decode.md). Structural
+          counterpart of the grille-lump verify badge: tells the
+          reviewer BEFORE they trust the grille lines. */}
+      {(() => {
+        const pf = (bom as any).register_preflight as
+          | { auto_count: number; user_count: number; total: number }
+          | undefined;
+        if (!pf || !pf.auto_count) return null;
+        return (
+          <div className="rounded-md border border-orange-400 bg-orange-50 px-3 py-2 text-sm text-orange-900 dark:bg-orange-950/30 dark:text-orange-200">
+            <span className="font-semibold">Pre-flight — register sizes:</span>{" "}
+            {pf.auto_count} of {pf.total} register records in this design are{" "}
+            <span className="font-medium">auto-sized</span> ({pf.user_count} set
+            explicitly). Wrightsoft stores unset grille sizes as a 12×12
+            default, so 12×12 grille lines may lump several real sizes
+            together. To fix at the source: set each register&apos;s grille
+            size in the Wrightsoft property sheet, rebuild the BOM, and
+            re-upload.
+          </div>
+        );
+      })()}
+
       {/* Day-16 — .rup best-effort notice */}
       {(bom as any).source_pipeline === "wrightsoft_rup" && (
         <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900">
@@ -1840,6 +1864,9 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
           // length). The per-size cut detail Richard needs; the summary
           // above collapses flex to one line per size.
           duct_runout_pieces: (bom as any).duct_runout_pieces,
+          // Day-31 — auto-vs-user grille-size counts (DREGINFO decode)
+          // so the agent can explain the 12×12 default lump precisely.
+          register_preflight: (bom as any).register_preflight,
           quick_order_summary: (bom as any).quick_order_summary,
           register_air_balance: (bom as any).rup_balduct,
         }}
