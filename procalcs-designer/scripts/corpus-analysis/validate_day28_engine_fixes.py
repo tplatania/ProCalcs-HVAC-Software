@@ -39,10 +39,13 @@ CONV = Path.home() / "Procalcs/SW 55th Ave Residence_duct2.rup"
 ROOT = Path.home() / "Procalcs/RUPs-from-zoho"
 PAIRS = Path.home() / "Procalcs/full-corpus-run-2026-07-15/pairs.jsonl"
 
-# Day-31 review (Tom): the separation claim is "50 known-Rheia (max 7)
-# vs SIX conventional projects (min 27)" — so the script must check
-# all six, not just SW 55th. These are the local ground-truth files
-# (rups can't live in the repo; the committed run log is the artifact).
+# Day-31 review (Tom): check ALL local conventional ground-truth
+# files, not just SW 55th. Verified result: 50 known-Rheia pairs
+# max 7 vs five BUILT conventional projects min 37 (Enos is unbuilt —
+# gate not applicable; Melko's 27 came from its stored-run listing and
+# stays supporting-only until its fresh upload). Corpus-based
+# supporting evidence — rups can't live in the repo; the committed run
+# log (docs/validation-2026-07-31-rheia-gate.md) is the artifact.
 CONV_ALL = [
     Path.home() / "Procalcs/SW 55th Ave Residence_duct2.rup",
     Path.home() / "Procalcs/Jappeloup Lane Residence_duct.rup",

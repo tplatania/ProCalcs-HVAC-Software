@@ -1,5 +1,13 @@
 # Validation artifact — day-31 Rheia gate separation (2026-07-31)
 
+**Status: corpus-based supporting evidence.** The separation result
+(50 known-Rheia pairs max 7 vs five built conventional projects
+min 37) is measured against the private corpus and local ground-truth
+files, which cannot be reproduced from GitHub. The independently
+reproducible coverage is the synthetic suite
+(`procalcs-bom/backend/tests/test_day31_gate_and_preflight.py`); this
+artifact supports the *choice* of threshold, not the gate's logic.
+
 Committed run log of
 `scripts/corpus-analysis/validate_day28_engine_fixes.py` (extended per
 Tom's 2026-07-31 review to check **every** local conventional
