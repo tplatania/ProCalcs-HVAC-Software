@@ -39,6 +39,19 @@ CONV = Path.home() / "Procalcs/SW 55th Ave Residence_duct2.rup"
 ROOT = Path.home() / "Procalcs/RUPs-from-zoho"
 PAIRS = Path.home() / "Procalcs/full-corpus-run-2026-07-15/pairs.jsonl"
 
+# Day-31 review (Tom): the separation claim is "50 known-Rheia (max 7)
+# vs SIX conventional projects (min 27)" — so the script must check
+# all six, not just SW 55th. These are the local ground-truth files
+# (rups can't live in the repo; the committed run log is the artifact).
+CONV_ALL = [
+    Path.home() / "Procalcs/SW 55th Ave Residence_duct2.rup",
+    Path.home() / "Procalcs/Jappeloup Lane Residence_duct.rup",
+    Path.home() / "Procalcs/1257 Irvine Rd Residence.rup",
+    Path.home() / "Procalcs/Enos Residence Load Calcs.rup",
+    Path.home() / "Procalcs/RUPs/79th Ct Residence Load Calcs+BOM.rup",
+    Path.home() / "Procalcs/BOM Samples/Clarke Residence Load Calcs.rup",
+]
+
 
 def build(f: Path, rheia: bool):
     lines = build_lines_from_rup(f.read_bytes(), source_name=f.name, rheia_takeoff=rheia)
@@ -103,9 +116,28 @@ def main() -> int:
                 pass
             if len(counts) >= 50:
                 break
-        checks.append((f"known-Rheia max duct-system SKUs < 15 (got {max(counts)})", max(counts) < 15))
-        checks.append((f"conventional SW55 duct-system SKUs >= 15 (got {duct_run_skus(CONV)})",
-                       duct_run_skus(CONV) >= 15))
+        checks.append((f"known-Rheia max duct-system SKUs < 15 "
+                       f"(n={len(counts)}, max={max(counts)})", max(counts) < 15))
+        conv_counts = {}
+        for cf in CONV_ALL:
+            if not cf.exists():
+                continue
+            # The gate metric reads the PRICED BOM (RPITEM); unbuilt
+            # files take the synthetic path and never reach the gate,
+            # so they aren't calibration points for this threshold.
+            if not has_priced_bom(RupReader(cf.read_bytes())):
+                print(f"  ⏭️  '{cf.name}' has no Wrightsoft-built BOM "
+                      "(unbuilt — gate not applicable, skipped)")
+                continue
+            conv_counts[cf.name] = duct_run_skus(cf)
+        for cname, cnt in conv_counts.items():
+            checks.append((f"conventional '{cname}' duct-system SKUs >= 15 "
+                           f"(got {cnt})", cnt >= 15))
+        if conv_counts:
+            checks.append((f"conventional min across {len(conv_counts)} projects "
+                           f"= {min(conv_counts.values())} (threshold 15, "
+                           f"Rheia max {max(counts)})",
+                           min(conv_counts.values()) >= 15))
 
     for label, passed in checks:
         print(f"  {'✅' if passed else '❌'} {label}")
