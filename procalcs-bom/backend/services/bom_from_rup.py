@@ -53,12 +53,16 @@ from utils.rup_duct_geometry import (
 
 logger = logging.getLogger("procalcs_bom")
 
-# Day-31 (Tim, Melko) — per-project Rheia gate calibration. A
-# conventional project prices its full duct system (min 27 distinct
-# SKUs across these families on six conventional projects); a Rheia
-# stub prices a handful (max 7 across all 50 known-Rheia pairs).
-# Threshold 15 sits mid-gap. Module-level so tests can exercise the
-# threshold synthetically (Tom, 2026-07-31 review).
+# Day-31 (Tim, Melko) — per-project Rheia gate calibration, from
+# corpus-based supporting evidence (private corpus — not reproducible
+# from GitHub; committed run log: designer
+# docs/validation-2026-07-31-rheia-gate.md). A conventional project
+# prices its full duct system (min 37 distinct SKUs across these
+# families on the five built local ground-truth projects; Melko
+# measured 27 from its stored-run listing — supporting, pending fresh
+# upload); a Rheia stub prices a handful (max 7 across all 50
+# known-Rheia pairs). Threshold 15 sits mid-gap. Module-level so tests
+# can exercise the threshold synthetically (Tom, 2026-07-31 review).
 CONV_DUCT_FAMILIES = ("DDVn", "DRFg", "DMS", "FBTI", "FTOB", "FTOA",
                       "FTOD", "FRGR", "FREL", "FPLH", "FPLI", "FPLB",
                       "FPLJ", "FRTE", "FMEC", "FBEC", "FRRTR")
@@ -602,8 +606,13 @@ def build_lines_from_rup(file_bytes: bytes,
     # robust signature is the FULL conventional duct-system family
     # spread: conventional projects price dozens of fitting/register/
     # grille SKUs, Rheia stubs price a handful. Calibrated on all 50
-    # known-Rheia pairs (max 7) vs six conventional projects (min 27 —
-    # Melko itself): threshold 15, mid-gap, wide margins both ways.
+    # known-Rheia pairs (max 7) vs the five BUILT local conventional
+    # projects (min 37; the sixth, Enos, is unbuilt so the gate never
+    # evaluates it; Melko measured 27 from its stored-run listing —
+    # supporting evidence pending its fresh upload): threshold 15,
+    # mid-gap, wide margins both ways. Corpus-based supporting
+    # evidence — committed run log in designer
+    # docs/validation-2026-07-31-rheia-gate.md.
     if rheia_takeoff:
         _n_conv = count_conventional_duct_skus(lines)
         if _n_conv >= CONV_SKU_THRESHOLD:

@@ -13,10 +13,13 @@ Covers, with NO corpus/local-file dependency:
      the never-overwrite rule.
 
 The empirical calibration behind the threshold (50 known-Rheia pairs
-max 7 vs six conventional projects min 27) lives in the designer
-repo's scripts/corpus-analysis/validate_day28_engine_fixes.py — rups
-cannot be committed, so its run log is the committed artifact
-(designer docs/validation-2026-07-31-rheia-gate.md).
+max 7 vs five built local conventional projects min 37; Melko's 27
+came from its stored-run listing and is supporting-only pending its
+fresh upload) is CORPUS-BASED SUPPORTING EVIDENCE — the private corpus
+cannot be reproduced from GitHub. It lives in the designer repo's
+scripts/corpus-analysis/validate_day28_engine_fixes.py; its run log is
+the committed artifact (designer
+docs/validation-2026-07-31-rheia-gate.md).
 """
 from __future__ import annotations
 
@@ -63,10 +66,12 @@ def test_gate_threshold_boundary():
 
 
 def test_gate_calibration_margins_hold_around_threshold():
-    # Empirical anchors from the day-31 calibration: known-Rheia max 7,
-    # conventional min 27. Both must stay on their side of the
-    # threshold — if someone edits CONV_SKU_THRESHOLD out of the gap,
-    # this fails.
+    # Empirical anchors (corpus-based supporting evidence, see module
+    # docstring): known-Rheia max 7; conventional anchored at 27 — the
+    # most conservative conventional measurement (Melko, stored-run
+    # listing; the five built local projects all measured >= 37). Both
+    # anchors must stay on their side of the threshold — if someone
+    # edits CONV_SKU_THRESHOLD out of the gap, this fails.
     assert 7 < CONV_SKU_THRESHOLD <= 27
 
 
