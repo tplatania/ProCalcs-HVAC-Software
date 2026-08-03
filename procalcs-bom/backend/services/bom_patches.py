@@ -94,3 +94,28 @@ def bom_with_patched_summaries(run) -> Dict[str, Any]:
     patch ops — for run-detail reads. Stored data stays raw/canonical."""
     bom = copy.deepcopy(run.generated_bom or {})
     return rebuild_summaries(bom, run.patch_ops)
+
+
+# Day-31 — structural extras extracted from the .rup bytes at upload
+# time (duct tables, canvas annotations, register pre-flight). The
+# wrightsoft line builder strips unknown keys, so any rebuild from
+# stored wrightsoft_lines loses them unless explicitly carried from
+# the parent run's stored BOM. Single source of truth for the key set
+# (route-level snapshot in bom_routes.py uses the same list).
+STRUCTURAL_EXTRA_KEYS = (
+    "rup_balduct", "rup_unbuilt_hint", "rup_duct_geometry",
+    "rup_file_type_hint", "duct_runout_pieces", "drawing_annotations",
+    "register_preflight",
+)
+
+
+def carry_structural_extras(child_bom: Dict[str, Any],
+                            parent_bom: Any) -> Dict[str, Any]:
+    """Copy structural extras from a parent run's stored BOM onto a
+    freshly rebuilt child BOM (setdefault — never overwrites keys the
+    rebuild produced itself). Tolerates a None/non-dict parent."""
+    if isinstance(parent_bom, dict):
+        for key in STRUCTURAL_EXTRA_KEYS:
+            if key in parent_bom:
+                child_bom.setdefault(key, parent_bom[key])
+    return child_bom

@@ -53,6 +53,27 @@ from utils.rup_duct_geometry import (
 
 logger = logging.getLogger("procalcs_bom")
 
+# Day-31 (Tim, Melko) — per-project Rheia gate calibration. A
+# conventional project prices its full duct system (min 27 distinct
+# SKUs across these families on six conventional projects); a Rheia
+# stub prices a handful (max 7 across all 50 known-Rheia pairs).
+# Threshold 15 sits mid-gap. Module-level so tests can exercise the
+# threshold synthetically (Tom, 2026-07-31 review).
+CONV_DUCT_FAMILIES = ("DDVn", "DRFg", "DMS", "FBTI", "FTOB", "FTOA",
+                      "FTOD", "FRGR", "FREL", "FPLH", "FPLI", "FPLB",
+                      "FPLJ", "FRTE", "FMEC", "FBEC", "FRRTR")
+CONV_SKU_THRESHOLD = 15
+
+
+def count_conventional_duct_skus(lines: List[Dict[str, Any]]) -> int:
+    """Distinct conventional duct-system SKUs in a priced line list —
+    the day-31 Rheia-gate metric (gate fires at CONV_SKU_THRESHOLD)."""
+    return len({
+        (l.get("generic_id") or "")
+        for l in lines
+        if (l.get("generic_id") or "").startswith(CONV_DUCT_FAMILIES)
+    })
+
 
 # Wrightsoft 4-char manufacturer codes for the common HVAC majors. These
 # are what land in `Src` on the .xls export when Wrightsoft itself
@@ -514,7 +535,13 @@ def build_lines_from_rup(file_bytes: bytes,
     try:
         from utils.rup_register_preflight import extract_register_preflight
         _preflight = extract_register_preflight(file_bytes)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # Loud, not silent (Tom, 2026-07-31): a decode failure must be
+        # distinguishable in logs from "file has no DREGINFO records",
+        # otherwise the pre-flight card just quietly disappears.
+        logger.warning("rup: register pre-flight decode FAILED for %s "
+                       "(card will be omitted): %s",
+                       source_name, exc, exc_info=True)
         _preflight = None
     if _preflight and lines:
         lines[0].setdefault("register_preflight", _preflight)
@@ -577,19 +604,12 @@ def build_lines_from_rup(file_bytes: bytes,
     # grille SKUs, Rheia stubs price a handful. Calibrated on all 50
     # known-Rheia pairs (max 7) vs six conventional projects (min 27 —
     # Melko itself): threshold 15, mid-gap, wide margins both ways.
-    _CONV_FAMS = ("DDVn", "DRFg", "DMS", "FBTI", "FTOB", "FTOA", "FTOD",
-                  "FRGR", "FREL", "FPLH", "FPLI", "FPLB", "FPLJ", "FRTE",
-                  "FMEC", "FBEC", "FRRTR")
     if rheia_takeoff:
-        _conv_skus = {
-            (l.get("generic_id") or "")
-            for l in lines
-            if (l.get("generic_id") or "").startswith(_CONV_FAMS)
-        }
-        if len(_conv_skus) >= 15:
+        _n_conv = count_conventional_duct_skus(lines)
+        if _n_conv >= CONV_SKU_THRESHOLD:
             logger.info("rup: %d conventional duct-system SKUs in priced BOM "
                         "— conventional project, suppressing Rheia takeoff",
-                        len(_conv_skus))
+                        _n_conv)
             rheia_takeoff = False
     if rheia_takeoff:
         # Day-22b — home-run decode (DUCT block, per-runout routed
