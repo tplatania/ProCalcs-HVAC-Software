@@ -119,7 +119,7 @@ router.get("/parts/:src/:pn", async (req: Request, res: Response) => {
               AltPN AS alt_part_no, Status AS status
          FROM ActItem WHERE "PSrc" = ? AND "PN" = ?`,
     )
-    .get(req.params.src.toUpperCase(), req.params.pn);
+    .get(String(req.params.src).toUpperCase(), String(req.params.pn));
   if (!row) {
     res.status(404).json({ success: false, data: null, error: "part not found" });
     return;

@@ -105,9 +105,10 @@ router.post("/import", async (req: Request, res: Response) => {
         ...authHeaders(req),
       },
       body: req as any,
-      // @ts-expect-error — Node fetch needs duplex:'half' when streaming a request body
+      // Node fetch needs duplex:'half' when streaming a request body;
+      // typed via cast because RequestInit doesn't declare it.
       duplex: "half",
-    });
+    } as RequestInit);
     const raw = await upstream.text();
     res.status(upstream.status).type("application/json").send(raw);
   } catch (err: any) {

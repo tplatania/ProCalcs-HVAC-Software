@@ -56,7 +56,7 @@ function loadLedger(contractor: string): LedgerQuestion[] | null {
 
 // GET /api/questions/:contractor — pending items + closed count.
 router.get("/:contractor", (req: Request, res: Response) => {
-  const all = loadLedger(req.params.contractor);
+  const all = loadLedger(String(req.params.contractor));
   if (all === null) {
     res.status(404).json({ success: false, data: null, error: "no ledger for contractor" });
     return;
