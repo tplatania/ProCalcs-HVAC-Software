@@ -20,6 +20,22 @@ meta:
   contractor_name: Reliable Heating and Cooling
   created: 2026-07-15
   corpus_basis: "Zoho archive sync 2026-07-14/15 — 12 communities, ~4,300+ files (sync completing)"
+  # Versioning (BETA gate B1, Tom's 2026-08-06 tightening): the ledger
+  # is frozen per version; ANY change to rules or their status bumps
+  # ledger_version and appends a changelog entry. Engine/UI flag
+  # behavior cites the version it was built against. Git tag
+  # `ledger-reliable-vX.Y` marks each freeze.
+  ledger_version: "1.0"
+  frozen: 2026-08-11
+  changelog:
+    - version: "1.0"
+      date: 2026-08-11
+      note: >
+        Initial freeze for the BETA definition loop. Contents as
+        accumulated through day-31 (13 closed / 1 pending question;
+        expert-ratified flag classes: heat strips, empirical-only
+        equipment, grille lumping, unbuilt-file accuracy, auto-sized
+        registers).
 
 rules:
   # ── Business scope ────────────────────────────────────────────────
