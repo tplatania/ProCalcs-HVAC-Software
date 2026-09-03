@@ -315,10 +315,17 @@
       <td class="label">Generated</td>
       <td class="value">{{ generated_display or generated_at or "—" }}</td>
     </tr>
+    {% if not hide_pricing %}
     <tr class="total">
       <td class="label">Grand Total</td>
       <td class="value">{{ grand_total | currency }}</td>
     </tr>
+    {% else %}
+    <tr class="total">
+      <td class="label">Pricing</td>
+      <td class="value" style="font-size:10pt;color:#64748b;font-weight:600;">Parts list only — no pricing</td>
+    </tr>
+    {% endif %}
   </table>
 </div>
 
@@ -427,7 +434,7 @@
   <div class="category-header" style="background: {{ group.meta.bg }};">
     <span class="chip" style="background: {{ group.meta.color }};"></span>
     {{ group.meta.label }}
-    <span class="category-count">{{ group.lines | length }} items · {{ group.subtotal | currency }}</span>
+    <span class="category-count">{{ group.lines | length }} items{% if not hide_pricing %} · {{ group.subtotal | currency }}{% endif %}</span>
   </div>
 
   {# Day-17 — unified column set: Generic | Description | Mfr | SKU |
@@ -444,8 +451,10 @@
         <th>SKU</th>
         <th class="num">Qty</th>
         <th>Unit</th>
+        {% if not hide_pricing %}
         <th class="num">Unit $</th>
         <th class="num">Total</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
@@ -458,22 +467,29 @@
         <td class="sku">{{ item.sku or "—" }}</td>
         <td class="num">{{ item.quantity | qty }}</td>
         <td>{{ item.unit or "EA" }}</td>
+        {% if not hide_pricing %}
         <td class="num">{{ (item.get('unit_price') if item.get('unit_price') is not none else item.get('unit_cost')) | currency }}</td>
         <td class="num">{{ (item.get('total_price') if item.get('total_price') is not none else item.get('total_cost')) | currency }}</td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>
+    {% if not hide_pricing %}
     <tfoot>
       <tr>
         <td colspan="8" class="num">{{ group.meta.label }} Subtotal</td>
         <td class="num">{{ group.subtotal | currency }}</td>
       </tr>
     </tfoot>
+    {% endif %}
   </table>
 </div>
 {% endfor %}
 
 <!-- ===== Grand total ===== -->
+{% if hide_pricing %}
+<div class="mode-note">{{ item_count }} line items · parts list only (no pricing)</div>
+{% else %}
 <div class="grand-total{% if is_partial_pricing %} partial{% endif %}">
   <span class="label">
     {% if is_partial_pricing %}
@@ -486,6 +502,7 @@
   <span class="amount">{{ grand_total | currency }}</span>
 </div>
 <div class="mode-note">{{ item_count }} line items · output mode: {{ output_mode }}</div>
+{% endif %}
 
 {% if ahri_specs %}
 <!-- ===== Equipment Specifications (AHRI-certified) ===== -->

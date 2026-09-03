@@ -76,6 +76,22 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     line_items: List[Dict[str, Any]] = list(bom.get("line_items") or [])
     totals = bom.get("totals") or {}
 
+    # Dana #1 (2026-09-02) — price-less parts list for multi-contractor
+    # bids. Drop the two price columns and all totals; keep everything
+    # else identical.
+    hide = bool(bom.get("hide_pricing"))
+    cols = ([c for c in _COLUMNS if c[0] not in ("Unit $", "Total $")]
+            if hide else _COLUMNS)
+    ncols = len(cols)
+    # 1-based indices of the price columns in the FULL layout (used to
+    # skip them per row when hidden). Unit $ = 8, Total $ = 9.
+    _price_col_idx = {8, 9}
+    # Source 1-based index (into the full 10-column layout) for each
+    # visible column, so per-row values map correctly after price
+    # columns are dropped.
+    _full_pos = {label: i for i, (label, _w) in enumerate(_COLUMNS, start=1)}
+    _src_indices = [_full_pos[label] for (label, _w) in cols]
+
     wb = Workbook()
     ws = wb.active
     ws.title = "BOM"
@@ -92,7 +108,7 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     project_name = (bom.get("project_name") or "").strip() or (bom.get("job_id") or "Bill of Materials")
     ws["A1"] = f"{project_name} — HVAC Bill of Materials"
     ws["A1"].font = Font(size=14, bold=True)
-    ws.merge_cells("A1:J1")
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
 
     from utils.ts_format import format_generated_eastern
     meta_rows = [
@@ -112,12 +128,12 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
         ws.cell(row=i, column=2, value=str(value))
 
     # ── Column widths ──────────────────────────────────────────────
-    for i, (_, width) in enumerate(_COLUMNS, start=1):
+    for i, (_, width) in enumerate(cols, start=1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
     # ── Header row ─────────────────────────────────────────────────
     header_row = 2 + len(meta_rows) + 1
-    for i, (label, _) in enumerate(_COLUMNS, start=1):
+    for i, (label, _) in enumerate(cols, start=1):
         cell = ws.cell(row=header_row, column=i, value=label)
         cell.fill = _HEADER_FILL
         cell.font = _WHITE_BOLD
@@ -144,8 +160,8 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
         sec_cell = ws.cell(row=row, column=1, value=section)
         sec_cell.font = _BOLD
         sec_cell.fill = _SECTION_FILL
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=len(_COLUMNS))
-        for col in range(1, len(_COLUMNS) + 1):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+        for col in range(1, ncols + 1):
             ws.cell(row=row, column=col).fill = _SECTION_FILL
         row += 1
 
@@ -156,68 +172,72 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
             section_total += line_total
 
             unmapped = li.get("source") == "wrightsoft_unmapped"
-            values = [
-                running_index,
-                li.get("generic_id") or "",
-                li.get("description") or "",
-                li.get("manufacturer") or "",
-                li.get("sku") or "",
-                _num(li.get("quantity")),
-                li.get("unit") or "",
-                _num(li.get("unit_cost")),
-                line_total,
-                li.get("source") or "",
-            ]
-            for col_idx, value in enumerate(values, start=1):
-                c = ws.cell(row=row, column=col_idx, value=value)
+            # Full-layout values keyed by 1-based column index, so we
+            # can drop the price columns cleanly when hidden.
+            full = {
+                1: running_index,
+                2: li.get("generic_id") or "",
+                3: li.get("description") or "",
+                4: li.get("manufacturer") or "",
+                5: li.get("sku") or "",
+                6: _num(li.get("quantity")),
+                7: li.get("unit") or "",
+                8: _num(li.get("unit_cost")),
+                9: line_total,
+                10: li.get("source") or "",
+            }
+            for out_idx, src_idx in enumerate(_src_indices, start=1):
+                c = ws.cell(row=row, column=out_idx, value=full[src_idx])
                 c.border = _CELL_BORDER
-                if col_idx in (6, 8, 9):
+                if src_idx == 6 or src_idx in _price_col_idx:
                     c.alignment = Alignment(horizontal="right")
-                    if col_idx in (8, 9):
+                    if src_idx in _price_col_idx:
                         c.number_format = '"$"#,##0.00'
                 if unmapped:
                     c.fill = _UNMAPPED_FILL
             row += 1
 
-        # Subtotal row for this section
-        sub_label = ws.cell(row=row, column=1, value=f"Subtotal — {section}")
-        sub_label.font = _BOLD
-        sub_label.fill = _SUBTOTAL_FILL
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
-        sub_val = ws.cell(row=row, column=9, value=section_total)
-        sub_val.font = _BOLD
-        sub_val.fill = _SUBTOTAL_FILL
-        sub_val.alignment = Alignment(horizontal="right")
-        sub_val.number_format = '"$"#,##0.00'
-        sub_val.border = _CELL_BORDER
-        # Fill the trailing cells too so the row looks complete
-        for col in range(1, len(_COLUMNS) + 1):
-            ws.cell(row=row, column=col).fill = _SUBTOTAL_FILL
-        ws.cell(row=row, column=10).border = _CELL_BORDER
-        row += 1
+        # Subtotal row for this section (skipped entirely when price-less)
+        if not hide:
+            sub_label = ws.cell(row=row, column=1, value=f"Subtotal — {section}")
+            sub_label.font = _BOLD
+            sub_label.fill = _SUBTOTAL_FILL
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+            sub_val = ws.cell(row=row, column=9, value=section_total)
+            sub_val.font = _BOLD
+            sub_val.fill = _SUBTOTAL_FILL
+            sub_val.alignment = Alignment(horizontal="right")
+            sub_val.number_format = '"$"#,##0.00'
+            sub_val.border = _CELL_BORDER
+            # Fill the trailing cells too so the row looks complete
+            for col in range(1, ncols + 1):
+                ws.cell(row=row, column=col).fill = _SUBTOTAL_FILL
+            ws.cell(row=row, column=ncols).border = _CELL_BORDER
+            row += 1
         # Spacer row between sections
         row += 1
 
         grand_total += section_total
 
-    # ── Grand total ────────────────────────────────────────────────
-    declared_total = totals.get("total_price")
-    if declared_total is None:
-        declared_total = totals.get("total_cost")
-    final_total = float(declared_total) if declared_total is not None else grand_total
+    # ── Grand total (omitted for a price-less parts list) ──────────
+    if not hide:
+        declared_total = totals.get("total_price")
+        if declared_total is None:
+            declared_total = totals.get("total_cost")
+        final_total = float(declared_total) if declared_total is not None else grand_total
 
-    g_label = ws.cell(row=row, column=1, value="GRAND TOTAL")
-    g_label.font = Font(bold=True, size=12)
-    g_label.fill = _GRAND_FILL
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
-    g_val = ws.cell(row=row, column=9, value=final_total)
-    g_val.font = Font(bold=True, size=12)
-    g_val.fill = _GRAND_FILL
-    g_val.alignment = Alignment(horizontal="right")
-    g_val.number_format = '"$"#,##0.00'
-    g_val.border = _CELL_BORDER
-    for col in range(1, len(_COLUMNS) + 1):
-        ws.cell(row=row, column=col).fill = _GRAND_FILL
+        g_label = ws.cell(row=row, column=1, value="GRAND TOTAL")
+        g_label.font = Font(bold=True, size=12)
+        g_label.fill = _GRAND_FILL
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+        g_val = ws.cell(row=row, column=9, value=final_total)
+        g_val.font = Font(bold=True, size=12)
+        g_val.fill = _GRAND_FILL
+        g_val.alignment = Alignment(horizontal="right")
+        g_val.number_format = '"$"#,##0.00'
+        g_val.border = _CELL_BORDER
+        for col in range(1, ncols + 1):
+            ws.cell(row=row, column=col).fill = _GRAND_FILL
 
     # Freeze header row so the column titles stick when scrolling
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)

@@ -234,6 +234,10 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         # Pricing coverage (Day-16)
         "priced_count":            priced_count,
         "is_partial_pricing":      is_partial_pricing,
+        # Dana #1 (2026-09-02) — price-less parts list for multi-
+        # contractor bids. When set, the PDF omits price columns,
+        # subtotals, and the grand total entirely.
+        "hide_pricing":            bool(bom.get("hide_pricing")),
         # Quick Order Summary (Day-17)
         "quick_order_summary":     bom.get("quick_order_summary") or [],
         # Per-piece Duct Cuts summary (Day-17, Richard Jun 30)
