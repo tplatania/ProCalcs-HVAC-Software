@@ -163,6 +163,12 @@ export default function WrightsoftBomV2Page(
   const [equipmentBundleFile, setEquipmentBundleFile] = useState<File | null>(null);
   const [bundleProjectName, setBundleProjectName] = useState<string>("");
   const [jobId, setJobId] = useState<string>("");
+  // Dana #8 (2026-09-02) — optional project identity for the exported
+  // header (Project Name / Address / Client Name). In Wrightsoft this
+  // lives in project information; entered here until WS-MCP can read it.
+  const [projectName, setProjectName] = useState<string>("");
+  const [projectAddress, setProjectAddress] = useState<string>("");
+  const [endClientName, setEndClientName] = useState<string>("");
 
   // Day-15 — the selected profile's brand color drives the contractor-
   // specific accent in the result view (badge edges, banner stripe).
@@ -283,6 +289,10 @@ export default function WrightsoftBomV2Page(
       fd.append("file", file);
       fd.append("client_id", clientId);
       fd.append("job_id", jobId);
+      // Dana #8 — optional project identity for the exported header.
+      if (projectName.trim())    fd.append("project_name", projectName.trim());
+      if (projectAddress.trim()) fd.append("project_address", projectAddress.trim());
+      if (endClientName.trim())  fd.append("end_client_name", endClientName.trim());
       // Day-16 follow-up — co-upload the source .rup when provided so
       // the response carries room/branch context the .xls doesn't have.
       if (rupContextFile) {
@@ -492,6 +502,39 @@ export default function WrightsoftBomV2Page(
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
                 placeholder="auto-filled from filename when you pick a file"
+                className="mt-1 h-10 w-full px-3 rounded-md border bg-background text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Dana #8 — project identity for the exported header. All
+              optional; the export leads with Project Name and falls
+              back to the Job ID when it's blank. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs">Project name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="e.g. Seddon Cove Way Residence"
+                className="mt-1 h-10 w-full px-3 rounded-md border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <input
+                value={projectAddress}
+                onChange={(e) => setProjectAddress(e.target.value)}
+                placeholder="e.g. 123 Seddon Cove Way"
+                className="mt-1 h-10 w-full px-3 rounded-md border bg-background text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Client name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <input
+                value={endClientName}
+                onChange={(e) => setEndClientName(e.target.value)}
+                placeholder="e.g. homeowner or builder"
                 className="mt-1 h-10 w-full px-3 rounded-md border bg-background text-sm"
               />
             </div>
@@ -830,6 +873,9 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
     ? null
     : ((bom.line_items as any[])[editingIndex] as EditableLine);
   const [, setLocation] = useLocation();
+  // Dana #1 (2026-09-02) — export a parts list WITHOUT pricing (for
+  // multi-contractor bids). Toggles hide_pricing on the exported bom.
+  const [exportNoPricing, setExportNoPricing] = useState(false);
   const renderPdf = useRenderBomPdf();
   // Day-24 — "sniping": surgical table/row references for the chat.
   // Lives here because both the crosshair buttons and the sidebar
@@ -1349,10 +1395,20 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
             </Button>
           );
         })()}
+        {/* Dana #1 — export without pricing for bid packages. */}
+        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none mr-1">
+          <input
+            type="checkbox"
+            checked={exportNoPricing}
+            onChange={(e) => setExportNoPricing(e.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          without pricing
+        </label>
         <Button
           size="sm"
           variant="outline"
-          onClick={() => renderXls.mutate({ bom })}
+          onClick={() => renderXls.mutate({ bom: { ...bom, hide_pricing: exportNoPricing } as any })}
           disabled={renderXls.isPending}
         >
           {renderXls.isPending
@@ -1363,7 +1419,7 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
         <Button
           size="sm"
           variant="outline"
-          onClick={() => renderPdf.mutate({ bom })}
+          onClick={() => renderPdf.mutate({ bom: { ...bom, hide_pricing: exportNoPricing } as any })}
           disabled={renderPdf.isPending}
         >
           {renderPdf.isPending
