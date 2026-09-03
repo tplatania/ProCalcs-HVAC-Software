@@ -42,6 +42,7 @@ export interface ProposedAction {
   quantity?: number;
   unit_price?: number;
   source?: string;
+  section?: string;   // Dana #9a — equipment adds carry section="Equipment"
   reason: string;
   rule_candidate?: boolean;
   applied?: boolean;

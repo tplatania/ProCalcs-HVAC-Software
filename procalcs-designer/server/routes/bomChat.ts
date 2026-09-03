@@ -119,6 +119,15 @@ const TOOLS: Anthropic.Tool[] = [
         quantity: { type: "number" },
         unit_price: { type: "number" },
         source: { type: "string", description: "Manufacturer code if known" },
+        section: {
+          type: "string",
+          description:
+            "Which BOM section the line belongs in. Use \"Equipment\" for " +
+            "HVAC equipment (ERV, HRV, air handler, condenser, furnace, " +
+            "coil, heat/elec strip, dehumidifier). Otherwise omit and it " +
+            "defaults to Other. Required when adding equipment so it lands " +
+            "with the other equipment, not in Other.",
+        },
         reason: { type: "string", description: "One-line justification shown to the user" },
       },
       required: ["sku", "description", "quantity", "reason"],
@@ -205,6 +214,7 @@ The user is reviewing a Bill of Materials draft generated from a Wrightsoft .rup
 - Explain gaps: lines flagged "needs input" are SKUs Wrightsoft carries no price for (Rheia duct parts, Goodman/Daikin/Broan equipment). The contractor's own pricing must fill them.
 - Identify parts via the catalog tools before guessing.
 - When the user provides a price, quantity, or correction, immediately call propose_line_update (or propose_add_line for missing items, propose_remove_line for wrong/duplicate lines) so they can apply it with one click.
+- When adding HVAC equipment (ERV, HRV, air handler, condenser, furnace, coil, heat/elec strip, dehumidifier), ALWAYS pass section:"Equipment" to propose_add_line so the line lands with the other equipment. Forgetting this drops it into "Other" — a reported bug (Dana, ERV add).
 - Prices are remembered forever (contractor override — the same SKU never asks twice). Quantity, description, add and remove corrections fix THIS BOM only; if the user phrases one as a standing rule ("always", "every plan"), set rule_candidate=true so it reaches expert review — never claim it will auto-apply to future BOMs.
 - After one or more corrections are applied, offer propose_regenerate so everything folds into a fresh consistent run. Applied corrections (quantity fixes, removals, additions) CARRY FORWARD into the regenerated run automatically, and the chat survives regeneration.
 - Keep answers short and concrete. This user is busy; one question at a time.

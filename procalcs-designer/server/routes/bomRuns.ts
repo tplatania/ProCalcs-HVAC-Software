@@ -18,6 +18,14 @@ const router = Router();
 // spins with no signal.
 const UPSTREAM_TIMEOUT_MS = 30_000;
 
+// Regenerate does a full engine rebuild + contractor-override reapply
+// + summary recompute — much heavier than a read, and on a cold
+// procalcs-bom instance it routinely exceeded 30s. Dana (2026-09-02)
+// hit the timeout: the banner said "Regeneration failed" while the
+// backend actually SUCCEEDED, so each retry spawned an orphan rerun
+// (runs 420-424). Give regenerate its own, larger budget.
+const REGENERATE_TIMEOUT_MS = 120_000;
+
 interface FlaskEnvelope<T> {
   success: boolean;
   data: T | null;
@@ -46,7 +54,8 @@ function describeUpstreamError(err: unknown): string {
 async function callFlask<T>(
   req: Request,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  timeoutMs: number = UPSTREAM_TIMEOUT_MS
 ): Promise<{ status: number; envelope: FlaskEnvelope<T> | null; raw: string }> {
   const url = `${config.flaskBomBaseUrl}/api/v1/bom-runs${path}`;
   const upstream = await fetch(url, {
@@ -55,8 +64,8 @@ async function callFlask<T>(
       ...buildUpstreamHeaders(req),
       ...(init?.headers || {}),
     },
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     ...init,
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const raw = await upstream.text();
   let envelope: FlaskEnvelope<T> | null = null;
@@ -304,7 +313,7 @@ router.post("/:id/regenerate", async (req: Request, res: Response) => {
       await callFlask(req, `/${id}/regenerate`, {
         method: "POST",
         body: JSON.stringify(req.body ?? {}),
-      }),
+      }, REGENERATE_TIMEOUT_MS),
     );
   } catch (err) {
     sendUpstreamError(res, err, `Regenerate ${req.params.id}`);

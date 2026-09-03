@@ -14,7 +14,7 @@
 // v1 stays live at /diagnostics/wrightsoft-bom for the .rup-only
 // path (contractors whose extraction station isn't wired yet).
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Link, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,6 +35,7 @@ import {
   Crosshair,
   ChevronLeft,
   Trash2,
+  FileText,
 } from "lucide-react";
 import { EditLineDrawer, type EditableLine } from "@/components/wrightsoft-bom/edit-line-drawer";
 import { BomChatSidebar, type Snipe } from "@/components/wrightsoft-bom/bom-chat-sidebar";
@@ -91,6 +92,19 @@ const PROFILES_CHANNEL = "procalcs-profiles";
 /** Day-26 — replay run-scoped patch ops (chat corrections) over a
  * stored generated_bom so a reloaded permalink shows the corrected
  * BOM, not the original. Mirrors the optimistic in-session logic. */
+/** Dana #9a — an added ERV/air-handler must land under Equipment, not
+ * Other. Honor an explicit section, else infer from HVAC-equipment
+ * keywords in the description. Mirrors the server (bom_patches.py). */
+export function inferEquipmentSection(
+  description: string | undefined, explicit?: string): string {
+  if (explicit) return explicit;
+  const d = String(description ?? "").toLowerCase();
+  const kw = ["erv", "hrv", "air handler", "condenser", "furnace", "coil",
+    "heat strip", "elec strip", "electric strip", "dehumidif", "ventilator",
+    "heat pump", "split ac", "ac unit"];
+  return kw.some((k) => d.includes(k)) ? "Equipment" : "Other";
+}
+
 export function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
   if (!Array.isArray(ops) || ops.length === 0) return bom;
   const items = ((bom?.line_items as any[]) ?? []).map((li) => ({ ...li }));
@@ -109,7 +123,8 @@ export function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
         quantity: qty, unit: "ea",
         unit_cost: price, unit_price: price,
         total_price: Math.round(price * qty * 100) / 100,
-        source: "wrightsoft_manual", section: f.section ?? "Other",
+        source: f.source ?? "wrightsoft_manual",
+        section: inferEquipmentSection(f.description ?? op.sku, f.section),
         patched: true,
       });
     } else if (op.op === "update_line" && idx >= 0) {
@@ -184,6 +199,11 @@ export default function WrightsoftBomV2Page(
   const [result, setResult] = useState<BomResponse | null>(null);
   // Chat-panel width handoff — content reflows instead of being covered.
   const [chatOpen, setChatOpen] = useState(false);
+  // Dana #9b — guard against the regenerate retry storm. When the
+  // proxy timed out (banner said "failed") the backend was still
+  // succeeding; re-clicks spawned orphan reruns (420-424). This ref
+  // makes a second regenerate a no-op while one is in flight.
+  const regenInFlight = useRef(false);
 
   // Day-17 — refresh-survivability via ?run=<id> URL param.
   // On mount (or whenever the URL changes), if ?run= is present we
@@ -214,7 +234,11 @@ export default function WrightsoftBomV2Page(
       // Day-26 — re-apply run-scoped patches on rehydrate, otherwise a
       // reload silently shows the pre-correction BOM.
       const patched = applyPatchOps(gen, data?.patch_ops);
-      setResult({ ...patched, run_id: data.id ?? urlRunId } as any);
+      // Dana #7 — carry the source .rup filename (stored at run
+      // top-level, not inside generated_bom) onto the result so the
+      // canvas can show which file the BOM came from.
+      setResult({ ...patched, run_id: data.id ?? urlRunId,
+                  source_rup_filename: data?.source_rup_filename } as any);
       if (data?.client_id && !clientId) setClientId(data.client_id);
       if (data?.job_id && !jobId)       setJobId(data.job_id);
     }
@@ -338,6 +362,14 @@ export default function WrightsoftBomV2Page(
             ? `Job ${(result as any).job_id}`
             : urlRunId ? `BOM #${urlRunId}` : "BOM"}
         </span>
+        {/* Dana #7 — show which .rup this BOM was generated from. */}
+        {(result as any)?.source_rup_filename && (
+          <span className="text-xs text-muted-foreground/80 flex items-center gap-1">
+            <span aria-hidden>·</span>
+            <FileText className="w-3.5 h-3.5" />
+            {(result as any).source_rup_filename}
+          </span>
+        )}
       </div>
       <Button variant="outline" size="sm"
               className="text-destructive border-destructive/40 hover:bg-destructive/10"
@@ -656,6 +688,7 @@ export default function WrightsoftBomV2Page(
             if (action.description != null) fields.description = action.description;
             if (op === "add_line" && action.unit_price != null) fields.unit_price = action.unit_price;
             if (action.source) fields.source = action.source;
+            if (action.section) fields.section = action.section;  // Dana #9a
             try {
               const res = await fetch(`/api/bom-runs/${runId}/patches`, {
                 method: "POST",
@@ -694,7 +727,8 @@ export default function WrightsoftBomV2Page(
                   unit_cost: action.unit_price ?? 0,
                   unit_price: action.unit_price ?? 0,
                   total_price: (action.unit_price ?? 0) * (action.quantity ?? 1),
-                  source: "wrightsoft_manual", section: "Other",
+                  source: action.source ?? "wrightsoft_manual",
+                  section: inferEquipmentSection(action.description, action.section),
                   patched: true,
                 });
               } else if (idx >= 0) {
@@ -718,6 +752,10 @@ export default function WrightsoftBomV2Page(
             // conversation survives.
             const runId = (result as any)?.run_id;
             if (!runId) return false;
+            // Dana #9b — refuse concurrent/retry regenerates. Without
+            // this, a slow run + re-click created duplicate child runs.
+            if (regenInFlight.current) return false;
+            regenInFlight.current = true;
             try {
               const res = await fetch(`/api/bom-runs/${runId}/regenerate`, {
                 method: "POST",
@@ -744,6 +782,7 @@ export default function WrightsoftBomV2Page(
               }
               return true;
             } catch { return false; }
+            finally { regenInFlight.current = false; }
           }}
           onLineUpdated={(idx, patch) => {
             // Optimistic in-place update so the edit drawer's save is
