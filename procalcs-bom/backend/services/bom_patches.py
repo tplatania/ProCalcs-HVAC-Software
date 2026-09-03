@@ -44,14 +44,27 @@ def apply_patch_ops(line_items: List[Dict[str, Any]],
         elif kind == "add_line":
             qty = float(fields.get("quantity") or 1)
             price = float(fields.get("unit_price") or 0)
+            # Dana #9a (2026-09-02): an added ERV landed in "Other"
+            # because the section defaulted there. Honor an explicit
+            # section, else infer Equipment from the description for
+            # HVAC equipment keywords (safety net for older add ops or
+            # a client that didn't pass section).
+            section = fields.get("section")
+            if not section:
+                _d = str(fields.get("description") or sku).lower()
+                _equip_kw = ("erv", "hrv", "air handler", "condenser",
+                             "furnace", "coil", "heat strip", "elec strip",
+                             "electric strip", "dehumidif", "ventilator",
+                             "heat pump", "split ac", "ac unit")
+                section = "Equipment" if any(k in _d for k in _equip_kw) else "Other"
             items.append({
                 "generic_id": sku, "sku": sku,
                 "description": fields.get("description") or sku,
                 "quantity": qty, "unit": "ea",
                 "unit_cost": price, "unit_price": price,
                 "total_price": round(price * qty, 2),
-                "source": "wrightsoft_manual",
-                "section": fields.get("section") or "Other",
+                "source": fields.get("source") or "wrightsoft_manual",
+                "section": section,
                 "patched": True,
             })
         elif kind == "update_line" and idx >= 0:

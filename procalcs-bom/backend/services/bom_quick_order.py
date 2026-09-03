@@ -59,6 +59,11 @@ _PACKAGING: Dict[str, Dict[str, Any]] = {
     # Round sheet metal duct
     "DRSt": {"per_box":  5.0, "unit": "ft", "container": "stick",
              "category": "Sheet metal duct"},
+    # Round metal duct (Dana #4, 2026-09-02) — DDMt* carries LINEAR
+    # FEET, but had no packaging entry so it fell into "Other items"
+    # counted as 'ea'. Give it its own ft-based category.
+    "DDMt": {"per_box":  5.0, "unit": "ft", "container": "stick",
+             "category": "Round metal duct"},
 
     # Fittings — sold individually
     "FBTI": {"per_box": 1.0, "unit": "ea", "container": "ea",
@@ -69,6 +74,12 @@ _PACKAGING: Dict[str, Dict[str, Any]] = {
              "category": "Collars"},
     "FRGR": {"per_box": 1.0, "unit": "ea", "container": "ea",
              "category": "Grilles / registers"},
+    # Elbows (Dana #4, 2026-09-02) — round 5-piece (FDEL) and rect
+    # mitered with vanes (FREL); previously fell into "Other items".
+    "FDEL": {"per_box": 1.0, "unit": "ea", "container": "ea",
+             "category": "Elbows / fittings"},
+    "FREL": {"per_box": 1.0, "unit": "ea", "container": "ea",
+             "category": "Elbows / fittings"},
     "FJB":  {"per_box": 1.0, "unit": "ea", "container": "ea",
              "category": "Junction boxes"},
     "FPL":  {"per_box": 1.0, "unit": "ea", "container": "ea",
@@ -459,7 +470,15 @@ def build_quick_order(line_items: List[Dict[str, Any]],
             # still rolling up true same-part rows.
             _m = re.match(r"^[A-Z]+", sku.upper())
             family = _m.group(0) if _m else "_misc"
-            category = "Other items"
+            # Dana #4 (2026-09-02): equipment (Split AC, air handler,
+            # elec strip, ERV) was lumped into "Other items". It
+            # already carries section=Equipment in the line items — use
+            # that so the Quick Order mirrors the line-item sections.
+            _sec = str(li.get("section") or "").strip().lower()
+            if _sec == "equipment":
+                category = "HVAC Equipment"
+            else:
+                category = "Other items"
             unit = (li.get("unit") or "ea").lower()
             container = unit
             per = 1.0
@@ -501,11 +520,14 @@ def build_quick_order(line_items: List[Dict[str, Any]],
     # Sort: ducts first, then fittings, then misc. Within each
     # category, sort by size token (8" before 10" before 12").
     _CATEGORY_ORDER = [
+        "HVAC Equipment",
         "Flex duct",
         "Fiberglass duct (cut from 4×8 board)",
         "Rectangular duct",
+        "Round metal duct",
         "Sheet metal duct",
         "Ceiling boots", "Collars", "End caps",
+        "Elbows / fittings",
         "Plenums / take-offs", "Take-offs",
         "Grilles / registers", "Junction boxes",
         "Duct runs (from .rup)", "Registers (from .rup)",

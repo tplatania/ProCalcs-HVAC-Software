@@ -116,7 +116,12 @@ def build_bom_from_wrightsoft_lines(
         if not gen_id:
             continue
         try:
-            quantity = float(raw.get("quantity") or 0)
+            # Dana #3 (2026-09-02): flex-duct LF came through as raw
+            # floats (47.23066806793213 ft). Round to 2 dp at the
+            # single assembly point so every surface (SPA/PDF/XLS)
+            # shows a clean number. 'ea' counts are already whole, so
+            # rounding is harmless for them.
+            quantity = round(float(raw.get("quantity") or 0), 2)
         except (TypeError, ValueError):
             quantity = 0.0
         if quantity <= 0:

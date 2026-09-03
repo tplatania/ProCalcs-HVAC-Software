@@ -296,8 +296,16 @@ def build_lines_from_rup(file_bytes: bytes,
     # DTYPREF type_counts is a per-run breakdown (one count per duct
     # run). We emit one line per type as a placeholder so reviewers
     # see the system composition; quantity = run count (not LF).
+    #
+    # Dana #6 (2026-09-02): these placeholders are only useful for an
+    # UNBUILT .rup (no priced BOM). When the file carries a real priced
+    # BOM, the same duct system is already itemized per-size — the
+    # DTYPREF run-count rows are then redundant ("superfluous") and
+    # their count reads wrong next to the real lines. Suppress them
+    # (and the register-count placeholder) whenever a priced BOM exists.
+    _built = has_priced_bom(reader)
     duct = design.get("duct_summary") or {}
-    type_counts = duct.get("type_counts") or {}
+    type_counts = {} if _built else (duct.get("type_counts") or {})
     _DUCT_TYPE_LABEL = {
         "ShtMetl": "Sheet metal duct run",
         "VinlFlx": "Vinyl flex duct run",
@@ -321,7 +329,7 @@ def build_lines_from_rup(file_bytes: bytes,
     # surface the actual duct sizes the designer used. Quantity stays
     # at 1 per size as a placeholder — the .rup doesn't carry LF per
     # size without a full per-run binary decode (deferred).
-    if not type_counts:
+    if not type_counts and not _built:
         for diam in (duct.get("round_diameters_present") or []):
             lines.append({
                 "generic_id":   f"DUCT-ROUND-{diam}",
@@ -351,7 +359,7 @@ def build_lines_from_rup(file_bytes: bytes,
     # this; fall back to None when absent.
     raw = design.get("raw_rup_context") or ""
     reg_count = _count_registers_from_context(raw)
-    if reg_count:
+    if reg_count and not _built:
         lines.append({
             "generic_id":   "REGISTERS",
             "quantity":     float(reg_count),
