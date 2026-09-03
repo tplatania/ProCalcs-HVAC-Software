@@ -911,6 +911,21 @@ def bom_from_wrightsoft():
         if rup_equipment_lines:
             bom["rup_equipment_merged"] = len(rup_equipment_lines)
 
+        # Dana #8 (2026-09-02) — optional project identity for the
+        # exported header. project_name leads the header (falls back to
+        # job_id at render time); end_client_name is the homeowner/
+        # builder and OVERRIDES the contractor-derived client_name
+        # default (the contractor still shows via branding.display_name).
+        _project_name    = (request.form.get('project_name') or '').strip()
+        _project_address = (request.form.get('project_address') or '').strip()
+        _end_client      = (request.form.get('end_client_name') or '').strip()
+        if _project_name:
+            bom["project_name"] = _project_name
+        if _project_address:
+            bom["project_address"] = _project_address
+        if _end_client:
+            bom["client_name"] = _end_client
+
         # Day-29 — merge the structural extras BEFORE persistence.
         # They were merged after BomRun.record, so every stored run
         # had rup_duct_geometry / rup_balduct / duct_runout_pieces = 0

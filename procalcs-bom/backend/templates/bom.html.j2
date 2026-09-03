@@ -73,22 +73,30 @@
     border-collapse: collapse;
   }
   .job-meta td {
-    padding: 4pt 8pt 4pt 0;
+    padding: 3pt 8pt 3pt 0;
     vertical-align: top;
   }
-  .job-meta .label {
+  /* Vertical two-column layout: fixed-width label column, value fills. */
+  .job-meta td.label {
     font-size: 8pt;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
     color: #64748b;
     font-weight: 600;
+    width: 90pt;
+    white-space: nowrap;
   }
-  .job-meta .value {
+  .job-meta td.value {
     font-size: 10pt;
     font-weight: 500;
     color: #1e293b;
   }
-  .job-meta .total .value {
+  .job-meta tr.total td {
+    border-top: 1pt solid #e2e8f0;
+    padding-top: 6pt;
+  }
+  .job-meta tr.total td.value {
+    font-size: 12pt;
     font-weight: 700;
     color: #f97316;
   }
@@ -279,33 +287,37 @@
       <img class="brand-logo" src="{{ logo_url }}" alt="">
     {% endif %}
     <div>
-      <h1 class="brand-name">{{ contractor_display_name or "ProCalcs" }}</h1>
+      <h1 class="brand-name">{{ project_name or "Bill of Materials" }}</h1>
       <div class="brand-bar"></div>
-      <p class="brand-sub">HVAC Bill of Materials</p>
+      <p class="brand-sub">HVAC Bill of Materials{% if contractor_display_name %} — {{ contractor_display_name }}{% endif %}</p>
     </div>
   </div>
 </div>
 
-<!-- ===== Job metadata banner ===== -->
+<!-- ===== Job metadata banner (Dana #8/#10 — vertical, EST) ===== -->
 <div class="job-meta">
   <table>
     <tr>
-      <td>
-        <div class="label">Project</div>
-        <div class="value">{{ job_id or "—" }}</div>
-      </td>
-      <td>
-        <div class="label">Client</div>
-        <div class="value">{{ client_name or "—" }}{% if supplier %} <span style="color:#94a3b8">({{ supplier }})</span>{% endif %}</div>
-      </td>
-      <td>
-        <div class="label">Generated</div>
-        <div class="value">{{ generated_at or "—" }}</div>
-      </td>
-      <td class="total">
-        <div class="label">Grand Total</div>
-        <div class="value">{{ grand_total | currency }}</div>
-      </td>
+      <td class="label">Project</td>
+      <td class="value">{{ project_name or "—" }}</td>
+    </tr>
+    {% if project_address %}
+    <tr>
+      <td class="label">Address</td>
+      <td class="value">{{ project_address }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td class="label">Client</td>
+      <td class="value">{{ client_name or "—" }}{% if supplier %} <span style="color:#94a3b8">({{ supplier }})</span>{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="label">Generated</td>
+      <td class="value">{{ generated_display or generated_at or "—" }}</td>
+    </tr>
+    <tr class="total">
+      <td class="label">Grand Total</td>
+      <td class="value">{{ grand_total | currency }}</td>
     </tr>
   </table>
 </div>

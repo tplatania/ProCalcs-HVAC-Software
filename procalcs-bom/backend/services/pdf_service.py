@@ -205,13 +205,23 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
         len(line_items) > 0 and priced_count < len(line_items)
     )
 
+    # Dana #8 (2026-09-02): the header should lead with the PROJECT,
+    # not the contractor. Project name / address / client come from
+    # Wrightsoft project information (or are entered at generate time);
+    # fall back to job_id only when no project name was supplied.
+    from utils.ts_format import format_generated_eastern
+    project_name = (bom.get("project_name") or "").strip()
     return {
         "job_id":         bom.get("job_id", ""),
+        "project_name":   project_name or bom.get("job_id", ""),
+        "project_address": (bom.get("project_address") or "").strip(),
         "client_name":    bom.get("client_name", ""),
         "client_id":      bom.get("client_id", ""),
         "supplier":       bom.get("supplier", ""),
         "output_mode":    bom.get("output_mode", "full"),
         "generated_at":   bom.get("generated_at", ""),
+        # Dana #10 — EST, no microseconds.
+        "generated_display": format_generated_eastern(bom.get("generated_at")),
         "item_count":     bom.get("item_count", len(line_items)),
         "grand_total":    grand_total,
         "groups":         _group_lines(line_items),

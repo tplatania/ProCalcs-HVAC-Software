@@ -87,16 +87,24 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     # openpyxl image insert needs binary download outside this hot path.
     branding = bom.get("branding") or {}
     display_name = branding.get("display_name") or "ProCalcs"
-    ws["A1"] = f"{display_name} HVAC — Bill of Materials"
+    # Dana #8 (2026-09-02): lead with the PROJECT name, not the
+    # contractor; contractor becomes a line below (blank when none).
+    project_name = (bom.get("project_name") or "").strip() or (bom.get("job_id") or "Bill of Materials")
+    ws["A1"] = f"{project_name} — HVAC Bill of Materials"
     ws["A1"].font = Font(size=14, bold=True)
     ws.merge_cells("A1:J1")
 
+    from utils.ts_format import format_generated_eastern
     meta_rows = [
-        ("Job ID",        bom.get("job_id") or "—"),
-        ("Profile",       bom.get("profile_name") or bom.get("client_id") or "—"),
-        ("Source",        bom.get("source_pipeline") or "—"),
-        ("Generated",     _format_ts(bom.get("generated_at"))
-                          or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
+        ("Project",       bom.get("project_name") or bom.get("job_id") or "—"),
+    ]
+    if (bom.get("project_address") or "").strip():
+        meta_rows.append(("Address", bom["project_address"].strip()))
+    meta_rows += [
+        ("Client",        bom.get("client_name") or "—"),
+        ("Contractor",    display_name if display_name != "ProCalcs" else "—"),
+        # Dana #10 — EST, no microseconds.
+        ("Generated",     format_generated_eastern(bom.get("generated_at"))),
         ("Items",         str(bom.get("item_count") or len(line_items))),
     ]
     for i, (label, value) in enumerate(meta_rows, start=2):
