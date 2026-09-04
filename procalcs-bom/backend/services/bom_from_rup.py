@@ -303,71 +303,73 @@ def build_lines_from_rup(file_bytes: bytes,
     # DTYPREF run-count rows are then redundant ("superfluous") and
     # their count reads wrong next to the real lines. Suppress them
     # (and the register-count placeholder) whenever a priced BOM exists.
-    _built = has_priced_bom(reader)
-    duct = design.get("duct_summary") or {}
-    type_counts = {} if _built else (duct.get("type_counts") or {})
-    _DUCT_TYPE_LABEL = {
-        "ShtMetl": "Sheet metal duct run",
-        "VinlFlx": "Vinyl flex duct run",
-        "RectFbg": "Rectangular fiberglass duct run",
-        "RectMet": "Rectangular sheet metal duct run",
-    }
-    for code, count in type_counts.items():
-        label = _DUCT_TYPE_LABEL.get(code, f"Duct run ({code})")
-        lines.append({
-            "generic_id":   f"DUCT-{code}",
-            "quantity":     float(count),
-            "description":  f"{label} — quantity from .rup DTYPREF",
-            "src":          "WSF",
-            "section_hint": "Duct System Equipment",
-            "unit":         "RUN",
-        })
-
-    # Day-16 follow-up — when DTYPREF is empty (common on Manual D /
-    # ADU Ducts files where Wrightsoft didn't tag duct types), fall
-    # back to round_diameters_present + rect_sizes_present so we still
-    # surface the actual duct sizes the designer used. Quantity stays
-    # at 1 per size as a placeholder — the .rup doesn't carry LF per
-    # size without a full per-run binary decode (deferred).
-    if not type_counts and not _built:
-        for diam in (duct.get("round_diameters_present") or []):
+    # One rule: placeholders exist only for an UNBUILT .rup. A built
+    # file already itemizes its duct system per-size, so these rows
+    # would be redundant and their counts read wrong beside the real
+    # lines (Dana #6). (type_counts/reg_count stay defined for the
+    # summary log below even when the block is skipped.)
+    type_counts: Dict[str, Any] = {}
+    reg_count = 0
+    if not has_priced_bom(reader):
+        duct = design.get("duct_summary") or {}
+        type_counts = duct.get("type_counts") or {}
+        _DUCT_TYPE_LABEL = {
+            "ShtMetl": "Sheet metal duct run",
+            "VinlFlx": "Vinyl flex duct run",
+            "RectFbg": "Rectangular fiberglass duct run",
+            "RectMet": "Rectangular sheet metal duct run",
+        }
+        for code, count in type_counts.items():
+            label = _DUCT_TYPE_LABEL.get(code, f"Duct run ({code})")
             lines.append({
-                "generic_id":   f"DUCT-ROUND-{diam}",
-                "quantity":     1.0,
-                "description":  f'Round duct — {diam}" diameter (size from .rup)',
+                "generic_id":   f"DUCT-{code}",
+                "quantity":     float(count),
+                "description":  f"{label} — quantity from .rup DTYPREF",
                 "src":          "WSF",
                 "section_hint": "Duct System Equipment",
-                "unit":         "SIZE",
-            })
-        for size in (duct.get("rect_sizes_present") or []):
-            lines.append({
-                "generic_id":   f"DUCT-RECT-{size}",
-                "quantity":     1.0,
-                "description":  f"Rectangular duct — {size}\" (size from .rup)",
-                "src":          "WSF",
-                "section_hint": "Duct System Equipment",
-                "unit":         "SIZE",
+                "unit":         "RUN",
             })
 
-    # ── Register count placeholder ─────────────────────────────────
-    # DREGINFO instance count is a clean signal — one record per
-    # register location in the design. Caller can apply contractor
-    # overrides to refine the SKU/price; default surfaces as a single
-    # generic line so reviewers see register count at a glance.
-    registers = design.get("rooms") or []
-    # The rooms collection from raw_rup_context is a richer source for
-    # this; fall back to None when absent.
-    raw = design.get("raw_rup_context") or ""
-    reg_count = _count_registers_from_context(raw)
-    if reg_count and not _built:
-        lines.append({
-            "generic_id":   "REGISTERS",
-            "quantity":     float(reg_count),
-            "description":  "Registers (count from .rup DREGINFO)",
-            "src":          "WSF",
-            "section_hint": "Duct System Equipment",
-            "unit":         "EA",
-        })
+        # Day-16 follow-up — when DTYPREF is empty (common on Manual D /
+        # ADU Ducts files where Wrightsoft didn't tag duct types), fall
+        # back to round_diameters_present + rect_sizes_present so we
+        # still surface the duct sizes the designer used. Quantity stays
+        # at 1 per size as a placeholder — the .rup doesn't carry LF per
+        # size without a full per-run binary decode (deferred).
+        if not type_counts:
+            for diam in (duct.get("round_diameters_present") or []):
+                lines.append({
+                    "generic_id":   f"DUCT-ROUND-{diam}",
+                    "quantity":     1.0,
+                    "description":  f'Round duct — {diam}" diameter (size from .rup)',
+                    "src":          "WSF",
+                    "section_hint": "Duct System Equipment",
+                    "unit":         "SIZE",
+                })
+            for size in (duct.get("rect_sizes_present") or []):
+                lines.append({
+                    "generic_id":   f"DUCT-RECT-{size}",
+                    "quantity":     1.0,
+                    "description":  f"Rectangular duct — {size}\" (size from .rup)",
+                    "src":          "WSF",
+                    "section_hint": "Duct System Equipment",
+                    "unit":         "SIZE",
+                })
+
+        # Register count placeholder — DREGINFO instance count is a
+        # clean signal (one record per register location). Surfaced as
+        # a single generic line so reviewers see the count at a glance.
+        raw = design.get("raw_rup_context") or ""
+        reg_count = _count_registers_from_context(raw)
+        if reg_count:
+            lines.append({
+                "generic_id":   "REGISTERS",
+                "quantity":     float(reg_count),
+                "description":  "Registers (count from .rup DREGINFO)",
+                "src":          "WSF",
+                "section_hint": "Duct System Equipment",
+                "unit":         "EA",
+            })
 
     # ── Fittings — per-code rollup or synthetic aggregate ─────────
     # Day-21 Increment 1: when the .rup was built + saved in

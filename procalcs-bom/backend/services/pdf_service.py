@@ -19,6 +19,8 @@ from typing import Any, Dict
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
+from utils.ts_format import format_generated_eastern
+
 # Category metadata — color + label. Matches the SPA's category chip
 # styling in procalcs-designer/src/pages/bom-output.tsx so the PDF
 # and the web view look like the same product.
@@ -209,7 +211,6 @@ def _build_pdf_context(bom: Dict[str, Any]) -> Dict[str, Any]:
     # not the contractor. Project name / address / client come from
     # Wrightsoft project information (or are entered at generate time);
     # fall back to job_id only when no project name was supplied.
-    from utils.ts_format import format_generated_eastern
     project_name = (bom.get("project_name") or "").strip()
     return {
         "job_id":         bom.get("job_id", ""),

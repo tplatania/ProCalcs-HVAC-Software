@@ -25,6 +25,15 @@ logger = logging.getLogger("procalcs_bom")
 
 _CONSUMABLES_CATEGORY = "Install consumables"
 
+# HVAC-equipment description keywords → an added line lands under the
+# Equipment section (Dana #9a). Mirrored client-side in
+# wrightsoft-bom-v2.tsx inferEquipmentSection(); keep the two in sync.
+_EQUIPMENT_KEYWORDS = (
+    "erv", "hrv", "air handler", "condenser", "furnace", "coil",
+    "heat strip", "elec strip", "electric strip", "dehumidif",
+    "ventilator", "heat pump", "split ac", "ac unit",
+)
+
 
 def apply_patch_ops(line_items: List[Dict[str, Any]],
                     ops: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
@@ -52,11 +61,9 @@ def apply_patch_ops(line_items: List[Dict[str, Any]],
             section = fields.get("section")
             if not section:
                 _d = str(fields.get("description") or sku).lower()
-                _equip_kw = ("erv", "hrv", "air handler", "condenser",
-                             "furnace", "coil", "heat strip", "elec strip",
-                             "electric strip", "dehumidif", "ventilator",
-                             "heat pump", "split ac", "ac unit")
-                section = "Equipment" if any(k in _d for k in _equip_kw) else "Other"
+                section = ("Equipment"
+                           if any(k in _d for k in _EQUIPMENT_KEYWORDS)
+                           else "Other")
             items.append({
                 "generic_id": sku, "sku": sku,
                 "description": fields.get("description") or sku,

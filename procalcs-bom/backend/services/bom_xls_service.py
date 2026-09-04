@@ -23,12 +23,13 @@ from __future__ import annotations
 
 import io
 from collections import OrderedDict
-from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+from utils.ts_format import format_generated_eastern
 
 
 # Section ordering — matches services.wrightsoft_catalog ordering and
@@ -78,19 +79,13 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
 
     # Dana #1 (2026-09-02) — price-less parts list for multi-contractor
     # bids. Drop the two price columns and all totals; keep everything
-    # else identical.
+    # else identical. `cols` (the filtered column list) is the single
+    # source of truth — per-row values are keyed by column label below.
+    _PRICE_LABELS = ("Unit $", "Total $")
     hide = bool(bom.get("hide_pricing"))
-    cols = ([c for c in _COLUMNS if c[0] not in ("Unit $", "Total $")]
+    cols = ([c for c in _COLUMNS if c[0] not in _PRICE_LABELS]
             if hide else _COLUMNS)
     ncols = len(cols)
-    # 1-based indices of the price columns in the FULL layout (used to
-    # skip them per row when hidden). Unit $ = 8, Total $ = 9.
-    _price_col_idx = {8, 9}
-    # Source 1-based index (into the full 10-column layout) for each
-    # visible column, so per-row values map correctly after price
-    # columns are dropped.
-    _full_pos = {label: i for i, (label, _w) in enumerate(_COLUMNS, start=1)}
-    _src_indices = [_full_pos[label] for (label, _w) in cols]
 
     wb = Workbook()
     ws = wb.active
@@ -110,7 +105,6 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
     ws["A1"].font = Font(size=14, bold=True)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
 
-    from utils.ts_format import format_generated_eastern
     meta_rows = [
         ("Project",       bom.get("project_name") or bom.get("job_id") or "—"),
     ]
@@ -172,26 +166,26 @@ def render_bom_xlsx(bom: Dict[str, Any]) -> bytes:
             section_total += line_total
 
             unmapped = li.get("source") == "wrightsoft_unmapped"
-            # Full-layout values keyed by 1-based column index, so we
-            # can drop the price columns cleanly when hidden.
-            full = {
-                1: running_index,
-                2: li.get("generic_id") or "",
-                3: li.get("description") or "",
-                4: li.get("manufacturer") or "",
-                5: li.get("sku") or "",
-                6: _num(li.get("quantity")),
-                7: li.get("unit") or "",
-                8: _num(li.get("unit_cost")),
-                9: line_total,
-                10: li.get("source") or "",
+            # Values keyed by column LABEL so dropping price columns is
+            # just a matter of `cols` no longer listing them.
+            by_label = {
+                "#":           running_index,
+                "Generic":     li.get("generic_id") or "",
+                "Description": li.get("description") or "",
+                "Mfr":         li.get("manufacturer") or "",
+                "SKU":         li.get("sku") or "",
+                "Qty":         _num(li.get("quantity")),
+                "Unit":        li.get("unit") or "",
+                "Unit $":      _num(li.get("unit_cost")),
+                "Total $":     line_total,
+                "Source":      li.get("source") or "",
             }
-            for out_idx, src_idx in enumerate(_src_indices, start=1):
-                c = ws.cell(row=row, column=out_idx, value=full[src_idx])
+            for out_idx, (label, _w) in enumerate(cols, start=1):
+                c = ws.cell(row=row, column=out_idx, value=by_label[label])
                 c.border = _CELL_BORDER
-                if src_idx == 6 or src_idx in _price_col_idx:
+                if label in ("Qty",) + _PRICE_LABELS:
                     c.alignment = Alignment(horizontal="right")
-                    if src_idx in _price_col_idx:
+                    if label in _PRICE_LABELS:
                         c.number_format = '"$"#,##0.00'
                 if unmapped:
                     c.fill = _UNMAPPED_FILL
@@ -385,20 +379,3 @@ def _num(value: Any) -> Any:
         return f
     except (TypeError, ValueError):
         return value
-
-
-def _format_ts(ts: Any) -> str:
-    """Format an ISO-ish timestamp string for display. Return '' if
-    unparseable so the caller can fall back to 'now'."""
-    if not ts:
-        return ""
-    if isinstance(ts, datetime):
-        return ts.strftime("%Y-%m-%d %H:%M UTC")
-    s = str(ts)
-    # The shapes we typically see: "2025-05-26T14:33:21Z" or with offset.
-    try:
-        # Try a few likely shapes without bringing in dateutil.
-        cleaned = s.replace("Z", "+00:00")
-        return datetime.fromisoformat(cleaned).strftime("%Y-%m-%d %H:%M UTC")
-    except ValueError:
-        return s
