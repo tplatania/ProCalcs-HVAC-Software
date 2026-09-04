@@ -92,17 +92,20 @@ const PROFILES_CHANNEL = "procalcs-profiles";
 /** Day-26 — replay run-scoped patch ops (chat corrections) over a
  * stored generated_bom so a reloaded permalink shows the corrected
  * BOM, not the original. Mirrors the optimistic in-session logic. */
+/** HVAC-equipment description keywords. Mirrors the server
+ * (bom_patches.py _EQUIPMENT_KEYWORDS); keep the two in sync. */
+const EQUIPMENT_KEYWORDS = ["erv", "hrv", "air handler", "condenser",
+  "furnace", "coil", "heat strip", "elec strip", "electric strip",
+  "dehumidif", "ventilator", "heat pump", "split ac", "ac unit"];
+
 /** Dana #9a — an added ERV/air-handler must land under Equipment, not
  * Other. Honor an explicit section, else infer from HVAC-equipment
- * keywords in the description. Mirrors the server (bom_patches.py). */
+ * keywords in the description. */
 export function inferEquipmentSection(
   description: string | undefined, explicit?: string): string {
   if (explicit) return explicit;
   const d = String(description ?? "").toLowerCase();
-  const kw = ["erv", "hrv", "air handler", "condenser", "furnace", "coil",
-    "heat strip", "elec strip", "electric strip", "dehumidif", "ventilator",
-    "heat pump", "split ac", "ac unit"];
-  return kw.some((k) => d.includes(k)) ? "Equipment" : "Other";
+  return EQUIPMENT_KEYWORDS.some((k) => d.includes(k)) ? "Equipment" : "Other";
 }
 
 export function applyPatchOps(bom: any, ops: any[] | null | undefined): any {
