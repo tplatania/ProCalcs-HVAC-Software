@@ -15,16 +15,8 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-if "weasyprint" not in sys.modules:
-    try:
-        import weasyprint  # noqa: F401
-    except Exception:  # noqa: BLE001
-        _w = MagicMock(); _w.HTML = MagicMock(); _w.CSS = MagicMock()
-        sys.modules["weasyprint"] = _w
 
 from models.client_profile import ClientProfile, MarkupTiers, SupplierInfo  # noqa: E402
 

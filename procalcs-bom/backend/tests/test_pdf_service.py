@@ -19,9 +19,25 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 # Skip the whole module if WeasyPrint isn't installable in this env.
-# On Windows dev machines WeasyPrint needs GTK which is a pain; the
-# prod Docker image has it via apt-get.
-pytest.importorskip("weasyprint")
+# On dev machines WeasyPrint needs system libs (GTK/pango) that aren't
+# present; the prod Docker image has them via apt-get.
+#
+# Subtlety: other test modules (e.g. test_bom_from_wrightsoft) stub
+# weasyprint into sys.modules with a MagicMock so create_app() can
+# import without the real lib. When one of those runs first, plain
+# importorskip finds the STUB, doesn't skip, and every render here
+# fails against the mock. Detect the stub and skip cleanly so a local
+# full-suite run is green; CI/prod (real weasyprint) still runs these.
+from unittest.mock import MagicMock as _MagicMock  # noqa: E402
+_wp = sys.modules.get("weasyprint")
+if _wp is None:
+    pytest.importorskip("weasyprint")
+elif isinstance(_wp, _MagicMock):
+    pytest.skip(
+        "weasyprint is stubbed by another test module; real PDF render "
+        "needs the actual library (runs in CI/prod).",
+        allow_module_level=True,
+    )
 
 from services.pdf_service import render_bom_pdf, _build_pdf_context  # noqa: E402
 
