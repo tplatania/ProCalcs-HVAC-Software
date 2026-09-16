@@ -140,6 +140,87 @@ def summary():
     })
 
 
+# ─── GET /cost — AI spend estimate from logged token usage ─────────
+
+@usage_events_bp.route("/cost", methods=["GET"])
+def cost():
+    """Estimated Anthropic spend over the window, from the token counts
+    logged on chat_message events. Grouped by model and by day. Test
+    actors excluded unless include_test=1.
+
+    NOTE: this reflects only events logged AFTER token-usage capture
+    shipped (2026-09) — earlier chats have no token detail and count as
+    $0. It's an in-app estimate for trend/relative comparison, not a
+    substitute for the Anthropic console bill.
+    """
+    from services.model_pricing import estimate_cost, prices_for
+
+    days = min(max(int(request.args.get("days", 30)), 1), 365)
+    include_test = request.args.get("include_test") == "1"
+    since = _utcnow() - timedelta(days=days)
+
+    q = (db.session.query(UsageEvent)
+         .filter(UsageEvent.created_at >= since)
+         .filter(UsageEvent.event == "chat_message"))
+    if not include_test:
+        q = q.filter(UsageEvent.provenance == "real")
+    rows = q.order_by(UsageEvent.created_at.asc()).all()
+
+    by_model: dict[str, dict] = {}
+    by_day: dict[str, float] = {}
+    total_cost = 0.0
+    total_in = total_out = total_cache_read = total_cache_write = 0
+    priced_events = 0
+    unpriced_events = 0
+
+    for r in rows:
+        d = r.detail if isinstance(r.detail, dict) else {}
+        model = d.get("model") or "unknown"
+        c = estimate_cost(d)
+        if prices_for(d.get("model")) is None or not d.get("model"):
+            unpriced_events += 1
+        else:
+            priced_events += 1
+        total_cost += c
+        day = r.created_at.date().isoformat()
+        by_day[day] = round(by_day.get(day, 0.0) + c, 6)
+        m = by_model.setdefault(model, {
+            "events": 0, "cost_usd": 0.0,
+            "input_tokens": 0, "output_tokens": 0,
+            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+        })
+        m["events"] += 1
+        m["cost_usd"] = round(m["cost_usd"] + c, 6)
+        for k in ("input_tokens", "output_tokens",
+                  "cache_read_input_tokens", "cache_creation_input_tokens"):
+            m[k] += int(d.get(k) or 0)
+        total_in += int(d.get("input_tokens") or 0)
+        total_out += int(d.get("output_tokens") or 0)
+        total_cache_read += int(d.get("cache_read_input_tokens") or 0)
+        total_cache_write += int(d.get("cache_creation_input_tokens") or 0)
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "days": days,
+            "include_test": include_test,
+            "total_cost_usd": round(total_cost, 4),
+            "chat_events": len(rows),
+            "priced_events": priced_events,
+            "unpriced_events": unpriced_events,
+            "totals": {
+                "input_tokens": total_in,
+                "output_tokens": total_out,
+                "cache_read_input_tokens": total_cache_read,
+                "cache_creation_input_tokens": total_cache_write,
+            },
+            "by_model": by_model,
+            "by_day": by_day,
+        },
+        "error": None,
+    })
+
+
 # ─── GET /impact — the learning-loop scoreboard ────────────────────
 
 @usage_events_bp.route("/impact", methods=["GET"])
