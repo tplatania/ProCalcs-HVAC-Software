@@ -7,6 +7,7 @@ import {
   EyeOff,
   Eye,
   PackageSearch,
+  Upload,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -52,6 +53,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 import { SkuCatalogForm } from "@/components/sku-catalog-form";
+import { SkuBulkImportDialog } from "@/components/sku-bulk-import";
 
 const ALL = "__all__";
 
@@ -72,6 +74,7 @@ export default function SkuCatalogPage() {
 
   // form state — null = closed, "create" = new, SKUItem = edit
   const [formMode, setFormMode] = useState<null | "create" | { editing: SKUItem }>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   // delete confirm state
   const [pendingDelete, setPendingDelete] = useState<SKUItem | null>(null);
@@ -158,10 +161,16 @@ export default function SkuCatalogPage() {
             the next BOM generation — no deploy required.
           </p>
         </div>
-        <Button onClick={() => setFormMode("create")}>
-          <PlusCircle className="w-4 h-4 mr-2" />
-          New SKU
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setBulkImportOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Bulk import
+          </Button>
+          <Button onClick={() => setFormMode("create")}>
+            <PlusCircle className="w-4 h-4 mr-2" />
+            New SKU
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -324,6 +333,21 @@ export default function SkuCatalogPage() {
             });
             invalidate();
             setFormMode(null);
+          }}
+        />
+      )}
+
+      {/* Bulk-import modal — Phase 3.6 (May 2026). Paste CSV/JSON,
+          POSTs to /api/sku-catalog/bulk-import, summary shown in-place. */}
+      {bulkImportOpen && (
+        <SkuBulkImportDialog
+          onClose={() => setBulkImportOpen(false)}
+          onImported={(summary) => {
+            toast({
+              title: "Bulk import complete",
+              description: `${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped`,
+            });
+            invalidate();
           }}
         />
       )}
