@@ -1,13 +1,48 @@
 import { useGetDashboardSummary } from "@/lib/api-hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, CheckCircle2, XCircle, FileText, Building2, TrendingUp, ArrowRight, PlusCircle } from "lucide-react";
+import { Users, CheckCircle2, XCircle, FileText, Building2, TrendingUp, ArrowRight, PlusCircle, Database } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetchEnvelope } from "@/lib/api-hooks";
+
+interface CatalogHealth {
+  available: boolean;
+  reason?: string;
+  batch_id?: number;
+  imported_at?: string;
+  imported_by?: string;
+  counts?: Record<string, number>;
+}
+
+const CATALOG_HEALTH_LABEL: Record<string, string> = {
+  manufacturers:      "Manufacturers",
+  categories:         "Categories",
+  generic_parts:      "Generic parts",
+  mapped_parts:       "Mapped parts",
+  dfunit:             "DFUnit equipment",
+  fitting_template:   "Standard fittings",
+  ahri_unit:          "AHRI units",
+  ahri_coil:          "AHRI coils",
+  ahri_ahcoil_match:  "AHRI AH/coil matches",
+  ahri_family:        "AHRI families",
+};
+
+const CATALOG_HEALTH_ORDER = [
+  "ahri_unit", "ahri_ahcoil_match", "ahri_coil", "ahri_family",
+  "mapped_parts", "generic_parts", "dfunit",
+  "fitting_template", "manufacturers", "categories",
+];
 
 export default function Dashboard() {
   const { data: summary, isLoading } = useGetDashboardSummary();
+  const catalogHealth = useQuery({
+    queryKey: ["catalog-health"],
+    queryFn: () => apiFetchEnvelope<CatalogHealth>("/api/v1/catalog-health"),
+    staleTime: 60_000,
+  });
 
   const stats = summary ? [
     {
@@ -205,6 +240,64 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Catalog Health — Day-15 carryover */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-sky-600" />
+                Catalog Health
+              </CardTitle>
+              <CardDescription>
+                Current ProCalcs Catalog batch served to BOM generation.
+              </CardDescription>
+            </div>
+            {catalogHealth.data?.available && catalogHealth.data.imported_at && (
+              <div className="text-xs text-muted-foreground text-right">
+                <div>Batch #{catalogHealth.data.batch_id}</div>
+                <div>{format(new Date(catalogHealth.data.imported_at), "MMM d, yyyy 'at' HH:mm")}</div>
+                {catalogHealth.data.imported_by && (
+                  <div className="italic">by {catalogHealth.data.imported_by}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {catalogHealth.isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          ) : !catalogHealth.data?.available ? (
+            <div className="text-sm text-muted-foreground italic">
+              {catalogHealth.data?.reason || "Catalog service not reachable."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {CATALOG_HEALTH_ORDER
+                .filter((k) => (catalogHealth.data!.counts?.[k] ?? 0) > 0)
+                .map((k) => (
+                  <div
+                    key={k}
+                    className="border rounded-lg px-3 py-2 bg-muted/30"
+                    title={k}
+                  >
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {CATALOG_HEALTH_LABEL[k] ?? k}
+                    </div>
+                    <div className="text-xl font-semibold tabular-nums">
+                      {(catalogHealth.data!.counts![k]).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import { useGetClientProfile, useUpdateClientProfile, getGetClientProfileQueryKey, getListClientProfilesQueryKey } from "@/lib/api-hooks";
 import { ProfileForm } from "@/components/profile-form";
+import { ConsumablesEditor } from "@/components/consumables-editor";
 import { useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Beaker } from "lucide-react";
 
 export default function EditProfile() {
   const params = useParams();
@@ -23,6 +26,17 @@ export default function EditProfile() {
         toast({ title: "Profile updated successfully" });
         queryClient.invalidateQueries({ queryKey: getGetClientProfileQueryKey(id) });
         queryClient.invalidateQueries({ queryKey: getListClientProfilesQueryKey() });
+        // Notify other open tabs (e.g. the Wrightsoft BOM page) so
+        // their profile dropdown reflects the edit without a manual
+        // reload. The Wrightsoft BOM page listens on this channel and
+        // invalidates its client-profiles query on receipt.
+        if (typeof BroadcastChannel !== "undefined") {
+          try {
+            const ch = new BroadcastChannel("procalcs-profiles");
+            ch.postMessage({ type: "profiles-updated", id });
+            ch.close();
+          } catch { /* older browsers — fail soft, focus refetch handles it */ }
+        }
       },
       onError: (error: any) => {
         toast({
@@ -65,12 +79,34 @@ export default function EditProfile() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <ProfileForm 
+    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-10">
+      <ProfileForm
         initialValues={profile}
-        onSubmit={handleSubmit} 
-        isSubmitting={updateMutation.isPending} 
+        onSubmit={handleSubmit}
+        isSubmitting={updateMutation.isPending}
       />
+
+      {/* Day-17 — install consumables config lives on the same profile.
+          Embed the editor here so a user editing a contractor doesn't
+          have to navigate to Pricing → Consumables to set mastic / tape
+          / screws multipliers + prices. Same component used by that
+          standalone page, so both stay in sync. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Beaker className="w-4 h-4 text-muted-foreground" />
+            Install Consumables
+          </CardTitle>
+          <CardDescription>
+            Auto-computed per BOM run from joint and flex-run counts.
+            Set this contractor's coverage multipliers and unit prices —
+            unset fields fall back to system defaults.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ConsumablesEditor clientId={id} compact />
+        </CardContent>
+      </Card>
     </div>
   );
 }
