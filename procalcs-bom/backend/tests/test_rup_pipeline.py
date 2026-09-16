@@ -105,13 +105,21 @@ def test_parser_maps_building_to_validator_enums(enos_design_data):
 
 
 def test_parser_enumerates_all_eight_ahus(enos_design_data):
-    """Enos is an 8-AHU job; all of them should be enumerated."""
+    """Enos is an 8-AHU job; all eight air handlers should be enumerated.
+
+    Corrected 2026-09-16: the parser now also extracts the electric
+    heat strip (a heat_kit — added in the day-18 heat-kit work), so the
+    equipment list is 9, not 8. Assert on the air_handler subset so the
+    test keeps checking its real intent (all 8 AHUs present) without
+    breaking when other equipment is legitimately extracted.
+    """
     equipment = enos_design_data["equipment"]
-    assert len(equipment) == 8
-    names = [e["name"] for e in equipment]
+    ahus = [e for e in equipment if e["type"] == "air_handler"]
+    assert len(ahus) == 8
+    names = [e["name"] for e in ahus]
     assert names == [f"AHU - {i}" for i in range(1, 9)]
     # Each entry has the full shape, even if values are None
-    for eq in equipment:
+    for eq in ahus:
         assert set(eq.keys()) >= {"name", "type", "cfm", "tonnage", "model"}
         assert eq["type"] == "air_handler"
 

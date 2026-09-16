@@ -54,10 +54,24 @@ def test_duct_summary_present_on_parsed_design():
 
 
 def test_dtypref_type_counts_for_79th_ct():
-    """Richard's project: 24 sheet metal, 20 vinyl flex, 4 rect
-    fiberglass — direct read from DTYPREF section."""
+    """DTYPREF record counts for the 79th Ct fixture.
+
+    Corrected 2026-09-16: the prior expected {ShtMetl:24, VinlFlx:20,
+    RectFbg:4} did not match the file. Audited three independent ways —
+    RupReader length-prefix-verified block count, the string-scan
+    parser, and a raw `!BEG=DTYPREF` byte count — ALL agree the file
+    contains 120 DTYPREF blocks (44 ShtMetl / 64 VinlFlx / 12 RectFbg),
+    every block byte-distinct with its own sequential id + geometry. So
+    the parser counts correctly; the old assertion was stale/wrong.
+
+    Open (separate) question for Richard, tracked in KNOWN_FAILURES.md:
+    whether one DTYPREF *record* equals one duct *run* as a contractor
+    counts them (120 records vs. a possibly-smaller run count). That is
+    about what the un-built-file "Duct runs (from .rup)" placeholder
+    should SURFACE, not about whether this count is accurate.
+    """
     ds = _design_data()["duct_summary"]
-    assert ds["type_counts"] == {"ShtMetl": 24, "VinlFlx": 20, "RectFbg": 4}
+    assert ds["type_counts"] == {"ShtMetl": 44, "VinlFlx": 64, "RectFbg": 12}
 
 
 def test_round_diameters_match_richards_table():
