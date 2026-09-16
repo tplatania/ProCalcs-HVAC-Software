@@ -1,0 +1,67 @@
+{
+  "fixture_79th": {
+    "distinct_generic_ids": 12,
+    "line_count": 12,
+    "qty_by_section": {
+      "Duct System Equipment": 1360.0,
+      "Equipment": 14.0
+    },
+    "sections": {
+      "Duct System Equipment": 5,
+      "Equipment": 7
+    },
+    "sku_hash": "239d4fe9b8e8e47d"
+  },
+  "fixture_clarke": {
+    "distinct_generic_ids": 57,
+    "line_count": 59,
+    "qty_by_section": {
+      "Duct System Equipment": 647.0,
+      "Equipment": 8.0
+    },
+    "sections": {
+      "Duct System Equipment": 52,
+      "Equipment": 7
+    },
+    "sku_hash": "237efefadc2c6ad8"
+  },
+  "fixture_irvine": {
+    "distinct_generic_ids": 49,
+    "line_count": 49,
+    "qty_by_section": {
+      "Duct System Equipment": 353.36,
+      "Equipment": 4.0
+    },
+    "sections": {
+      "Duct System Equipment": 45,
+      "Equipment": 4
+    },
+    "sku_hash": "04d2ca78309586a1"
+  },
+  "fixture_jappeloup": {
+    "distinct_generic_ids": 79,
+    "line_count": 79,
+    "qty_by_section": {
+      "Duct System Equipment": 791.39,
+      "Equipment": 12.0
+    },
+    "sections": {
+      "Duct System Equipment": 69,
+      "Equipment": 10
+    },
+    "sku_hash": "d9cefffda901932a"
+  },
+  "fixture_sw55": {
+    "distinct_generic_ids": 109,
+    "line_count": 109,
+    "qty_by_section": {
+      "Duct System Equipment": 1189.25,
+      "Equipment": 13.0
+    },
+    "sections": {
+      "Duct System Equipment": 96,
+      "Equipment": 13
+    },
+    "sku_hash": "826a756590303013"
+  }
+}
