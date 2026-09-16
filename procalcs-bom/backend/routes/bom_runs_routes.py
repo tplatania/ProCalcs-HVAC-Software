@@ -282,6 +282,11 @@ def regenerate_run(run_id: int):
         from services.bom_patches import carry_structural_extras
         carry_structural_extras(bom, parent.generated_bom)
         try:
+            from services.review_confidence import build_review_summary
+            build_review_summary(bom)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             run = BomRun.record(
                 client_id=parent.client_id,
                 job_id=new_job_id,

@@ -935,6 +935,15 @@ def bom_from_wrightsoft():
         for _k, _v in (_rup_extras or {}).items():
             bom.setdefault(_k, _v)
 
+        # Confidence & materiality review layer — grade the verify flags
+        # by confidence + dollar weight so the reviewer works the
+        # riskiest items first (2026 takeoff best-practice).
+        try:
+            from services.review_confidence import build_review_summary
+            build_review_summary(bom)
+        except Exception as exc:  # noqa: BLE001 — never block a BOM on this
+            logger.warning("review summary failed: %s", exc)
+
         # ── Persist as a bom_run so the BOM shows up in Run History
         # next to /generate output. Best-effort: a DB failure must
         # NOT swallow the successful BOM result — same contract as

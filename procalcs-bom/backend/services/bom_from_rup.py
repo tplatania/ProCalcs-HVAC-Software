@@ -241,6 +241,9 @@ def build_lines_from_rup(file_bytes: bytes,
                     f"{int(qty)} identical heat strips counted in the design "
                     "file — no standing per-strip rule (expert-confirmed); "
                     "verify the count for this project.")
+                # Confidence: the count IS in the file; only the intent
+                # (does this project want them all?) is uncertain.
+                primary["verify_confidence"] = "medium"
             # Emit the primary (condenser) line
             lines.append(primary)
             seen_models.add(cond)
@@ -291,6 +294,9 @@ def build_lines_from_rup(file_bytes: bytes,
                 "placed equipment instances — possibly an earlier or "
                 "alternate selection; verify it belongs on this project "
                 "or remove it.")
+            # Confidence: genuinely uncertain whether this belongs (it
+            # may be a phantom / superseded selection).
+            lines[-1]["verify_confidence"] = "low"
 
     # ── Duct-system summary lines ──────────────────────────────────
     # DTYPREF type_counts is a per-run breakdown (one count per duct
@@ -448,6 +454,9 @@ def build_lines_from_rup(file_bytes: bytes,
                                 "lumped grille sizes together (seen on other "
                                 "projects). Verify the size split against the "
                                 "M Sheets.")
+                            # Confidence: statistical smell; the true size
+                            # split is genuinely not recoverable from the file.
+                            _l["verify_confidence"] = "low"
     else:
         # Un-built .rup — no RPITEM records. Fall back to the
         # synthetic FITTINGS aggregate + surface an actionable hint
