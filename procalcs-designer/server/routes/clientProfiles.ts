@@ -119,6 +119,86 @@ router.put("/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ───── Day-17: Consumables rules + supplier consumable costs ──────
+//
+// Dedicated GET/PUT for the install-consumables config (mastic, tape,
+// flex tape, screws). Lifts a small slice out of the full profile so
+// the editor UI doesn't have to round-trip every unrelated field.
+// All keys are snake_case to match the upstream Python shape directly.
+
+// Day-17 — dynamic list of consumable items. Each item is per-job
+// auto-quantified from one of: joints | flex_runs | fittings | duct_lf
+// | per_job. The Express layer just round-trips the array — upstream
+// Python (_read_consumables_rules) handles defaults + legacy migration.
+
+interface ConsumableItem {
+  key: string;
+  name: string;
+  description?: string;
+  basis: "joints" | "flex_runs" | "fittings" | "duct_lf" | "per_job";
+  per_container: number;
+  qty_per_job?: number;
+  container: string;
+  unit_price: number;
+  enabled: boolean;
+}
+interface ConsumablesConfig {
+  items: ConsumableItem[];
+}
+
+// GET /api/client-profiles/:id/consumables
+router.get("/:id/consumables", async (req: Request, res: Response) => {
+  try {
+    const upstream = await callFlask<PythonClientProfile>(
+      `/api/v1/profiles/${encodeURIComponent(String(req.params.id))}`
+    );
+    const p: any = upstream.data ?? {};
+    const rules = p.consumables_rules ?? {};
+    // Python from_dict ensures items[] is always present — but we
+    // double-belt against an upstream that hasn't been upgraded yet.
+    const items: ConsumableItem[] = Array.isArray(rules.items) ? rules.items.map((it: any) => ({
+      key:           String(it.key ?? ""),
+      name:          String(it.name ?? ""),
+      description:   String(it.description ?? ""),
+      basis:         (it.basis ?? "joints") as ConsumableItem["basis"],
+      per_container: Number(it.per_container ?? 0),
+      qty_per_job:   Number(it.qty_per_job ?? 0),
+      container:     String(it.container ?? "ea"),
+      unit_price:    Number(it.unit_price ?? 0),
+      enabled:       it.enabled !== false,
+    })) : [];
+    res.json({ items } as ConsumablesConfig);
+  } catch (err: any) {
+    res.status(err.status ?? 500).json({ error: err.message ?? "Fetch failed" });
+  }
+});
+
+// PUT /api/client-profiles/:id/consumables
+router.put("/:id/consumables", async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    // Fetch existing so we don't clobber unrelated fields.
+    const current = await callFlask<PythonClientProfile>(
+      `/api/v1/profiles/${encodeURIComponent(id)}`
+    );
+    const existing: any = current.data ?? {};
+    const body = req.body as ConsumablesConfig;
+
+    // Surgical merge — only the consumable rules. Supplier untouched.
+    const merged: any = {
+      ...existing,
+      consumables_rules: { items: body.items },
+    };
+    await callFlask<PythonClientProfile>(
+      `/api/v1/profiles/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(merged) }
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(err.status ?? 500).json({ error: err.message ?? "Update failed" });
+  }
+});
+
 // DELETE /api/client-profiles/:id
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
