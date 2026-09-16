@@ -249,6 +249,8 @@ def build_bom_from_wrightsoft_lines(
             # Day-29 — review-flag passthrough (heat-strip policy).
             if raw.get("verify_reason"):
                 line["verify_reason"] = raw["verify_reason"]
+                if raw.get("verify_confidence"):
+                    line["verify_confidence"] = raw["verify_confidence"]
             # Attach the spec dict so PDF / SPA can display capacity,
             # dimensions, weight without re-looking up DFUnit downstream.
             line["dfunit_spec"] = dfunit_spec
@@ -276,6 +278,8 @@ def build_bom_from_wrightsoft_lines(
             # Day-29 — review-flag passthrough (heat-strip policy).
             if raw.get("verify_reason"):
                 line["verify_reason"] = raw["verify_reason"]
+                if raw.get("verify_confidence"):
+                    line["verify_confidence"] = raw["verify_confidence"]
         elif wsf_src:
             # Wrightsoft told us who supplies this part (Src column) and
             # what the part number is (Name column). Trust it — the
@@ -396,6 +400,8 @@ def build_bom_from_wrightsoft_lines(
             # Day-29 — review-flag passthrough (heat-strip policy).
             if raw.get("verify_reason"):
                 line["verify_reason"] = raw["verify_reason"]
+                if raw.get("verify_confidence"):
+                    line["verify_confidence"] = raw["verify_confidence"]
 
         # Day-13 — apply contractor-level overrides on every line that
         # got emitted, regardless of which branch (mapped / dfunit /
