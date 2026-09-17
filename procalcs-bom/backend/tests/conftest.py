@@ -10,6 +10,13 @@ from unittest.mock import MagicMock
 # Ensure backend is importable from all test files
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Security: the service-auth gate fails CLOSED on an empty
+# SERVICE_SHARED_SECRET (see app.py). The test suite runs without a
+# real secret, so declare the dev opt-out here — the suite is a dev
+# context. (test_service_auth_fail_closed overrides this per-test to
+# exercise the fail-closed path.)
+os.environ.setdefault("ALLOW_INSECURE_NO_AUTH", "1")
+
 # Shim optional SDKs so the suite runs locally without installing them.
 # Real CI / prod deploys have them installed via requirements.txt, in
 # which case these shims are harmless no-ops because the real modules
