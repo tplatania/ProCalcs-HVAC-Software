@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Secret-leak guardrail. Install once per clone:
+#   git config core.hooksPath scripts/git-hooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/security/check-secrets.py"

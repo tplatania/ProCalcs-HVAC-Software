@@ -25,5 +25,12 @@
     "types": ["vite/client"]
   },
   "include": ["src"],
-  "exclude": ["server", "dist", "dist-server", "node_modules"]
+  "exclude": [
+    "server",
+    "dist",
+    "dist-server",
+    "node_modules",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
 }

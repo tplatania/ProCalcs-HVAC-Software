@@ -15,11 +15,13 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import {
   authConfig,
+  googleOauthConfigured,
   isEmailAllowed,
   GOOGLE_AUTH_URL,
   GOOGLE_TOKEN_URL,
   GOOGLE_JWKS_URL,
 } from "./config.js";
+import { passwordAuthEnabled, verifyCredentials } from "./seedUsers.js";
 import { signToken, verifyToken, TokenError } from "./token.js";
 
 const router = Router();
@@ -93,6 +95,11 @@ function clearSessionCookie(res: Response): void {
 router.get("/login", (req: Request, res: Response) => {
   if (!authConfig.enabled) {
     return res.status(503).json({ error: "Auth not configured on this deploy" });
+  }
+  if (!googleOauthConfigured) {
+    return res.status(503).json({
+      error: "Google sign-in is not configured on this deploy — use email + password.",
+    });
   }
   const returnTo = typeof req.query.return_to === "string" ? req.query.return_to : "/";
   const state = signState(returnTo);
@@ -202,7 +209,7 @@ router.get("/callback", async (req: Request, res: Response) => {
   }
   if (!isEmailAllowed(claims.email, claims.email_verified)) {
     return res.status(403).json({
-      error: `Access restricted to verified @${authConfig.allowedDomain} accounts`,
+      error: `Access restricted to verified accounts on: ${authConfig.allowedDomains.map((d) => "@" + d).join(", ")}`,
       detail: `got email=${claims.email}, verified=${claims.email_verified ?? false}`,
     });
   }
@@ -223,6 +230,45 @@ router.get("/callback", async (req: Request, res: Response) => {
   // used as an open redirect.
   const safeReturn = returnTo.startsWith("/") ? returnTo : "/";
   res.redirect(safeReturn);
+});
+
+// GET /api/auth/methods — which sign-in methods this deploy offers.
+// The SPA login screen uses this to decide what to render.
+router.get("/methods", (_req: Request, res: Response) => {
+  res.json({
+    enabled:  authConfig.enabled,
+    password: authConfig.enabled && passwordAuthEnabled(),
+    google:   authConfig.enabled && googleOauthConfigured,
+  });
+});
+
+// POST /api/auth/login/password — Day-27 seeded-account sign-in.
+// Body: {email, password}. Uniform 401 on any failure (no account
+// enumeration); verifyCredentials burns a bcrypt compare either way.
+router.post("/login/password", async (req: Request, res: Response) => {
+  if (!authConfig.enabled || !passwordAuthEnabled()) {
+    return res.status(503).json({ error: "Password sign-in is not enabled on this deploy" });
+  }
+  const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+  if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+    return res.status(400).json({ error: "email and password are required" });
+  }
+  const user = await verifyCredentials(email, password);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid email or password" });
+  }
+  const sessionToken = signToken(
+    {
+      email:   user.email,
+      name:    user.name,
+      picture: "",
+      hd:      user.email.split("@")[1] ?? "",
+    },
+    authConfig.sessionSigningKey,
+    authConfig.sessionTtlSeconds
+  );
+  setSessionCookie(res, sessionToken);
+  res.json({ email: user.email, name: user.name, role: user.role });
 });
 
 // POST /api/auth/logout
