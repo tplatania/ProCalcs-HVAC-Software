@@ -1788,6 +1788,19 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
                       }
                       pricingClientId={clientId}
                       onSnipe={onSnipe}
+                      onDeleteLine={(li) => {
+                        const sku = li.sku ?? li.generic_id;
+                        if (!sku || !onApplyPatch) return;
+                        if (!window.confirm(
+                          `Delete "${li.description || sku}" from this BOM?`)) return;
+                        // Reuse the existing remove-line correction path
+                        // (run-scoped patch; carries through regenerate).
+                        onApplyPatch({
+                          kind: "propose_remove_line",
+                          sku,
+                          reason: "Removed via inline delete",
+                        });
+                      }}
                     />
                   );
                 });
@@ -1983,7 +1996,7 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
 
 function SectionBlock({
   section, items, subtotal, startIndex, onEditLine,
-  onInlinePriceSave, pricingClientId, onSnipe,
+  onInlinePriceSave, pricingClientId, onSnipe, onDeleteLine,
 }: {
   section: string;
   items: any[];
@@ -1993,6 +2006,7 @@ function SectionBlock({
   onInlinePriceSave: (absoluteIndex: number, price: number) => void;
   pricingClientId: string;
   onSnipe: (s: Snipe) => void;
+  onDeleteLine: (li: any) => void;
 }) {
   return (
     <>
@@ -2133,7 +2147,7 @@ function SectionBlock({
             <td className="px-3 py-1.5 text-right font-semibold">
               ${(li.total_price ?? li.total_cost ?? 0).toFixed(2)}
             </td>
-            <td className="w-10 px-0 py-1.5 text-center align-middle">
+            <td className="w-16 px-0 py-1.5 text-center align-middle whitespace-nowrap">
               <button className="opacity-30 hover:opacity-100 transition-opacity align-middle"
                       title={`Reference "${li.sku ?? li.generic_id ?? li.description}" in the chat`}
                       onClick={(e) => { e.stopPropagation(); onSnipe({
@@ -2142,6 +2156,13 @@ function SectionBlock({
                         kind: "row", data: li,
                       }); }}>
                 <Crosshair className="w-3.5 h-3.5" />
+              </button>
+              {/* Dana #1 (2026-09-17): inline delete — remove a
+                  superfluous line without going through the assistant. */}
+              <button className="ml-1.5 opacity-30 hover:opacity-100 hover:text-rose-600 transition align-middle"
+                      title={`Delete "${li.sku ?? li.generic_id ?? li.description}"`}
+                      onClick={(e) => { e.stopPropagation(); onDeleteLine(li); }}>
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </td>
           </tr>
