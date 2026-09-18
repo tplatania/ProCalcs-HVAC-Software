@@ -860,20 +860,30 @@ def bom_from_wrightsoft():
         # the T333 smoke draft). First occurrence wins — the route's
         # empirical rows lead and carry the richer description.
         merged_lines = (rup_equipment_lines + lines) if rup_equipment_lines else lines
-        if source_pipeline_override == "wrightsoft_rup":
-            # Unconditional on the .rup path: duplicates also arise
-            # INSIDE build_lines_from_rup (design-block vs structural
-            # EQUIP extraction), not only from the route-level merge.
-            #
-            # Day-28 (Richard, SW 55th) — the priced BOM carries a BARE
-            # handler stub (e.g. FE5BNXC48L*, desc "Part or assembly is
-            # not in the database") while the structural EQUIP parse
+        # Equipment dedup by generic_id (first occurrence wins). Runs on
+        # EVERY path now, because the same unit can appear twice from two
+        # SOURCES: the WS .xlsx BOM lines AND a co-uploaded .rup's
+        # structural EQUIP parse.
+        #
+        # Dana (2026-09-17): uploading .xlsx + .rup together doubled the
+        # Carrier system (2 ct each); .rup-only was correct. The dedup
+        # below was previously gated to the .rup-only path, so the
+        # dual-upload path skipped it. It's safe on all paths — a project
+        # that legitimately has two identical units is represented by one
+        # line with quantity 2, not two qty-1 lines.
+        _is_rup = source_pipeline_override == "wrightsoft_rup"
+        # Only when there's cross-source merging risk: the .rup path
+        # (dupes arise inside the parser) or a dual upload (.xlsx lines +
+        # co-uploaded .rup equipment). A plain single-source .xlsx is
+        # left untouched so any intentional duplicate line survives.
+        if merged_lines and (_is_rup or rup_equipment_lines):
+            # Day-28 (Richard, SW 55th) — the .rup priced BOM carries a
+            # BARE handler stub (e.g. FE5BNXC48L*, desc "Part or assembly
+            # is not in the database") while the structural EQUIP parse
             # carries the REAL "+UI" model (FE5BNXC48L*+UI). Different
-            # generic_ids, so exact-dedup keeps both → phantom duplicate
-            # equipment lines every upload. Drop a line only when it is
-            # BOTH stub-marked AND a strict prefix of another equipment
-            # line's id (the real one) — so a genuinely distinct model
-            # is never removed.
+            # generic_ids, so exact-dedup keeps both → phantom duplicate.
+            # Drop a line only when it is BOTH stub-marked AND a strict
+            # prefix of another equipment line's id. This is .rup-specific.
             eq_ids = [
                 (li.get("generic_id") or "").strip().upper()
                 for li in merged_lines
@@ -893,7 +903,7 @@ def bom_from_wrightsoft():
             seen_ids: set = set()
             deduped: list = []
             for li in merged_lines:
-                if _is_stub_prefix(li):
+                if _is_rup and _is_stub_prefix(li):
                     continue
                 gid = (li.get("generic_id") or "").strip().upper()
                 if gid and li.get("section_hint") == "Equipment":
