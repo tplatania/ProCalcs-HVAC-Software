@@ -134,20 +134,28 @@ def _decode_equip(cursor: RupCursor) -> Optional[dict]:
     condenser_model  = cursor.utf16_string()
     coil_model       = cursor.utf16_string()
 
-    # §3.2 placed-instance signature — refined empirically per Ally
-    # BAYEA blocks: accessories (heat strips) have the mfr key + model
-    # but NO part_source code. Systems (Trane split AC/HP) have all
-    # three. So the discriminator is "has manufacturer key + has model".
-    # Empty model = template (catalog row, not placed).
-    if not mfr_catalog_key:
-        return None  # not a real placed record (no resolved mfr)
-    if not condenser_model:
-        return None  # template — no resolved model
+    # §3.2 placed-instance signature — a real placed record has a
+    # resolved model PLUS a manufacturer identity. Empty model =
+    # template (catalog row, not placed); "(mixed)" = an aggregate
+    # placeholder, not a real unit.
+    #
+    # Dana (2026-09-17, Rahim II) — the manufacturer identity lives in
+    # DIFFERENT fields per manufacturer: Mitsubishi populates
+    # mfr_catalog_key; Carrier leaves it empty and carries the name only
+    # in display_mfr (+ sometimes part_source). Requiring mfr_catalog_key
+    # dropped the entire Carrier system, incl. its heat strip
+    # (KFFEH2601C10). Accept the identity from EITHER field so Carrier
+    # equipment isn't silently lost.
+    if not condenser_model or condenser_model == "(mixed)":
+        return None  # template / aggregate — no resolved model
+    mfr_identity = mfr_catalog_key or display_mfr
+    if not mfr_identity or mfr_identity == "(mixed)":
+        return None  # no resolved manufacturer
     return {
         "equipment_type":   equipment_type or None,
         "drawing_tag":      drawing_tag or None,
-        "manufacturer":     display_mfr or None,
-        "mfr_catalog_key":  mfr_catalog_key,
+        "manufacturer":     display_mfr or mfr_catalog_key or None,
+        "mfr_catalog_key":  mfr_catalog_key or display_mfr,
         "part_source":      part_source,
         "condenser_model":  condenser_model,
         "coil_model":       coil_model or None,
