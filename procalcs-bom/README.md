@@ -134,11 +134,25 @@ npm run dev
 
 ## Deploy to Cloud Run
 
+This service is built from the **`Dockerfile`** in this directory. Do
+NOT deploy it with plain buildpacks — a buildpack build fails now (it
+picks the wrong Python, compiles Pillow from source, and can't supply
+weasyprint's system libraries; see the Dockerfile header for the full
+story). The service still carries the buildpack auto-base config, so the
+first Dockerfile deploy must clear it:
+
 ```bash
-gcloud run deploy procalcs-bom --source . --region us-east1
+# Staging (the pilot service):
+gcloud run deploy procalcs-hvac-bom-staging --source . \
+  --region us-east1 --clear-base-image
 ```
 
-Set environment variables in the Cloud Run console — never in code.
+After deploy, always confirm traffic is on the new revision
+(`gcloud run services describe procalcs-hvac-bom-staging --region us-east1
+--format='value(status.traffic)'`) — traffic has been pinned in the past.
+
+Set environment variables + secrets on the Cloud Run service (never in
+code). The staging DB is Cloud SQL `solarpviq-db-e1` / `procalcs_bom_staging`.
 
 ## Standards
 
