@@ -139,6 +139,32 @@ export interface BomLineItem {
   section?: string;
   phase?: string;
   source?: "rules" | "ai" | string;
+  // Confidence & materiality review layer (procalcs-bom review_confidence).
+  // Present only on flagged lines. verify_confidence grades how trustworthy
+  // the line is (low = genuinely uncertain); verify_materiality is the
+  // line's dollar weight; verify_reason is the human-readable flag.
+  verify_reason?: string;
+  verify_confidence?: "low" | "medium" | "high";
+  verify_materiality?: number;
+}
+
+// BOM-level review roll-up from the confidence-review layer. Optional —
+// only backends running review_confidence emit it. PREVIEW feature.
+export interface BomReviewSummary {
+  flagged_count: number;
+  by_confidence: { low: number; medium: number; high: number };
+  flagged_value: number;
+  bom_total: number;
+  high_dollar_threshold: number;
+  priority_count: number;
+  priority_lines: Array<{
+    sku?: string | null;
+    description?: string | null;
+    confidence: "low" | "medium" | "high";
+    materiality: number;
+    high_dollar: boolean;
+    reason: string;
+  }>;
 }
 
 export interface BomResponse {
@@ -161,6 +187,9 @@ export interface BomResponse {
   // row and the new id is surfaced here so the SPA can deep-link to
   // the run-history page right after a regenerate.
   run_id?: number;
+  // Confidence & materiality review roll-up (PREVIEW). Optional — only
+  // present when the backend runs the review_confidence layer.
+  review_summary?: BomReviewSummary;
 }
 
 // ─── Query keys ──────────────────────────────────────────────────────────

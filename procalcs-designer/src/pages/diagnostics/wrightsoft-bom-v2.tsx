@@ -68,6 +68,7 @@ import {
   useRenderBomXls,
   getListClientProfilesQueryKey,
   type BomResponse,
+  type BomReviewSummary,
 } from "@/lib/api-hooks";
 import { useCurrentUser } from "@/lib/auth-hooks";
 import { UserChip } from "@/components/user-chip";
@@ -1134,6 +1135,78 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
             together. To fix at the source: set each register&apos;s grille
             size in the Wrightsoft property sheet, rebuild the BOM, and
             re-upload.
+          </div>
+        );
+      })()}
+
+      {/* Confidence review (PREVIEW, 2026-09-18) — grades the engine's
+          verify flags by confidence + dollar weight so the reviewer works
+          the riskiest items first. Backend: services/review_confidence.
+          Renders only when the backend supplies review_summary; gated so
+          older backends / non-flagged BOMs show nothing. */}
+      {(() => {
+        const rs = (bom as any).review_summary as BomReviewSummary | undefined;
+        if (!rs || rs.flagged_count === 0) return null;
+        const chip = (c: "low" | "medium" | "high") => {
+          const tone =
+            c === "low"
+              ? "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+              : c === "medium"
+              ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200";
+          return (
+            <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide", tone)}>
+              {c}
+            </span>
+          );
+        };
+        return (
+          <div className="rounded-md border border-violet-300 bg-violet-50/70 px-3 py-2.5 text-sm text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold">Confidence review</span>
+              <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                Preview
+              </span>
+              <span className="text-xs text-violet-700/80 dark:text-violet-300/80">
+                {rs.flagged_count} line{rs.flagged_count === 1 ? "" : "s"} to verify
+                {" · "}
+                {rs.by_confidence.low} low / {rs.by_confidence.medium} medium /{" "}
+                {rs.by_confidence.high} high
+                {rs.priority_count > 0 && (
+                  <> · {rs.priority_count} priority (low-confidence or ≥ ${rs.high_dollar_threshold.toLocaleString()})</>
+                )}
+              </span>
+            </div>
+            {rs.priority_lines.length > 0 && (
+              <ul className="space-y-1">
+                {rs.priority_lines.slice(0, 8).map((p, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    {chip(p.confidence)}
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium">
+                        {p.description || p.sku || "(line)"}
+                      </span>
+                      {p.materiality > 0 && (
+                        <span className="text-xs text-violet-700/80 dark:text-violet-300/80">
+                          {" "}· ${p.materiality.toLocaleString()}
+                          {p.high_dollar ? " (high $)" : ""}
+                        </span>
+                      )}
+                      {p.reason && (
+                        <span className="block text-xs text-violet-700/70 dark:text-violet-300/70">
+                          {p.reason}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="text-[11px] text-violet-600/70 dark:text-violet-400/70">
+              Preview feature — we&apos;re trialing confidence-graded review.
+              Existing verify badges are unchanged; tell us if this ordering
+              helps you work a BOM.
+            </div>
           </div>
         );
       })()}
