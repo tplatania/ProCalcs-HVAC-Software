@@ -13,3 +13,6 @@ from .contractor_override import ContractorOverride  # noqa: F401
 from .rup_duct_totals import RupDuctTotals  # noqa: F401
 from .usage_event import UsageEvent        # noqa: F401
 from .chat_message import ChatMessage      # noqa: F401
+from .feedback import (                     # noqa: F401
+    FeedbackThread, FeedbackMessage, FeedbackAttachment,
+)
