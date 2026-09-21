@@ -30,6 +30,7 @@ import MappingBrowserPage from "@/pages/diagnostics/mapping-browser";
 import PricingImportPage from "@/pages/pricing/import";
 import PricingOverridesPage from "@/pages/pricing/overrides";
 import PricingConsumablesPage from "@/pages/pricing/consumables";
+import FeedbackPage from "@/pages/feedback/index";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ function Router() {
         <Route path="/pricing/import" component={PricingImportPage} />
         <Route path="/pricing/overrides" component={PricingOverridesPage} />
         <Route path="/pricing/consumables" component={PricingConsumablesPage} />
+        <Route path="/feedback" component={FeedbackPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

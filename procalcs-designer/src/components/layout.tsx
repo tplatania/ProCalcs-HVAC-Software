@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTheme } from "next-themes";
 import {
   LayoutDashboard,
+  MessagesSquare,
   Users,
   PlusCircle,
   Settings,
@@ -53,6 +54,7 @@ function userInitials(name: string | undefined, email: string | undefined): stri
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "Overview" },
+  { name: "Feedback & Questions", href: "/feedback", icon: MessagesSquare, section: "Overview" },
   // Day-28 — BREAD: the primary reviewer surface. Browse previously
   // generated BOMs (each hydrates the full canvas — tables, edits,
   // sniping, chat, regenerate) or generate a new one.

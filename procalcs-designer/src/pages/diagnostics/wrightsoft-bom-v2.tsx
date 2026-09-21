@@ -36,9 +36,11 @@ import {
   ChevronLeft,
   Trash2,
   FileText,
+  Flag,
 } from "lucide-react";
 import { EditLineDrawer, type EditableLine } from "@/components/wrightsoft-bom/edit-line-drawer";
 import { BomChatSidebar, type Snipe } from "@/components/wrightsoft-bom/bom-chat-sidebar";
+import { FeedbackComposerDialog } from "@/components/feedback/feedback-composer";
 import { useUpsertContractorOverride } from "@/lib/api-hooks";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -885,6 +887,8 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
   // Lives here because both the crosshair buttons and the sidebar
   // render inside this view.
   const [snipes, setSnipes] = useState<Snipe[]>([]);
+  // "Flag this" opens the feedback composer pre-linked to this BOM run.
+  const [flagOpen, setFlagOpen] = useState(false);
   // Sniping auto-opens the chat (bumping the signal); the page-level
   // container reflows to full-width-minus-panel while it's open.
   const [chatOpenSignal, setChatOpenSignal] = useState(0);
@@ -1083,6 +1087,26 @@ export function BomResultView({ bom, clientId, brandColor, onLineUpdated, onChat
         className="h-1 rounded-full"
         style={{ background: brandColor }}
         aria-hidden
+      />
+
+      {/* Flag this BOM → opens a feedback thread pre-linked to this run. */}
+      <div className="flex justify-end -mt-2">
+        <button
+          type="button"
+          onClick={() => setFlagOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Report an issue or ask the team about this BOM"
+        >
+          <Flag className="h-3.5 w-3.5" />
+          Flag this / ask the team
+        </button>
+      </div>
+      <FeedbackComposerDialog
+        open={flagOpen}
+        onOpenChange={setFlagOpen}
+        pageContext="wrightsoft-bom-v2"
+        runId={(bom as any).run_id ?? null}
+        clientId={clientId}
       />
 
       {/* Day-30 — build-first guidance (Tim's Test 2: results are

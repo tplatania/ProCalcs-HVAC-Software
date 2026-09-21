@@ -1519,3 +1519,172 @@ export function useDeleteContractorOverride() {
     },
   });
 }
+
+// ─── Feedback / ask threads ──────────────────────────────────────────────
+// In-app tester+team conversations with attachments (see server/routes/
+// feedback.ts → procalcs-bom /api/v1/feedback). The agent is a bounded
+// capture assistant, so a thread has at most one 'agent' message.
+
+export type FeedbackKind = "report" | "question";
+export type FeedbackStatus = "open" | "answered" | "resolved";
+export type FeedbackRole = "tester" | "team" | "agent";
+
+export interface FeedbackAttachmentMeta {
+  id: number;
+  thread_id: number;
+  message_id: number | null;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  is_image: boolean;
+}
+
+export interface FeedbackMessage {
+  id: number;
+  thread_id: number;
+  created_at: string | null;
+  role: FeedbackRole;
+  author_email: string | null;
+  body: string | null;
+}
+
+export interface FeedbackThreadSummary {
+  id: number;
+  kind: FeedbackKind;
+  status: FeedbackStatus;
+  title: string;
+  page_context: string | null;
+  run_id: number | null;
+  client_id: string | null;
+  created_by_email: string | null;
+  message_count: number;
+  attachment_count: number;
+  last_message_at: string | null;
+  last_message_role: FeedbackRole | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface FeedbackThreadDetail extends FeedbackThreadSummary {
+  messages: FeedbackMessage[];
+  attachments: FeedbackAttachmentMeta[];
+}
+
+export interface FeedbackListResponse {
+  threads: FeedbackThreadSummary[];
+  open_count: number;
+}
+
+export interface FeedbackListFilter {
+  status?: FeedbackStatus;
+  kind?: FeedbackKind;
+  mine?: boolean;
+}
+
+export const getFeedbackThreadsQueryKey = (f?: FeedbackListFilter) =>
+  ["feedback-threads", f ?? {}] as const;
+export const getFeedbackThreadQueryKey = (id: number) =>
+  ["feedback-thread", id] as const;
+
+/** URL for an attachment's bytes (image src / download href). */
+export const feedbackAttachmentUrl = (id: number) =>
+  `/api/feedback/attachments/${id}`;
+
+/** POST a multipart FormData and unwrap the {success,data,error} envelope.
+ *  No Content-Type header — the browser sets the multipart boundary. */
+async function postFormEnvelope<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, { method: "POST", body: form });
+  let body: FlaskEnvelope<T> | null = null;
+  try { body = (await res.json()) as FlaskEnvelope<T>; } catch { /* ignore */ }
+  if (!res.ok || !body?.success) {
+    throw { error: body?.error ?? res.statusText, status: res.status };
+  }
+  return body.data as T;
+}
+
+export function useFeedbackThreads(filter?: FeedbackListFilter) {
+  return useQuery({
+    queryKey: getFeedbackThreadsQueryKey(filter),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (filter?.status) qs.set("status", filter.status);
+      if (filter?.kind) qs.set("kind", filter.kind);
+      if (filter?.mine) qs.set("mine", "1");
+      const q = qs.toString();
+      return apiFetchEnvelope<FeedbackListResponse>(
+        q ? `/api/feedback/threads?${q}` : "/api/feedback/threads");
+    },
+  });
+}
+
+export function useFeedbackThread(id: number | null) {
+  return useQuery({
+    queryKey: getFeedbackThreadQueryKey(id ?? 0),
+    queryFn: () =>
+      apiFetchEnvelope<FeedbackThreadDetail>(`/api/feedback/threads/${id}`),
+    enabled: id != null && id > 0,
+  });
+}
+
+export interface CreateFeedbackInput {
+  kind: FeedbackKind;
+  title?: string;
+  body: string;
+  page_context?: string;
+  run_id?: number | null;
+  client_id?: string;
+  files?: File[];
+}
+
+export function useCreateFeedbackThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateFeedbackInput) => {
+      const form = new FormData();
+      form.set("kind", input.kind);
+      if (input.title) form.set("title", input.title);
+      form.set("body", input.body);
+      if (input.page_context) form.set("page_context", input.page_context);
+      if (input.run_id != null) form.set("run_id", String(input.run_id));
+      if (input.client_id) form.set("client_id", input.client_id);
+      for (const f of input.files ?? []) form.append("attachments", f);
+      return postFormEnvelope<FeedbackThreadDetail>("/api/feedback/threads", form);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["feedback-threads"] });
+    },
+  });
+}
+
+export function useAddFeedbackMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, body, files }:
+                 { threadId: number; body: string; files?: File[] }) => {
+      const form = new FormData();
+      if (body) form.set("body", body);
+      for (const f of files ?? []) form.append("attachments", f);
+      return postFormEnvelope<FeedbackThreadDetail>(
+        `/api/feedback/threads/${threadId}/messages`, form);
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: getFeedbackThreadQueryKey(vars.threadId) });
+      qc.invalidateQueries({ queryKey: ["feedback-threads"] });
+    },
+  });
+}
+
+export function useResolveFeedbackThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, status }:
+                 { threadId: number; status: FeedbackStatus }) =>
+      apiFetchEnvelope<FeedbackThreadSummary>(
+        `/api/feedback/threads/${threadId}/resolve`,
+        { method: "POST", body: JSON.stringify({ status }) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: getFeedbackThreadQueryKey(vars.threadId) });
+      qc.invalidateQueries({ queryKey: ["feedback-threads"] });
+    },
+  });
+}
