@@ -49,3 +49,8 @@ cloud-sql-python-connector[pg8000]==1.5.0
 # the legacy .xls binary format that Tom's reference BOM exports use.
 openpyxl==3.1.5
 xlrd==2.0.2
+
+# M-sheet (mechanical schedule) PDF extraction — pure-python (pdfminer.six),
+# no system libs, so no Dockerfile change. Handles the rotated two-column
+# equipment schedule that pypdf/PyPDF2 miss.
+pdfplumber==0.11.4
