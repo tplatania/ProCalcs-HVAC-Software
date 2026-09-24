@@ -102,7 +102,10 @@ def rebuild_summaries(bom: Dict[str, Any],
         consumables = [r for r in (bom.get("quick_order_summary") or [])
                        if r.get("category") == _CONSUMABLES_CATEGORY]
         bom["quick_order_summary"] = build_quick_order(patched) + consumables
-        bom["duct_cuts_summary"] = build_duct_cuts_summary(patched)
+        # Keep flex per-piece counts through a patch/regenerate (geometry
+        # is a preserved top-level key).
+        bom["duct_cuts_summary"] = build_duct_cuts_summary(
+            patched, bom.get("rup_duct_geometry"))
     except Exception:  # noqa: BLE001 — summaries must never break a read
         logger.warning("patched-summary rebuild failed (serving raw)",
                        exc_info=True)

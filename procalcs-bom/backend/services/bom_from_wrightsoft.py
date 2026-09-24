@@ -613,7 +613,10 @@ def build_bom_from_wrightsoft_lines(
         # Each cut creates two end joints needing fastener + mastic
         # + tape. Surfaces alongside the aggregated Quick Order so
         # the crew can count joints off the BOM directly.
-        bom["duct_cuts_summary"] = build_duct_cuts_summary(line_items)
+        # Flex cuts are counted per physical piece from the .rup drawing
+        # geometry (round segments on lines[0]); trunk stays 1 run/size.
+        _geom = (lines[0].get("rup_duct_geometry") if lines else None)
+        bom["duct_cuts_summary"] = build_duct_cuts_summary(line_items, _geom)
     except Exception as exc:  # noqa: BLE001
         logger.warning("duct_cuts_summary build skipped: %s", exc)
     try:

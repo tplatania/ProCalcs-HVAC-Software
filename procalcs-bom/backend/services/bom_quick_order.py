@@ -362,11 +362,38 @@ def _duct_family(sku: str) -> Optional[str]:
     return None
 
 
-def build_duct_cuts_summary(line_items: List[Dict[str, Any]]
+def _round_cut_pieces_by_diameter(duct_geometry: Optional[List[Dict[str, Any]]]
+                                  ) -> Dict[int, List[float]]:
+    """Map nominal diameter (int inches) → list of physical cut lengths
+    for every ROUND drawing segment. These are the individual flex/branch
+    pieces the .rup carries per run (rup_duct_geometry). Both supply and
+    return are included — a return runout is still a cut piece."""
+    by: Dict[int, List[float]] = {}
+    for g in duct_geometry or []:
+        if g.get("shape") != "round":
+            continue
+        d = g.get("diameter_in")
+        if not d:
+            continue
+        by.setdefault(int(round(float(d))), []).append(
+            round(float(g.get("cut_length_ft") or 0), 2))
+    return by
+
+
+def build_duct_cuts_summary(line_items: List[Dict[str, Any]],
+                            duct_geometry: Optional[List[Dict[str, Any]]] = None
                             ) -> List[Dict[str, Any]]:
     """One entry per (family + size). Each carries a `cuts` list with
     one item per individual cut + a joints column (= 2 per cut, both
     ends).
+
+    Flex duct is counted PER PHYSICAL PIECE from the drawing geometry
+    (`duct_geometry`, round segments) when available — the .rup carries
+    each run separately, and the joint count (2 per piece) drives tape /
+    mastic. Without geometry, or for the rigid trunk (rect fiberglass /
+    sheet metal), a size is one run — Richard (NE 132nd, 2026-09-24):
+    "1 trunk run of the same size is fine". Family comes from the SKU
+    (the duct-code distinction), per his same reply.
 
     Output shape:
       [
@@ -404,6 +431,29 @@ def build_duct_cuts_summary(line_items: List[Dict[str, Any]]
         g["total_length"] += qty
         g["total_joints"] += 2
         g["cut_count"] += 1
+
+    # ── Flex per-piece override (NE 132nd fix, 2026-09-24) ──────────
+    # The loop above builds one cut per LINE ITEM, and duct line items
+    # are pre-aggregated to one row per size — so flex always came out
+    # as 1 cut / 2 joints regardless of how many real pieces exist
+    # (Richard's "merged"). The .rup actually carries each run as its
+    # own round segment; count those as the true cuts. Rigid trunk
+    # (rect/sheet metal) is intentionally left as 1 run per size.
+    round_pieces = _round_cut_pieces_by_diameter(duct_geometry)
+    if round_pieces:
+        for g in groups.values():
+            if g["family"] != "Flex duct":
+                continue
+            m = re.match(r"(\d+)", g["size"])
+            if not m:
+                continue
+            pieces = round_pieces.get(int(m.group(1)))
+            if not pieces:
+                continue  # no geometry for this size — keep the fallback
+            g["cuts"] = [{"length": L, "joints": 2} for L in pieces]
+            g["cut_count"] = len(pieces)
+            g["total_joints"] = 2 * len(pieces)
+            g["total_length"] = round(sum(pieces), 2)
 
     rows = list(groups.values())
     _CUT_FAMILY_ORDER = [
