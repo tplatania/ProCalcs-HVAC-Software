@@ -145,8 +145,8 @@ def register_auth_middleware(app):
     """
     Require X-Procalcs-Service-Token on every non-health request.
     The shared secret is read from SERVICE_SHARED_SECRET. If the
-    secret is empty (dev / misconfigured deploy), the middleware
-    fails open with a loud warning so local dev still works.
+    secret is empty, the middleware fails closed. Local development
+    must explicitly opt out with ALLOW_INSECURE_NO_AUTH=1.
     """
     logger = logging.getLogger('procalcs_bom')
 

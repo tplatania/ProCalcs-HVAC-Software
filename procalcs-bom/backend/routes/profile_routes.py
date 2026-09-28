@@ -14,6 +14,7 @@ from services.profile_service import (
     update_profile,
     delete_profile,
 )
+from services.client_scope import allowed_client_ids, can_access_client
 
 logger = logging.getLogger('procalcs_bom')
 profile_bp = Blueprint('profiles', __name__)
@@ -28,6 +29,12 @@ def list_profiles():
     """Return all active client profiles."""
     try:
         profiles = get_all_profiles()
+        allowed = allowed_client_ids()
+        if allowed is not None:
+            profiles = [
+                profile for profile in profiles
+                if (profile.get('client_id') or profile.get('id')) in allowed
+            ]
         return jsonify({"success": True, "data": profiles, "error": None}), 200
     except Exception as e:
         logger.error("list_profiles failed: %s", e)
@@ -42,6 +49,9 @@ def list_profiles():
 @profile_bp.route('/<string:client_id>', methods=['GET'])
 def get_profile(client_id):
     """Return a single client profile by ID."""
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
     try:
         profile = get_profile_by_id(client_id)
         if not profile:
@@ -66,6 +76,9 @@ def create_new_profile():
         if not body:
             return jsonify({"success": False, "data": None,
                             "error": "Request body is required."}), 400
+        if not can_access_client((body.get('client_id') or '').strip()):
+            return jsonify({"success": False, "data": None,
+                            "error": "client access denied"}), 403
 
         created_by = body.get('created_by', 'unknown')
         profile = create_profile(body, created_by)
@@ -86,6 +99,9 @@ def create_new_profile():
 @profile_bp.route('/<string:client_id>', methods=['PUT'])
 def update_existing_profile(client_id):
     """Update an existing client profile."""
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
     try:
         body = request.get_json(silent=True)
         if not body:
@@ -110,6 +126,9 @@ def update_existing_profile(client_id):
 @profile_bp.route('/<string:client_id>', methods=['DELETE'])
 def delete_existing_profile(client_id):
     """Delete a client profile. Requires confirmation."""
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
     try:
         delete_profile(client_id)
         return jsonify({"success": True,

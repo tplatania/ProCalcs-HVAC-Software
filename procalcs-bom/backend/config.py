@@ -4,6 +4,7 @@ Single source of truth for all environment-based settings.
 Follows ProCalcs Design Standards v2.0
 """
 
+import json
 import os
 import logging
 from dotenv import load_dotenv
@@ -119,6 +120,18 @@ class Config:
     # restriction in designer-desktop's auth config.
     INTERNAL_DOMAIN = os.environ.get('INTERNAL_DOMAIN', 'procalcs.net')
 
+    # Server-enforced client isolation for external users. Keys may be an
+    # exact email address or an email domain; values are the client/profile
+    # IDs that identity may access. Internal-domain users remain unrestricted.
+    # Example:
+    # {"reliableheating.team": ["reliable-heating-and-cooling"]}
+    try:
+        CLIENT_SCOPE_RULES = json.loads(
+            os.environ.get('CLIENT_SCOPE_RULES_JSON', '{}') or '{}'
+        )
+    except json.JSONDecodeError:
+        CLIENT_SCOPE_RULES = {}
+
 
 # ---------------------------------------------------------------------
 # Tier definitions — single source of truth for limits + pricing display.
@@ -226,18 +239,19 @@ def validate_config(app):
             "Missing required config: %s. Check .env file." % ', '.join(missing)
         )
 
-    # SERVICE_SHARED_SECRET is a soft-required — warn loudly in non-dev
-    # environments but don't refuse to boot (keeps dev workflow frictionless).
+    # The request middleware fails closed when this is absent. Keep startup
+    # non-fatal so Cloud Run can expose a healthy diagnostic response and so
+    # local development can opt out explicitly.
     if not app.config.get('SERVICE_SHARED_SECRET'):
         if os.environ.get('FLASK_ENV') == 'production':
             logger.warning(
-                "[WARNING] SERVICE_SHARED_SECRET is empty — shared-secret auth "
-                "is DISABLED. Any caller can hit the BOM endpoints."
+                "[SECURITY] SERVICE_SHARED_SECRET is empty — protected routes "
+                "will return 503 until it is configured."
             )
         else:
             logger.info(
-                "SERVICE_SHARED_SECRET not set — auth middleware is disabled "
-                "(dev mode). Set it to enable shared-secret auth."
+                "SERVICE_SHARED_SECRET not set — protected routes fail closed. "
+                "Set ALLOW_INSECURE_NO_AUTH=1 only for local development."
             )
 
     logger.info("Config validated successfully for environment: %s",
