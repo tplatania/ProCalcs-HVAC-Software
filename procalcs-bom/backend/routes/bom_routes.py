@@ -772,38 +772,32 @@ def bom_from_wrightsoft():
                     or _looks_like_rup(rup_bytes)
                 ):
                     from utils.rup_parser import parse_rup_bytes
-                    from services.bom_from_rup import _MFR_NAME_TO_SRC
+                    from services.bom_from_rup import build_lines_from_rup
                     design = parse_rup_bytes(
                         rup_bytes, source_name=rup_upload.filename or "")
-                    # Day-17 — Wrightsoft's BOM.xls export doesn't carry
-                    # equipment (AHU/condenser/furnace/ERV). When the
-                    # user attaches the source .rup, the EQUIP block
-                    # has them. Convert each into the same lines-list
-                    # shape build_bom_from_wrightsoft_lines consumes,
-                    # tagged section_hint=Equipment so the rules engine
-                    # places them in the Equipment section. Identical
-                    # construction to bom_from_rup.build_bom_from_rup
-                    # so AHRI / DFUnit lookups fire the same way.
-                    for unit in design.get("equipment", []) or []:
-                        model = (unit.get("model") or "").strip()
-                        if not model:
-                            continue
-                        mfr_name = unit.get("manufacturer") or ""
-                        src = (
-                            _MFR_NAME_TO_SRC.get(mfr_name)
-                            or _MFR_NAME_TO_SRC.get(mfr_name.title())
-                            or "WSF"
-                        )
-                        qty = float(unit.get("count") or 1)
-                        type_label = (unit.get("type") or "equipment").replace("_", " ").title()
-                        rup_equipment_lines.append({
-                            "generic_id":   model,
-                            "quantity":     qty,
-                            "description":  f"{type_label} — {mfr_name} {model}".strip(" —"),
-                            "src":          src,
-                            "section_hint": "Equipment",
-                            "unit":         "EA",
-                        })
+                    # Wrightsoft's BOM.xls export doesn't carry equipment
+                    # (AHU/condenser/heat strip/ERV); the attached .rup's
+                    # EQUIP block does. Build those lines with the SAME
+                    # structural extraction the .rup-primary path uses
+                    # (build_lines_from_rup → parse_equipment), so a dual
+                    # .xls+.rup upload surfaces exactly what a .rup-only
+                    # upload does. Dana (2026-09): the electric heat strips
+                    # were missing on the .xls/dual path because this branch
+                    # used the older parse_rup_bytes equipment list, which
+                    # doesn't include the EQUIP-block accessories (the
+                    # be900d2 fix lives in parse_equipment). We keep the
+                    # parse_rup_bytes `design` below for rooms/duct context.
+                    _EQ_KEYS = ("generic_id", "quantity", "description", "src",
+                                "section_hint", "unit", "verify_reason",
+                                "verify_confidence")
+                    _rup_all = build_lines_from_rup(
+                        rup_bytes, source_name=rup_upload.filename or "",
+                        rheia_takeoff=False)
+                    rup_equipment_lines = [
+                        {k: li[k] for k in _EQ_KEYS if k in li}
+                        for li in _rup_all
+                        if li.get("section_hint") == "Equipment"
+                    ]
                     # Extract clean room list — prefer the BALDUCT-derived
                     # rooms parsed into raw_rup_context (Day-14), fall
                     # back to the text-regex rooms collection.
