@@ -19,6 +19,7 @@ from services.profile_service import get_profile_by_id
 from models.client_profile import ClientProfile
 from utils.validators import validate_bom_request
 from utils.rup_parser import parse_rup_bytes
+from services.client_scope import can_access_client
 
 logger = logging.getLogger('procalcs_bom')
 bom_bp = Blueprint('bom', __name__)
@@ -137,6 +138,15 @@ def generate_bom():
     try:
         body = request.get_json(silent=True)
 
+        # Authorize the target before validating or touching contractor data.
+        # This also avoids leaking validation/profile details for another
+        # contractor to a scoped external user.
+        client_id = (body.get('client_id', '').strip()
+                     if isinstance(body, dict) else '')
+        if not can_access_client(client_id):
+            return jsonify({"success": False, "data": None,
+                            "error": "client access denied"}), 403
+
         # Validate input
         errors = validate_bom_request(body)
         if errors:
@@ -146,7 +156,6 @@ def generate_bom():
                 "error": " | ".join(errors)
             }), 400
 
-        client_id   = body.get('client_id', '').strip()
         job_id      = body.get('job_id', '').strip()
         design_data = body.get('design_data', {})
         output_mode = body.get('output_mode')
@@ -841,6 +850,9 @@ def bom_from_wrightsoft():
         if not client_id or not job_id:
             return jsonify({"success": False, "data": None,
                             "error": "client_id and job_id are required"}), 400
+        if not can_access_client(client_id):
+            return jsonify({"success": False, "data": None,
+                            "error": "client access denied"}), 403
 
         # ── Resolve contractor profile ────────────────────────────────
         profile_data = get_profile_by_id(client_id)
@@ -1109,6 +1121,9 @@ def bom_from_wrightsoft_bundle():
         if not client_id or not job_id:
             return jsonify({"success": False, "data": None,
                             "error": "client_id and job_id are required"}), 400
+        if not can_access_client(client_id):
+            return jsonify({"success": False, "data": None,
+                            "error": "client access denied"}), 403
 
         # ── Parse the equipment bundle ───────────────────────────
         import json as _json

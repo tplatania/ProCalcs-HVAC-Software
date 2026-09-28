@@ -22,6 +22,7 @@ from flask import Blueprint, jsonify, request
 
 from extensions import db
 from models.contractor_override import ContractorOverride
+from services.client_scope import can_access_client
 
 
 logger = logging.getLogger("procalcs_bom")
@@ -54,6 +55,9 @@ def list_overrides():
             "data": None,
             "error": "client_id query parameter is required",
         }), 400
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
     try:
         rows = ContractorOverride.list_for_contractor(client_id)
         return jsonify({
@@ -104,6 +108,9 @@ def upsert_override():
             "success": False, "data": None,
             "error": "client_id, supplier, and sku are required",
         }), 400
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
 
     # Type-check unit_price separately so a bad value produces a
     # readable 400 instead of a 500.
@@ -202,6 +209,9 @@ def import_overrides():
     if not client_id:
         return jsonify({"success": False, "data": None,
                         "error": "Missing 'client_id'"}), 400
+    if not can_access_client(client_id):
+        return jsonify({"success": False, "data": None,
+                        "error": "client access denied"}), 403
 
     upload = request.files["file"]
     if not upload.filename:
@@ -362,6 +372,9 @@ def delete_override(override_id: int):
                 "success": False, "data": None,
                 "error": f"Override {override_id} not found",
             }), 404
+        if not can_access_client(row.contractor_id):
+            return jsonify({"success": False, "data": None,
+                            "error": "client access denied"}), 403
         db.session.delete(row)
         db.session.commit()
         return jsonify({

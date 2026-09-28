@@ -145,8 +145,8 @@ def register_auth_middleware(app):
     """
     Require X-Procalcs-Service-Token on every non-health request.
     The shared secret is read from SERVICE_SHARED_SECRET. If the
-    secret is empty (dev / misconfigured deploy), the middleware
-    fails open with a loud warning so local dev still works.
+    secret is empty, the middleware fails closed. Local development
+    must explicitly opt out with ALLOW_INSECURE_NO_AUTH=1.
     """
     logger = logging.getLogger('procalcs_bom')
 
@@ -161,15 +161,35 @@ def register_auth_middleware(app):
 
         expected = app.config.get('SERVICE_SHARED_SECRET', '') or ''
         if not expected:
-            # Dev fallback — already warned at startup in validate_config.
-            return None
+            # Security hardening — FAIL CLOSED. Previously an empty
+            # secret let every request through (a silent hole if a
+            # deploy shipped without the secret set). Now an unconfigured
+            # secret denies by default; local dev opts out explicitly
+            # with ALLOW_INSECURE_NO_AUTH=1.
+            if os.environ.get('ALLOW_INSECURE_NO_AUTH') == '1':
+                return None
+            logger.error(
+                '[security.service_auth_unconfigured] '
+                '{"kind":"security","event":"service_auth_unconfigured",'
+                '"path":"%s"} — SERVICE_SHARED_SECRET not set; denying. '
+                'Set the secret, or ALLOW_INSECURE_NO_AUTH=1 for local dev.',
+                request.path,
+            )
+            return jsonify({
+                "success": False, "data": None,
+                "error": "service auth not configured",
+            }), 503
 
         presented = request.headers.get('X-Procalcs-Service-Token', '')
         if presented != expected:
             client_id = request.headers.get('X-Client-Id', 'unknown')
+            # Structured security audit line (Cloud Run captures stdout).
             logger.warning(
-                "Unauthorized request — path=%s client_id=%s",
+                '[security.service_auth_denied] '
+                '{"kind":"security","event":"service_auth_denied",'
+                '"path":"%s","client_id":"%s","has_token":%s}',
                 request.path, client_id,
+                'true' if presented else 'false',
             )
             return jsonify({
                 "success": False,

@@ -38,6 +38,7 @@ from services import bom_service
 from services.bom_comparator import compare_bom
 from services.bom_diff import diff_summary, is_regression
 from services.sample_bom import parse_sample_bom_bytes
+from services.client_scope import can_access_client, scope_query
 
 logger = logging.getLogger("procalcs_bom.bom_runs")
 
@@ -62,6 +63,11 @@ def _reviewer_email_from_request() -> str | None:
     if user is not None:
         return getattr(user, "email", None)
     return None
+
+
+def _scoped_run(run_id: int) -> BomRun | None:
+    """Load a run only when it belongs to the caller's allowed client."""
+    return scope_query(BomRun.query, BomRun.client_id).filter(BomRun.id == run_id).first()
 
 
 # ─── List ───────────────────────────────────────────────────────────
@@ -111,7 +117,9 @@ def list_runs():
                 400,
             )
 
-        query = BomRun.query
+        query = scope_query(BomRun.query, BomRun.client_id)
+        if client_id and not can_access_client(client_id):
+            return _err("client access denied", 403)
         if client_id:
             query = query.filter(BomRun.client_id == client_id)
         if reviewer_status:
@@ -164,7 +172,7 @@ def get_run(run_id: int):
     summaries (quick order, duct cuts) are rebuilt from the PATCHED
     line items so every surface agrees with the corrections. Stored
     data stays raw; the SPA still replays ops over line items."""
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
     d = run.to_dict()
@@ -180,7 +188,7 @@ def get_run(run_id: int):
 def review_run(run_id: int):
     """Set reviewer status + optional notes. Idempotent — same payload
     twice produces the same final state."""
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
 
@@ -226,7 +234,7 @@ def regenerate_run(run_id: int):
         design_data     — overrides parent's design_data (lets the SPA
                           tweak-and-regenerate without re-uploading the RUP)
     """
-    parent = BomRun.query.get(run_id)
+    parent = _scoped_run(run_id)
     if parent is None:
         return _err(f"Run {run_id} not found", 404)
 
@@ -363,7 +371,7 @@ def add_patch(run_id: int):
     overrides instead (they're remembered forever); the SPA enforces
     that split. Returns the full updated ops list.
     """
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
 
@@ -445,7 +453,7 @@ def get_chat(run_id: int):
     chain (bounded) and merge chronologically; new turns keep writing
     to the current run, so storage stays canonical with no copying."""
     from models import ChatMessage, BomRun
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
     chain = [run.id]
@@ -454,7 +462,7 @@ def get_chat(run_id: int):
         pid = node.regenerated_from_id
         if not pid:
             break
-        node = BomRun.query.get(pid)
+        node = _scoped_run(pid)
         if node is None:
             break
         chain.append(node.id)
@@ -475,7 +483,7 @@ def append_chat(run_id: int):
     author_email is taken from the forwarded identity header, not the
     body, so it can't be spoofed."""
     from models import ChatMessage, BomRun
-    if BomRun.query.get(run_id) is None:
+    if _scoped_run(run_id) is None:
         return _err(f"Run {run_id} not found", 404)
     body = request.get_json(silent=True) or {}
     turns = body.get("turns")
@@ -503,7 +511,7 @@ def append_chat(run_id: int):
 def clear_chat(run_id: int):
     """Delete a run's conversation (clear chat / cleanup)."""
     from models import ChatMessage, BomRun
-    if BomRun.query.get(run_id) is None:
+    if _scoped_run(run_id) is None:
         return _err(f"Run {run_id} not found", 404)
     n = db.session.query(ChatMessage).filter_by(run_id=run_id).delete()
     db.session.commit()
@@ -517,7 +525,7 @@ def delete_run(run_id: int):
     Contractor overrides are intentionally NOT deleted — they are
     contractor-wide learning, not owned by one run."""
     from models import BomRun, ChatMessage
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
     db.session.query(ChatMessage).filter_by(run_id=run_id).delete()
@@ -543,7 +551,7 @@ def compare_run(run_id: int):
     missing / extra). Does NOT persist the report — Phase 8/9 will
     layer on storage when we wire the regression suite.
     """
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
     if not run.generated_bom:
@@ -652,7 +660,7 @@ def list_tags():
     user opens the regression-suites page, so the cost is bounded.
     """
     try:
-        all_runs = BomRun.query.with_entities(BomRun.tags).all()
+        all_runs = scope_query(BomRun.query, BomRun.client_id).with_entities(BomRun.tags).all()
         counts: dict[str, int] = {}
         for (tags,) in all_runs:
             for t in (tags or []):
@@ -682,7 +690,7 @@ def update_tags(run_id: int):
     list without a follow-up GET. Idempotent — adding a tag the run
     already has is a no-op rather than an error.
     """
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
 
@@ -740,7 +748,7 @@ def run_regression_suite(tag: str):
         return _err(str(exc), 400)
 
     parents = (
-        BomRun.query.order_by(BomRun.created_at.asc()).all()
+        scope_query(BomRun.query, BomRun.client_id).order_by(BomRun.created_at.asc()).all()
     )
     parents = [p for p in parents if suite_tag in (p.tags or [])]
     if not parents:
@@ -860,10 +868,12 @@ def missing_sku_backlog():
 
         # Pull all comparisons; tiny join to BomRun for client_id filter
         # is fine at staging-scale (hundreds, not millions).
-        q = BomComparison.query
+        q = BomComparison.query.join(BomRun, BomRun.id == BomComparison.bom_run_id)
+        q = scope_query(q, BomRun.client_id)
+        if client_id and not can_access_client(client_id):
+            return _err("client access denied", 403)
         if client_id:
-            q = q.join(BomRun, BomRun.id == BomComparison.bom_run_id)\
-                 .filter(BomRun.client_id == client_id)
+            q = q.filter(BomRun.client_id == client_id)
         comparisons = q.order_by(BomComparison.created_at.asc()).all()
 
         # Group missing SKUs across all rows
@@ -931,7 +941,7 @@ def missing_sku_backlog():
 def list_run_comparisons(run_id: int):
     """List all persisted comparisons for a single run, newest first.
     Useful for "show me every sample I've uploaded against run #5"."""
-    run = BomRun.query.get(run_id)
+    run = _scoped_run(run_id)
     if run is None:
         return _err(f"Run {run_id} not found", 404)
     rows = (
