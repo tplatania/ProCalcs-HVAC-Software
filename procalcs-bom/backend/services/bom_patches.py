@@ -128,7 +128,7 @@ def bom_with_patched_summaries(run) -> Dict[str, Any]:
 STRUCTURAL_EXTRA_KEYS = (
     "rup_balduct", "rup_unbuilt_hint", "rup_duct_geometry",
     "rup_file_type_hint", "duct_runout_pieces", "drawing_annotations",
-    "register_preflight",
+    "register_preflight", "excluded_auto_sized_grilles",
 )
 
 

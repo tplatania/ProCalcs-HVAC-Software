@@ -167,6 +167,38 @@ def _plan_memo_lookup(source_name: str):
             yield sku, entries[0]["qty"], min(e["agreement"] for e in entries)
 
 
+def apply_grille_auto_exclude(lines: List[Dict[str, Any]]) -> None:
+    """Drop grille lines confirmed as auto-sized 12x12 defaults and record
+    what was removed. In place on `lines`.
+
+    Richard (NE 132nd, 2026-09-24): "Grilles not in the actual duct layout
+    should be excluded from the BOM report." A line is only removed when
+    BOTH the grille-lump smell AND the DREGINFO auto-sized-default check
+    agree (marked `auto_sized_grille_artifact` upstream) — Wrightsoft's
+    stored default, never a real placement. The removals are recorded on
+    lines[0]["excluded_auto_sized_grilles"] so the reviewer sees exactly
+    what was dropped and why (transparent + reversible; reviewer still
+    owns the number). No-op when nothing is marked or nothing would be
+    left (never blanks a BOM)."""
+    if not lines:
+        return
+    excluded = [
+        {"generic_id": li.get("generic_id"),
+         "description": li.get("description"),
+         "quantity": li.get("quantity"),
+         "reason": "Auto-sized 12x12 default grille — not a real placement "
+                   "in the duct layout."}
+        for li in lines if li.get("auto_sized_grille_artifact")
+    ]
+    if not excluded:
+        return
+    kept = [li for li in lines if not li.get("auto_sized_grille_artifact")]
+    if not kept:
+        return  # never leave an empty BOM
+    lines[:] = kept
+    lines[0].setdefault("excluded_auto_sized_grilles", excluded)
+
+
 def build_lines_from_rup(file_bytes: bytes,
                          source_name: str = "",
                          rheia_takeoff: bool = False) -> List[Dict[str, Any]]:
@@ -582,6 +614,14 @@ def build_lines_from_rup(file_bytes: bytes,
                         f"{_preflight['total']} register records are "
                         "auto-sized (stored at the 12x12 default), which "
                         "matches this lump.")
+                    # Dual-signal confirmed: the statistical lump AND the
+                    # DREGINFO auto-sized default agree. Mark it as an
+                    # auto-sized artifact so the exclusion step below can
+                    # drop it (Richard, NE 132nd 2026-09-24).
+                    _l["auto_sized_grille_artifact"] = True
+
+    # ── Grille auto-exclude (Richard, NE 132nd 2026-09-24) ──────────
+    apply_grille_auto_exclude(lines)
 
     if _pieces and lines:
         lines[0].setdefault("duct_runout_pieces", [
